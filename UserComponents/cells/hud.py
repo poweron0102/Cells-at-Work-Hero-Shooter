@@ -6,6 +6,7 @@ from .ui_base import Canvas, INK, MUTED, PAPER, TEAL, RED, LINE, WHITE
 from .catalog import HEROES, CELLS, POINTS, CORE_POSITIONS, PHASE_NAMES, can_select
 from .screens import leave
 from .layout import SOLIDS, RAMPS
+from .cursor import set_cursor_captured
 
 
 class CombatHUD(Canvas):
@@ -29,9 +30,15 @@ class CombatHUD(Canvas):
         s = a.state
         actor = a.actors.get(net.local_slot)
         if actor is None:
+            set_cursor_captured(False)
             self.panel(400, 300, 480, 100, INK)
             self.text("SINCRONIZANDO COM O SERVIDOR...", 425, 339, 20, WHITE)
             return
+        # Respawn and pause controls are screen-space UI, so release capture
+        # here as well as in PlayerInput. This also covers the frame in which
+        # the server reports a death or a network error.
+        if not actor.alive or self.player_input.paused or net.error:
+            set_cursor_captured(False)
         kit = HEROES[actor.hero]
         self.panel(26, 22, 305, 75, INK, 235)
         self.text("ABRASION", 43, 31, 22, WHITE)
