@@ -97,12 +97,22 @@ com `owner=0` para manter a autoridade no servidor.
 .venv\Scripts\python.exe -m unittest discover -s tests -v
 .venv\Scripts\python.exe scripts/check_multiplayer.py
 .venv\Scripts\python.exe scripts/check_scenes.py
+.venv\Scripts\python.exe scripts/check_hud.py
 ```
 
 O segundo comando abre um host e cinco clientes em processos independentes,
 sem janela. O terceiro usa uma janela oculta e salva capturas em `.scratch/scenes/`.
 Veja [detalhes da implementação](docs/IMPLEMENTACAO.md) e o
 [GDD original](docs/GDD_Cells_at_Work_Hero_Shooter_Prototype.html).
+
+A HUD agrupa objetivo e progresso no canto superior esquerdo, minimapa e stress
+no superior direito, vida no inferior esquerdo e munição sobre habilidades no
+inferior direito. O aviso de coleta aparece somente perto de antígenos acessíveis.
+Os rostos usam recortes em tempo de renderização dos `up.png` oficiais, definidos
+em `UserComponents/cells/hud_portraits.py`. Expressões disponíveis acompanham dano,
+vida baixa, habilidades e mudança de fase; personagens sem variantes conservam o
+rosto oficial. `check_hud.py` valida os recortes dos oito heróis e gera capturas
+dos estados de combate e uma prancha de expressões em `.scratch/hud/`.
 
 O distrito 3D tem **96 × 120 unidades**, três frentes conectadas, quatro rampas,
 galerias e telhados a 4 m, torres a 7 m e atalhos por salto. Todos sobem pelas
