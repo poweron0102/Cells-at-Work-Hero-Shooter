@@ -5,6 +5,7 @@ from EasyCells3D.Geometry import Vec3
 from .ui_base import Canvas, INK, MUTED, PAPER, TEAL, RED, LINE, WHITE
 from .catalog import HEROES, CELLS, POINTS, CORE_POSITIONS, PHASE_NAMES, can_select
 from .screens import leave
+from .layout import SOLIDS, RAMPS
 
 
 class CombatHUD(Canvas):
@@ -68,13 +69,23 @@ class CombatHUD(Canvas):
                 self.marker(target.transform.position+Vec3(0, 1.4, 0), net.roster[target.slot]["name"][:9], (142, 239, 204) if target.team == actor.team else (255, 171, 127))
         # Schematic minimap always uses the same team and objective colors.
         self.panel(1090, 111, 164, 182, INK, 225)
-        self.text("TISSUE / 01", 1102, 120, 11, WHITE)
+        self.text("DISTRITO / ALT. " + str(max(0, round(actor.transform.y-.95))) + "m", 1102, 120, 10, WHITE)
+        for solid in SOLIDS:
+            if solid.name == 'Perimeter':
+                continue
+            x, y, z = solid.position
+            w, h, d = solid.size
+            self.panel(1172+(x-w/2)*1.15, 213+(z-d/2)*1.15, w*1.15, d*1.15,
+                       (85, 119, 107) if solid.top >= 4 else (60, 83, 74))
+        for ramp in RAMPS:
+            self.panel(1172+(ramp.x-2.5)*1.15, 213+min(ramp.start_z, ramp.end_z)*1.15,
+                       5*1.15, abs(ramp.end_z-ramp.start_z)*1.15, (170, 155, 99))
         for target in a.actors.values():
             if target.alive and (target.team == actor.team or actor.reveal > 0):
-                self.circle(1172+target.transform.x*2.5, 213+target.transform.z*2, 3 if target.slot != actor.slot else 5,
+                self.circle(1172+target.transform.x*1.15, 213+target.transform.z*1.15, 3 if target.slot != actor.slot else 5,
                             (130, 234, 192) if target.team == actor.team else (241, 133, 97))
         for x, z in POINTS:
-            self.panel(1169+x*2.5, 210+z*2, 6, 6, (236, 213, 141))
+            self.panel(1169+x*1.15, 210+z*1.15, 6, 6, (236, 213, 141))
         if actor.alive:
             # Stylized viewmodel, tied to local weapon shot and reload state.
             bob = math.sin(s.elapsed*8)*2
@@ -111,7 +122,7 @@ class CombatHUD(Canvas):
         self.panel(1064, 616, 190, 77, INK, 240)
         self.text(f"{actor.weapon.ammo:02} / {kit.magazine}", 1093, 626, 32, WHITE)
         self.text("RECARREGANDO" if actor.weapon.reload_time > 0 else "R  RECARREGAR", 1083, 668, 13, (184, 216, 197))
-        self.text("WASD mover   SHIFT correr   ESPACO pular   E coletar   RMB secundario   ESC menu", 30, 566, 12, WHITE)
+        self.text(f"WASD mover   SHIFT correr   ESPACO salto {kit.jump_height:.1f}m   E coletar   RMB secundario   ESC menu", 30, 566, 12, WHITE)
         if s.notice_time > 0:
             self.panel(280, 215, 720, 38, INK, 235)
             self.text(s.notice[:85], 300, 225, 16, (227, 221, 157))

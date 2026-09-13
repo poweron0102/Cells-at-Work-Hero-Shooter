@@ -11,11 +11,14 @@
 | `Levels/results.py` | Relatório e saída da sessão |
 | `catalog.py` | Dados dos oito kits, facções, limites e desbloqueios |
 | `rules.py` | Estado da partida e condições de progresso/vitória testáveis sem janela |
-| `network.py` | Sessão, lobby, comandos validados e snapshots |
+| `network.py` | `NetworkComponent` de sessão e canais de comandos com `@Rpc` |
 | `actors.py` / `combat.py` | Componentes de combatente, arma, dano, habilidades e respawn |
 | `arena.py` | Objetivos vivos, amostras, núcleos e coordenação da simulação |
 | `director.py` | Eventos fisiológicos e alteração da passagem central |
-| `world.py` / `visuals.py` | Fábricas do blockout e componentes `Renderable3D` |
+| `world.py` / `layout.py` / `navigation.py` | Distrito, colisões e navegação por superfícies em diferentes alturas |
+| `scenery.py` / `art.py` | Fachadas e pavimentação em malhas estáticas agrupadas |
+| `models.py` / `appearance.py` / `model_lighting.py` | Personagens articulados, aparências e iluminação |
+| `visuals.py` | Integração dos modelos com combatentes e efeitos da arena |
 | `player.py` | Entrada local e câmera de primeira pessoa |
 | `bots.py` | Navegação e decisões dos combatentes opcionais de treino |
 | `ui_base.py` / `screens.py` / `hud.py` | Interface sobre `CameraUI` e `RenderableUI` |
@@ -27,7 +30,7 @@ Não foi criado um loop de jogo, engine de física ou transporte paralelo.
 São reutilizados `Game`, `Item`, `Component`, `Transform`, `Vec3`, `Quaternion`,
 `Camera3D`, `CameraUI`, `Renderable3D`, `RenderableUI`, `BulletPhysicsWorld`,
 `PhysicsBody3D`, `CharacterController3D`, shapes, raycasts, `overlap_sphere`,
-`NetworkManager`, `TcpTransport` e o scheduler da biblioteca. Temporizadores de
+`NetworkManager`, `NetworkComponent`, `Rpc`, `NetworkTransform` e o scheduler da biblioteca. Temporizadores de
 gameplay usam `game.delta_time` para permanecer pausáveis e replicáveis.
 
 Embora o guia mencione apenas física 2D, a biblioteca fornecida também inclui
@@ -38,15 +41,31 @@ a interface utiliza a camada atual `CameraUI`, sem pygame.
 ## Rede
 
 O anfitrião também joga e é a autoridade de todos os combatentes, objetivos,
-cooldowns e eventos. Clientes enviam intenção de movimento, mira e botões a 30 Hz.
-O host publica snapshots a 20 Hz; o cliente interpola posições para apresentação.
-Não aceita posição, dano, vida ou resultado enviados por um cliente.
+cooldowns e eventos. A conexão usa um `NetworkManager` da biblioteca, sem subclassificar
+seu despachante ou ler/enviar pacotes pelo gameplay. TCP e UDP usam a porta 25765.
 
-O `ArenaNetwork` especializa `NetworkManager` e usa seu transporte TCP existente.
-O snapshot agrupa entidades e objetivos para aplicar um estado coerente; por isso
-não usa `NetworkTransform`, cujo modelo transfere a escrita do transform ao dono.
-UDP fica desativado nesta aplicação, pois os handshakes TCP/UDP da biblioteca
-atribuem IDs separadamente e podem divergir com conexões simultâneas.
+`ArenaNetwork` herda de `NetworkComponent`. Cada conexão recebe outro componente,
+`PeerCommands`, cujo `owner` é o ID TCP atribuído pela engine. Seus métodos `join`,
+`choose_hero` e `submit_input` usam `@Rpc(send_to=SendTo.SERVER, require_owner=True)`.
+A engine verifica a propriedade do componente antes de executar a chamada.
+Clientes enviam intenção de movimento, mira e botões a 30 Hz, sem enviar posições,
+dano, vida ou resultado. O host passa pelo mesmo método RPC para sua entrada local.
+
+O método `ArenaNetwork.receive_match_state`, com `@Rpc(send_to=SendTo.CLIENTS)` e
+`owner=0`, publica os dados de lobby, objetivos e combate a 20 Hz. Esses dados não
+contêm posições de combatentes. Erros destinados a um jogador usam
+`NetworkManager.call_rpc_on_client`.
+
+Cada combatente tem um `NetworkTransform` nativo com ID estável e **`owner=0`**.
+Isso mantém a escrita do transform no servidor. O componente serializa e transmite
+posições por seu RPC UDP `sync_transform`, com frequência de 30 Hz. A interpolação,
+rejeição de pacotes antigos e recuperação de um estado estacionário após perda de
+datagrama ficam no próprio `NetworkTransform`, não nos componentes de gameplay.
+
+Os IDs de handshake UDP/TCP da biblioteca continuam independentes. Aqui, os
+comandos de jogadores e chamadas para clientes específicos usam TCP; transforms
+são enviados por broadcast do servidor a todos os clientes UDP. O jogo não usa
+um ID TCP para endereçar um cliente UDP nem aceita transforms de clientes.
 
 - Seis vagas, três por time; o host valida todas as escolhas.
 - Células iniciam com dois neutrófilos e um macrófago em uma sala completa.
@@ -65,11 +84,22 @@ atribuem IDs separadamente e podem divergir com conexões simultâneas.
   aceita dados primitivos, mas rejeita instâncias executáveis via pickle.
   RPCs/NetworkVariables que enviem instâncias Python precisam convertê-las em
   dados primitivos; os snapshots deste jogo já fazem isso.
-- `NetworkManager`: opção `enable_udp=False` sem alterar o padrão existente;
-  flags de conexão inicializadas antes das threads de transporte.
+- `NetworkManager`: flags de conexão inicializadas antes das threads; quando a
+  porta solicitada é zero, TCP e UDP compartilham a mesma porta atribuída. A opção
+  `enable_udp` continua disponível, mas o jogo utiliza ambos os protocolos.
+- `Rpc`: `SendTo.SERVER` executa também quando quem chama é o próprio host.
+  `Protocol` é exportado por `NetworkComponents`, como no exemplo do guia.
+- `NetworkTransform`: interpolação opcional (desativada por padrão), correção
+  imediata de teleporte, reenvio periódico de estado estacionário para recuperar
+  datagramas perdidos, rejeição de pacotes antigos/tamanho inválido e cancelamento
+  da coroutine ao destruir o componente.
+- `NetworkUDP`: a thread de handshake é a única leitora até obter o ID; tentativas
+  limitadas com timeout; encerramento tolerante a desconexão. Usa a mesma leitura
+  restrita a dados primitivos do transporte TCP.
 - `Camera3D`: limpa a câmera principal ao destruir a cena e tolera destruição
   de renderizável que ainda não recebeu `init()`.
-- `Game`: limpa callbacks pendentes de objetos da cena anterior; encerramento
+- `Game`: limpa callbacks pendentes de objetos destruídos, preservando o `init()`
+  dos itens persistentes e seus filhos; encerramento
   idempotente de itens persistentes, física, scheduler e janela; cor de fundo e
   sinal de parada usados também pelos testes de renderização.
 
@@ -93,11 +123,13 @@ fluxo empurra ambos os times nas laterais, inflamação reduz movimento no centr
 febre suspende regeneração. Plaquetas são figuras passivas ligadas à reparação;
 os bots de treino são combatentes das vagas do 3v3, não esses NPCs.
 
-Arquitetura de tecido, cargas de oxigênio, rotas, silhuetas dos combatentes e
-arma em primeira pessoa são blockout de geometria. O tecido infectado é atualmente
-um estado de objetivo; não há célula do tecido individual infectável. Os PNGs
-oficiais são usados como retratos; não são modelos 3D. A pasta de referências
-locais mencionada não estava presente no workspace durante esta implementação.
+Arquitetura e personagens foram refeitos a partir dos renderizadores procedurais
+de Cellular-Odyssey-2. O distrito tem 96 × 120 unidades, rampas, galerias, telhados,
+torres e atalhos por mobilidade; veja `MAPA_ABRASION.md`. Os oito modelos têm
+silhuetas e equipamentos próprios, baseados nas imagens oficiais arquivadas.
+Os PNGs são retratos e referências; os modelos 3D são geometria articulada em código.
+A arma em primeira pessoa continua sendo uma silhueta 2D. O tecido infectado é
+um estado de objetivo; não há célula do tecido individual infectável.
 
 ## Evidências de validação
 
@@ -108,9 +140,14 @@ locais mencionada não estava presente no workspace durante esta implementação
   aterrissagem, recarga, morte e respawn.
 - Transporte com sockets reais: cabeçalhos/corpos fragmentados, frames agregados
   e desconexão sem alteração de IDs.
-- Um host e cinco processos clientes: seis vagas, comandos, movimento replicado,
-  três fases, coleta de antígeno, morte/respawn e evento. O teste acelera tempo de
+- Um host e cinco processos clientes: seis vagas, comandos via RPC, movimento por
+  `NetworkTransform` UDP, três fases, coleta de antígeno, morte/respawn e evento.
+  O teste verifica que o estado enviado via TCP não transporta posições e que cada
+  cliente recebe o `NetworkTransform` do servidor. O teste acelera tempo de
   simulação e prepara estados de objetivos; não é um playtest de balanceamento.
+- Regressões das APIs de rede: propriedade de RPC, execução pelo host, inicialização
+  persistente, interpolação/teleporte, ordem de datagramas, reenvio de posição
+  estacionária após perda de pacote e recusa de transform enviado por cliente.
 - GPU/Raylib: menu, lobby, seleção, arena, respawn, fases, resultado e retorno ao
   menu. Confere remoção de câmeras e do mundo físico ao sair da partida.
 

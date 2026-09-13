@@ -1,11 +1,13 @@
 """Combatant lifecycle and hero abilities, attached to each Item."""
 import math
 from EasyCells3D.Components import Component
+from EasyCells3D.NetworkComponents import NetworkTransform
 from EasyCells3D.Geometry import Vec3
 from EasyCells3D.PhysicsComponents3D import PhysicsBody3D, CharacterController3D, CapsuleShape, BodyType
 from .catalog import HEROES, CELLS, CORE_POSITIONS
 from .combat import Weapon, direction
 from .visuals import CombatantVisual
+from .network import TRANSFORM_ID_BASE
 
 
 class Combatant(Component):
@@ -23,7 +25,6 @@ class Combatant(Component):
         self.hit_marker = self.hurt = 0
         self.kills = self.deaths = self.shot = 0
         self.previous = {}
-        self.target_position = None
 
     def init(self):
         self.body = self.GetComponent(PhysicsBody3D)
@@ -65,10 +66,6 @@ class Combatant(Component):
 
     def loop(self):
         if not self.arena.authority:
-            if self.target_position is not None:
-                p = self.transform.position
-                t = min(1, self.game.delta_time * 22)
-                self.transform.position = p + (self.target_position-p)*t
             return
         dt = min(.05, self.game.delta_time)
         for key in ("ability_cd", "secondary_cd", "special_cd", "boost", "harden", "dash", "reveal", "neutralized", "hit_marker", "hurt"):
@@ -103,6 +100,7 @@ class Combatant(Component):
         if self.dash > 0:
             speed, move = 22, forward
         self.controller.move_speed = speed
+        self.controller.jump_height = HEROES[self.hero].jump_height
         self.controller.move(move)
         if self.arena.state.event == "blood_flow" and self.arena.state.event_time > 0 and abs(self.transform.x) > 15:
             self.body.velocity = self.body.velocity + Vec3(0, 0, 3.2)
@@ -214,7 +212,13 @@ def load_combatant(game, arena, slot, player):
                                    allow_sleep=False, friction=0,
                                    body_type=BodyType.DYNAMIC if arena.authority else BodyType.KINEMATIC,
                                    collision_group=2 if player["team"] == CELLS else 4))
-    item.AddComponent(CharacterController3D())
+    item.AddComponent(CharacterController3D(jump_height=HEROES[player['hero']].jump_height))
     item.AddComponent(Weapon(actor))
     item.AddComponent(CombatantVisual(actor))
+    item.AddComponent(NetworkTransform(
+        identifier=TRANSFORM_ID_BASE + slot, owner=0, sync_frequency=1/30,
+        sync_rot_x=False, sync_rot_y=False, sync_rot_z=False,
+        sync_scale_x=False, sync_scale_y=False, sync_scale_z=False,
+        interpolation_speed=22,
+    ))
     return actor

@@ -8,6 +8,7 @@ import time
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from simulation_support import headless_game, mount_arena, step
 from EasyCells3D.Geometry import Vec3
+from EasyCells3D.NetworkComponents import NetworkTransform
 from UserComponents.cells.network import connect
 from UserComponents.cells.catalog import CELLS
 
@@ -47,6 +48,8 @@ def run(role, port, output):
                     if elapsed > 18:
                         break
             elif net.local_slot is not None:
+                if net.status == "playing" and arena is None:
+                    arena = mount_arena(game)
                 player = net.roster[net.local_slot]
                 # Includes forged state fields: the host must ignore these.
                 net.input(dict(x=0, z=1 if frames < 100 else 0,
@@ -56,7 +59,9 @@ def run(role, port, output):
                     previous_snapshot = net.latest
                     phases.add(net.latest["state"]["phase"])
                     a = net.latest["actors"][net.local_slot]
-                    positions.append(a["pos"])
+                    assert "pos" not in a, "Positions must travel through NetworkTransform, not match-state RPCs"
+                    actor = arena.actors[net.local_slot]
+                    positions.append(actor.transform.position.to_tuple)
                     deaths.append(a["alive"])
                     assert a["health"] < 99999
                     frames += 1
@@ -75,7 +80,10 @@ def run(role, port, output):
             assert phases == {0, 1, 2}, phases
             assert len(positions) > 20
             assert max(p[2] for p in positions)-min(p[2] for p in positions) > .5
+            transform = arena.actors[net.local_slot].GetComponent(NetworkTransform)
+            assert transform.owner == 0 and transform.cont > 0, "No native UDP transform received"
             report = dict(role=role, slot=net.local_slot, snapshots=frames, phases=sorted(phases), movement=True,
+                          last_transform_sequence=transform.cont,
                           saw_death=False in deaths, saw_respawn=False in deaths and deaths[-1])
         Path(output).write_text(json.dumps(report, indent=2), encoding="utf8")
     finally:

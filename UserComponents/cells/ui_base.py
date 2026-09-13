@@ -78,7 +78,8 @@ class Canvas(RenderableUI):
             path = Path("Assets/characters") / f"{hero}.png"
             self.textures[hero] = rl.load_texture(str(path)) if path.exists() else None
             if self.textures[hero]:
-                rl.set_texture_filter(self.textures[hero], rl.TextureFilter.TEXTURE_FILTER_BILINEAR)
+                rl.gen_texture_mipmaps(rl.ffi.addressof(self.textures[hero]))
+                rl.set_texture_filter(self.textures[hero], rl.TextureFilter.TEXTURE_FILTER_TRILINEAR)
         texture = self.textures[hero]
         if texture:
             factor = min(w/texture.width, h/texture.height)

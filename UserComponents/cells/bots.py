@@ -1,7 +1,7 @@
 """Optional training opponents use the same input and combat path as humans."""
 import math
 from EasyCells3D.Geometry import Vec3
-from .catalog import CELLS, POINTS, CORE_POSITIONS
+from .catalog import CELLS, POINTS, CORE_POSITIONS, HEROES
 
 
 class BotBrain:
@@ -30,10 +30,10 @@ class BotBrain:
             x, z = CORE_POSITIONS[i]
             target = Vec3(x, 1, z + (4 if actor.team != CELLS else 7))
         if state.elapsed >= self.next_path.get(actor.slot, 0):
-            self.paths[actor.slot] = arena.navigator.path(position, target)
+            self.paths[actor.slot] = arena.navigator.path(position, target, HEROES[actor.hero].jump_height)
             self.next_path[actor.slot] = state.elapsed + 1.5
         path = self.paths.get(actor.slot, [])
-        while path and (Vec3(path[0].x, position.y, path[0].z)-position).magnitude() < 1:
+        while path and (path[0]-position).magnitude() < 1:
             path.pop(0)
         waypoint = path[0] if path else target
         move = waypoint-position
@@ -60,4 +60,5 @@ class BotBrain:
                     fire=fire, interact=True, sprint=not fire, reload=actor.weapon.ammo == 0,
                     ability=bool(enemy) and actor.hero not in ("neutrophil", "killer_t", "streptococcus"),
                     ultimate=bool(enemy) and actor.health < 90,
-                    jump=bool(path) and actor.controller.is_grounded and actor.body.velocity.magnitude() < .5)
+                    jump=bool(path) and actor.controller.is_grounded
+                    and (waypoint.y > position.y+.7 or actor.body.velocity.magnitude() < .5))

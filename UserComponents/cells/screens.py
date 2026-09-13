@@ -105,7 +105,7 @@ class LobbyScreen(Canvas):
             self.button("INICIAR 3v3  >", 944, 564, 290, lambda: net.start(False), True, len(net.roster) == 6)
         else:
             self.text("O anfitriao inicia a partida.", 901, 580, 20, MUTED)
-        self.text(net.error or f"REDE LOCAL  /  TCP 25765  /  {'Compartilhe o IPv4 deste computador com a equipe.' if net.is_server else net.ip}", 48, 636, 14, RED if net.error else MUTED)
+        self.text(net.error or f"REDE LOCAL  /  TCP + UDP {net.port}  /  {'Compartilhe o IPv4 deste computador com a equipe.' if net.is_server else net.ip}", 48, 636, 14, RED if net.error else MUTED)
 
 
 class SelectionScreen(Canvas):
@@ -127,6 +127,7 @@ class SelectionScreen(Canvas):
             self.text(hero.name, x+17, y+14, 19)
             self.text(hero.role, x+18, y+42, 10, MUTED)
             self.text(f"{hero.health} HP  /  {hero.magazine} MUN.", x+18, y+71, 13)
+            self.text(f"SALTO {hero.jump_height:.1f}m", x+18, y+92, 11, MUTED)
             self.portrait(key, x+172, y+44, 99, 118)
             label = "SELECIONADO" if selected else "BLOQUEADO" if not unlocked(key, 0, False) else "OCUPADO" if not available else "SELECIONAR"
             self.button(label, x+16, y+115, 164, lambda h=key: net.choose(h), selected, available or bool(selected), h=35)

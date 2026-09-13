@@ -34,7 +34,7 @@ Para iniciar diretamente pela linha de comando:
 ```
 
 O endereço acima é apenas um exemplo. Consulte `ipconfig` no computador anfitrião.
-A sala usa **TCP 25765**; permita o Python na rede privada se o Windows solicitar.
+A sala usa **TCP e UDP na porta 25765**; permita o Python na rede privada se o Windows solicitar.
 O argumento `--port` permite outra porta, que deve ser a mesma em todos os processos.
 A interface gráfica usa a porta padrão.
 
@@ -89,6 +89,10 @@ As cenas `menu`, `lobby`, `selection`, `abrasion` e `results` ficam em `Levels/`
 Cada cena monta objetos e componentes; regras, física, combate, rede, interface e
 fábricas ficam em `UserComponents/cells/`, seguindo `GUIA_DESENVOLVIMENTO.md`.
 
+A rede usa `NetworkManager` diretamente: comandos e estado são métodos `@Rpc`
+em `NetworkComponent`; posições são sincronizadas por `NetworkTransform` via UDP,
+com `owner=0` para manter a autoridade no servidor.
+
 ```powershell
 .venv\Scripts\python.exe -m unittest discover -s tests -v
 .venv\Scripts\python.exe scripts/check_multiplayer.py
@@ -100,7 +104,20 @@ sem janela. O terceiro usa uma janela oculta e salva capturas em `.scratch/scene
 Veja [detalhes da implementação](docs/IMPLEMENTACAO.md) e o
 [GDD original](docs/GDD_Cells_at_Work_Hero_Shooter_Prototype.html).
 
-O visual 3D é um blockout estilizado, com personagens de geometria simples.
-Os retratos transparentes originais do [site oficial](https://cellsatwork-anime.com/character/)
-estão em `Assets/characters/`, com créditos em `SOURCES.md`. Os sons curtos são
-procedurais e podem ser regenerados com `python scripts/build_audio.py`.
+O distrito 3D tem **96 × 120 unidades**, três frentes conectadas, quatro rampas,
+galerias e telhados a 4 m, torres a 7 m e atalhos por salto. Todos sobem pelas
+rampas; Killer T e Pseudomonas saltam 3,6 m e alcançam as torres pelas galerias.
+Streptococcus pode atravessar o vão de 9 m correndo e pulando; heróis com avanço
+também podem combinar a habilidade com o pulo. Cair no vão leva à rua inferior.
+O minimapa mostra construções, rampas e a altitude atual.
+
+Os personagens articulados e as fachadas foram adaptados de **Cellular-Odyssey-2**,
+com modelos distintos para os oito heróis e iluminação estilizada. O acervo inclui
+142 imagens das páginas de personagens das duas temporadas do
+[site oficial](https://cellsatwork-anime.com/1st/character/), com dez retratos
+completos, URLs e hashes em `Assets/characters/manifest.json` e créditos em
+`Assets/characters/SOURCES.md`. O jogo funciona sem o outro projeto e sem internet.
+Veja [o mapa e as travessias](docs/MAPA_ABRASION.md).
+
+`python scripts/check_art.py` gera capturas dos modelos e do distrito em
+`.scratch/art-upgrade/`. Os sons podem ser regenerados com `python scripts/build_audio.py`.

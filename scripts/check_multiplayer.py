@@ -32,13 +32,17 @@ def main():
                 failures.append(i)
         for log in logs:
             log.flush()
+        for i, log in enumerate(logs):
+            text = Path(log.name).read_text(encoding="utf8")
+            if any(marker in text for marker in ("Traceback", "Error in ", "Erro processando pacote")) and i not in failures:
+                failures.append(i)
         if failures:
             for i in failures:
                 print(Path(logs[i].name).read_text(encoding="utf8"))
             raise SystemExit("Multiplayer integration failed")
         for role in ["host", "client1", "client2", "client3", "client4", "client5"]:
             print((output/f"{role}.json").read_text(encoding="utf8"))
-        print("PASS: one host + five TCP clients, movement, phases, antigen, death/respawn and physiological event.")
+        print("PASS: one host + five clients; native RPCs (TCP), NetworkTransform (UDP), phases, antigen, death/respawn and event.")
     finally:
         for process in processes:
             if process.poll() is None:

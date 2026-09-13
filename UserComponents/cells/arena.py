@@ -5,6 +5,7 @@ from EasyCells3D.PhysicsComponents3D import PhysicsBody3D, BodyType, SphereShape
 from .rules import MatchState
 from .catalog import POINTS, CORE_POSITIONS, CELLS
 from .bots import BotBrain
+from .layout import SPAWN_Z
 
 ACTOR_FIELDS = ("hero", "health", "shield", "alive", "respawn", "yaw", "pitch", "ability_cd", "secondary_cd",
                 "special_cd", "boost", "harden", "reveal", "neutralized", "hit_marker", "hurt", "kills", "deaths", "shot")
@@ -32,7 +33,7 @@ class Arena(Component):
             self.core_bodies.append(body)
 
     def spawn_position(self, slot):
-        return Vec3((slot % 3-1)*10, 1.05, 25 if slot < 3 else -26)
+        return Vec3((slot % 3-1)*20, 1.05, SPAWN_Z if slot < 3 else -SPAWN_Z)
 
     def actor_for_body(self, body):
         return next((a for a in self.actors.values() if getattr(a, "body", None) is body and a.alive), None)
@@ -97,14 +98,14 @@ class Arena(Component):
         if self.state.winner:
             self.finish_timer += dt
             if self.finish_timer > 2:
-                net.latest = self.snapshot()
+                net.latest = self.serialize_state()
                 net.status = "results"
 
-    def snapshot(self):
+    def serialize_state(self):
         actors = {}
         for slot, a in self.actors.items():
             data = {key: getattr(a, key) for key in ACTOR_FIELDS}
-            data.update(pos=a.transform.position.to_tuple, ammo=getattr(a, "weapon", None).ammo if hasattr(a, "weapon") else 0,
+            data.update(ammo=getattr(a, "weapon", None).ammo if hasattr(a, "weapon") else 0,
                         reload=a.weapon.reload_time if hasattr(a, "weapon") else 0)
             actors[slot] = data
         return dict(state=self.state.serialize(), actors=actors, samples=self.samples.copy(),
@@ -117,13 +118,9 @@ class Arena(Component):
             a = self.actors.get(slot)
             if a is None:
                 continue
-            teleported = a.alive != data["alive"]
             for key in ACTOR_FIELDS:
                 setattr(a, key, data[key])
-            a.target_position = Vec3(*data["pos"])
             a.body.enable = a.alive
-            if teleported:
-                a.transform.position = a.target_position
             a.weapon.ammo, a.weapon.reload_time = data["ammo"], data["reload"]
         self.gate.enable = self.state.event == "coagulation" and self.state.event_time > 0
         for i, body in enumerate(self.core_bodies):

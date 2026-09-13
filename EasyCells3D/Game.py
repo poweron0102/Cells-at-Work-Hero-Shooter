@@ -105,7 +105,16 @@ class Game:
 
         self.run_time = 0
 
-        self.to_init.clear()
+        # Persistent items (and their children) still need pending Component.init.
+        def survives_load(callback):
+            item = getattr(getattr(callback, "__self__", None), "item", None)
+            if item is None:
+                return False
+            while item.parent is not None:
+                item = item.parent
+            return not item.destroy_on_load
+
+        self.to_init[:] = [callback for callback in self.to_init if survives_load(callback)]
         for item in list(self.item_list):
             if item.destroy_on_load:
                 item.Destroy()

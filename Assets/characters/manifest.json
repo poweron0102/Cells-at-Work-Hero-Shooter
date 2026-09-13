@@ -1,0 +1,920 @@
+{
+  "pages": [
+    "https://cellsatwork-anime.com/1st/character/",
+    "https://cellsatwork-anime.com/character/",
+    "https://cellsatwork-anime.com/1st/character/b_cell.html",
+    "https://cellsatwork-anime.com/1st/character/bacillus_cereus.html",
+    "https://cellsatwork-anime.com/1st/character/basophilic.html",
+    "https://cellsatwork-anime.com/1st/character/cancer_cell.html",
+    "https://cellsatwork-anime.com/1st/character/dendritic_cell.html",
+    "https://cellsatwork-anime.com/1st/character/effector_t_cell.html",
+    "https://cellsatwork-anime.com/1st/character/eosinophil.html",
+    "https://cellsatwork-anime.com/1st/character/erythroblast.html",
+    "https://cellsatwork-anime.com/1st/character/erythrocyte.html",
+    "https://cellsatwork-anime.com/1st/character/erythrocyte_2.html",
+    "https://cellsatwork-anime.com/1st/character/erythrocyte_3.html",
+    "https://cellsatwork-anime.com/1st/character/helper_t_cell.html",
+    "https://cellsatwork-anime.com/1st/character/immature_thymocytes_h.html",
+    "https://cellsatwork-anime.com/1st/character/immature_thymocytes_k.html",
+    "https://cellsatwork-anime.com/1st/character/killer_t_cell.html",
+    "https://cellsatwork-anime.com/1st/character/leukocyte.html",
+    "https://cellsatwork-anime.com/1st/character/leukocyte_2.html",
+    "https://cellsatwork-anime.com/1st/character/macrophage.html",
+    "https://cellsatwork-anime.com/1st/character/mast_cell.html",
+    "https://cellsatwork-anime.com/1st/character/memory_cell.html",
+    "https://cellsatwork-anime.com/1st/character/memory_t_cell.html",
+    "https://cellsatwork-anime.com/1st/character/monocytes.html",
+    "https://cellsatwork-anime.com/1st/character/myelocyte.html",
+    "https://cellsatwork-anime.com/1st/character/naive_t_cell.html",
+    "https://cellsatwork-anime.com/1st/character/neutrophil.html",
+    "https://cellsatwork-anime.com/1st/character/nk_cell.html",
+    "https://cellsatwork-anime.com/1st/character/platelet.html",
+    "https://cellsatwork-anime.com/1st/character/pollinosis.html",
+    "https://cellsatwork-anime.com/1st/character/regulatory_t_cell.html",
+    "https://cellsatwork-anime.com/1st/character/s_aeruginosa.html",
+    "https://cellsatwork-anime.com/1st/character/s_anisakis.html",
+    "https://cellsatwork-anime.com/1st/character/s_aureus.html",
+    "https://cellsatwork-anime.com/1st/character/s_campylobacter.html",
+    "https://cellsatwork-anime.com/1st/character/s_pneumoniae.html",
+    "https://cellsatwork-anime.com/1st/character/s_pyogenes.html",
+    "https://cellsatwork-anime.com/1st/character/s_vibrio.html",
+    "https://cellsatwork-anime.com/1st/character/thymocyte_cell.html",
+    "https://cellsatwork-anime.com/character/01/",
+    "https://cellsatwork-anime.com/character/02/",
+    "https://cellsatwork-anime.com/character/03/",
+    "https://cellsatwork-anime.com/character/04/",
+    "https://cellsatwork-anime.com/character/05/",
+    "https://cellsatwork-anime.com/character/06/",
+    "https://cellsatwork-anime.com/character/07/",
+    "https://cellsatwork-anime.com/character/08/",
+    "https://cellsatwork-anime.com/character/09/",
+    "https://cellsatwork-anime.com/character/10/",
+    "https://cellsatwork-anime.com/character/11/"
+  ],
+  "images": [
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/b_cell.png",
+      "file": "official/1st/assets/img/character/b_cell.png",
+      "bytes": 41386,
+      "sha256": "c1b0d48d6b95700de6b0b3118e35d767371f58749b1d9fc52d3d027b757f5beb"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/b_cell/ss.jpg",
+      "file": "official/1st/assets/img/character/b_cell/ss.jpg",
+      "bytes": 276739,
+      "sha256": "e15bec0ab4b4ddc91da41c5177f5894d0318627f189f072e93809153dadb8de1"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/b_cell/stand.png",
+      "file": "official/1st/assets/img/character/b_cell/stand.png",
+      "bytes": 266142,
+      "sha256": "c4e9a2be3a9b441871b7bd9826f24361b97e6dae84899d3bf2da58e3f25d721e"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/b_cell/up.png",
+      "file": "official/1st/assets/img/character/b_cell/up.png",
+      "bytes": 199200,
+      "sha256": "6b0a3cbd7937f3a4c59a36dcc9a2d681707c84aeffc8b1cd7d95f88f92737d0e"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/bacillus_cereus.png",
+      "file": "official/1st/assets/img/character/bacillus_cereus.png",
+      "bytes": 55003,
+      "sha256": "bfdb54752949cfe17f42882d78f4775ab4ee71a6ebb509a3f7dd4ee95d3a71e3"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/bacillus_cereus/ss.jpg",
+      "file": "official/1st/assets/img/character/bacillus_cereus/ss.jpg",
+      "bytes": 85955,
+      "sha256": "40a26dadce334596ca12d946972893da7ca55a5dd521b47294f458b711a54881"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/basophilic.png",
+      "file": "official/1st/assets/img/character/basophilic.png",
+      "bytes": 32992,
+      "sha256": "4667a11356ef0231ea4d06b42da40ed60bfcb6a0ba595659472be089a27b1b87"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/basophilic/ss.jpg",
+      "file": "official/1st/assets/img/character/basophilic/ss.jpg",
+      "bytes": 136070,
+      "sha256": "994d6b4e6746b278cd8ac18ad9a541bada2aff03c63cee88bdb0cfd8f1c2bd32"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/basophilic/stand.png",
+      "file": "official/1st/assets/img/character/basophilic/stand.png",
+      "bytes": 189893,
+      "sha256": "1e33359d1bf947aefb6c5e11baa766f66e9396a43551319c13dfd7121c533aef"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/basophilic/up.png",
+      "file": "official/1st/assets/img/character/basophilic/up.png",
+      "bytes": 149510,
+      "sha256": "17d9103c320cec7cb8a44a30cbdea63d4f6a6458d1c54681c825f5159561503b"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/cancer_cell.png",
+      "file": "official/1st/assets/img/character/cancer_cell.png",
+      "bytes": 57617,
+      "sha256": "e85a8ecefe063840312933a0f1b501d4fd4d70fa35710d4f488e2c56a63a0115"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/cancer_cell/ss.jpg",
+      "file": "official/1st/assets/img/character/cancer_cell/ss.jpg",
+      "bytes": 181820,
+      "sha256": "978ab55577cbe8510fe44df4d6289bd93a84cecaa449184182bf9049da01bc8c"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/dendritic_cell.png",
+      "file": "official/1st/assets/img/character/dendritic_cell.png",
+      "bytes": 36085,
+      "sha256": "01fbfc6b08cbe924eca33e4ad9daa248add574931d7aecfd016650fa190ad8b4"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/dendritic_cell/ss.jpg",
+      "file": "official/1st/assets/img/character/dendritic_cell/ss.jpg",
+      "bytes": 144810,
+      "sha256": "7988fab9bd3d77be947e5fb5fd39e9fb5dfd96509826e5fed8510d1cbcb63fa4"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/dendritic_cell/stand.png",
+      "file": "official/1st/assets/img/character/dendritic_cell/stand.png",
+      "bytes": 220233,
+      "sha256": "3358b2bc021ade3dcebb9177c7090ba8b8eec80364990e69bf3c94872c6340e9"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/dendritic_cell/up.png",
+      "file": "official/1st/assets/img/character/dendritic_cell/up.png",
+      "bytes": 173728,
+      "sha256": "8844bd9f925e59f17a4a501206ed3cc47ca92e918b1bd30c76d09e1f172e8311"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/effector_t_cell.png",
+      "file": "official/1st/assets/img/character/effector_t_cell.png",
+      "bytes": 39882,
+      "sha256": "debeaf3ea04130d09a951bcc300ebb04df28b795497480c1238b243450741491"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/effector_t_cell/ss.jpg",
+      "file": "official/1st/assets/img/character/effector_t_cell/ss.jpg",
+      "bytes": 155149,
+      "sha256": "20fe0100fdcef4319c124c9c7a9ef6c0c09311b68c5b59610a197b1ba038c7d7"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/effector_t_cell/stand.png",
+      "file": "official/1st/assets/img/character/effector_t_cell/stand.png",
+      "bytes": 224407,
+      "sha256": "a275e010edd658f9c8ec80299853d6ded46bb091979d47916e1e080de525dab3"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/effector_t_cell/up.png",
+      "file": "official/1st/assets/img/character/effector_t_cell/up.png",
+      "bytes": 232645,
+      "sha256": "c6878d10f908dcb500f751113f1355460c1e22e07c2656f9dc6dfe6c97e4985b"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/eosinophil.png",
+      "file": "official/1st/assets/img/character/eosinophil.png",
+      "bytes": 40991,
+      "sha256": "8fc903dfcc59d321d4f917ea6e4f695b5f868fd219580c3f03c83b9ac2839e88"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/eosinophil/ss.jpg",
+      "file": "official/1st/assets/img/character/eosinophil/ss.jpg",
+      "bytes": 178531,
+      "sha256": "7b2ae00efdec4161c81752ac151942a5cc3bbeed13b58428014881a011abba41"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/eosinophil/stand.png",
+      "file": "official/1st/assets/img/character/eosinophil/stand.png",
+      "bytes": 268317,
+      "sha256": "58f6d18bef50f7590a1525b2d5e0f0a30e6391cd5c0b3e934497114c760e5776"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/eosinophil/up.png",
+      "file": "official/1st/assets/img/character/eosinophil/up.png",
+      "bytes": 212008,
+      "sha256": "4124f08355b8040837aedd1d5ebb53840141caf88315ee7471fb2780e656d398"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/erythroblast.png",
+      "file": "official/1st/assets/img/character/erythroblast.png",
+      "bytes": 58127,
+      "sha256": "a9cd3b8df47ee0c4ad04e86d094f63eeae4728f1856c70da722af84152ebe6df"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/erythroblast/ss.jpg",
+      "file": "official/1st/assets/img/character/erythroblast/ss.jpg",
+      "bytes": 211608,
+      "sha256": "2bb5a08480368e5c5132391d43cac86f509a8e9f234ad5af947f313b7716d570"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/erythrocyte.png",
+      "file": "official/1st/assets/img/character/erythrocyte.png",
+      "bytes": 39634,
+      "sha256": "593c00a2d09114b4b73eb84f9cd6cb8d03bc700b9bab911b8c7056528d742879"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/erythrocyte/ss.jpg",
+      "file": "official/1st/assets/img/character/erythrocyte/ss.jpg",
+      "bytes": 95092,
+      "sha256": "c45d8a4dc74475a95f7630fa015b8d5298fb7c7e0bf0be4ddb6d45714c7f8859"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/erythrocyte/stand.png",
+      "file": "official/1st/assets/img/character/erythrocyte/stand.png",
+      "bytes": 253607,
+      "sha256": "e065be3cee1c0b375da5aac370b71f21dd6b31a5742edd2a2cd181ed36a82253"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/erythrocyte/up.png",
+      "file": "official/1st/assets/img/character/erythrocyte/up.png",
+      "bytes": 50133,
+      "sha256": "9b39e05af14dfc2d7169c7e0cbed09d96ac4d4128ffbe7161dd03a00f552813d"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/erythrocyte_2.png",
+      "file": "official/1st/assets/img/character/erythrocyte_2.png",
+      "bytes": 59160,
+      "sha256": "f91c80d9ed324693f34d07c420f798a0c65b157c1afeb0f3c4ec5261c823dfcb"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/erythrocyte_2/ss.jpg",
+      "file": "official/1st/assets/img/character/erythrocyte_2/ss.jpg",
+      "bytes": 258913,
+      "sha256": "6f7a656934ade8972f3bb8a603ba91c28d8ebea8d3ae9e5d53df91ee6906b50d"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/erythrocyte_3.png",
+      "file": "official/1st/assets/img/character/erythrocyte_3.png",
+      "bytes": 54297,
+      "sha256": "aa14d55d472ed88a22919729a8b1a6fb6061fde58af0599a2d13f15b1d6a5091"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/erythrocyte_3/ss.jpg",
+      "file": "official/1st/assets/img/character/erythrocyte_3/ss.jpg",
+      "bytes": 103402,
+      "sha256": "fa6d464c92c249978b8b0d076614634170f5cebfc84b5a0ff289cfeaf1182d5d"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/helper_t_cell.png",
+      "file": "official/1st/assets/img/character/helper_t_cell.png",
+      "bytes": 35718,
+      "sha256": "3a87143e3dd33be117fb6aa8d319faeb0190f163111b896489bdb1fe4777bca7"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/helper_t_cell/ss.jpg",
+      "file": "official/1st/assets/img/character/helper_t_cell/ss.jpg",
+      "bytes": 185838,
+      "sha256": "69068bf6bcb2c0f8fa4022dd49e7746753c83592a3a3c928f82580ce2657a225"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/helper_t_cell/stand.png",
+      "file": "official/1st/assets/img/character/helper_t_cell/stand.png",
+      "bytes": 230495,
+      "sha256": "47430d110d576cb9e6d24663db9191799de659b2b4c1dd449b97a56664bde228"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/helper_t_cell/up.png",
+      "file": "official/1st/assets/img/character/helper_t_cell/up.png",
+      "bytes": 50642,
+      "sha256": "e077002cb104f9175a855f3d7838c757149c61da81df94ab9479d55942c3fbff"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/immature_thymocytes_h.png",
+      "file": "official/1st/assets/img/character/immature_thymocytes_h.png",
+      "bytes": 63537,
+      "sha256": "16c15bf57b69d5a6af210560e0842c5f0a595fdde16caf40cfa132cdb8173b6d"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/immature_thymocytes_h/ss.jpg",
+      "file": "official/1st/assets/img/character/immature_thymocytes_h/ss.jpg",
+      "bytes": 233708,
+      "sha256": "3ce49dd9b40ab9ea819873fbfa6b73e9926d9b4b5a92f2d3b5ad4c7d615c4bc4"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/immature_thymocytes_k.png",
+      "file": "official/1st/assets/img/character/immature_thymocytes_k.png",
+      "bytes": 61714,
+      "sha256": "5ecdf8462043db1bd4904821572500ee8febdef8af4790bcba242a242bcf0dd8"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/immature_thymocytes_k/ss.jpg",
+      "file": "official/1st/assets/img/character/immature_thymocytes_k/ss.jpg",
+      "bytes": 124354,
+      "sha256": "5d465dcf15d28e4bb45a83be466936b8e8a5b6fbba11a0957f7ae0cf90c1b186"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/killer_t_cell.png",
+      "file": "official/1st/assets/img/character/killer_t_cell.png",
+      "bytes": 38123,
+      "sha256": "cd25d8683cc8fab670b5c24696b478ef538eaddd6b237eeca28b39a644a2ff64"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/killer_t_cell/ss.jpg",
+      "file": "official/1st/assets/img/character/killer_t_cell/ss.jpg",
+      "bytes": 84835,
+      "sha256": "ebcb44c69622ef703261507a71f510e0a480fc8719191d857cc4fe2e43f1a54c"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/killer_t_cell/stand.png",
+      "file": "official/1st/assets/img/character/killer_t_cell/stand.png",
+      "bytes": 222154,
+      "sha256": "eceec7893aabe3f23d586d7a632aa4cc53d5423ad9e9f8ed9c1578d6b8283da7"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/killer_t_cell/up.png",
+      "file": "official/1st/assets/img/character/killer_t_cell/up.png",
+      "bytes": 50338,
+      "sha256": "06661993d9aa6aca4b4be516c691a73223d5858dc07f94ed02a6196231220c55"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/leukocyte.png",
+      "file": "official/1st/assets/img/character/leukocyte.png",
+      "bytes": 31077,
+      "sha256": "855663b091017036cbf911a6c255d69ed50e1b7b7c8a02ed1d4e0ac03e07091e"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/leukocyte/ss.jpg",
+      "file": "official/1st/assets/img/character/leukocyte/ss.jpg",
+      "bytes": 132277,
+      "sha256": "e81a96d0e803f05f8e321c443d09ba6ff0289dedef11c6ee40ba758c533d3929"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/leukocyte/stand.png",
+      "file": "official/1st/assets/img/character/leukocyte/stand.png",
+      "bytes": 369463,
+      "sha256": "0bd63928ddcc28c97159001434a2abf921440854444a83076ded5063a82d0390"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/leukocyte/up.png",
+      "file": "official/1st/assets/img/character/leukocyte/up.png",
+      "bytes": 55653,
+      "sha256": "54ed449cf567b80403e019e3d8a9dad827ed7def1fad1db18ec0f075bcd30cec"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/leukocyte_2.png",
+      "file": "official/1st/assets/img/character/leukocyte_2.png",
+      "bytes": 36778,
+      "sha256": "01b99cc00ce47cacc72a890f2d43f0f6edd132b49247b217575b96f712b2edee"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/leukocyte_2/stand.png",
+      "file": "official/1st/assets/img/character/leukocyte_2/stand.png",
+      "bytes": 519798,
+      "sha256": "91dcff724563efaf21e55831e814fb01430023feed9e85f730fde8ffecd79851"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/leukocyte_2/up.png",
+      "file": "official/1st/assets/img/character/leukocyte_2/up.png",
+      "bytes": 207408,
+      "sha256": "b57b3d672526d43340770eddd9cd82dbcbb8efb861fd7e5b798c4794366a6b6f"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/macrophage.png",
+      "file": "official/1st/assets/img/character/macrophage.png",
+      "bytes": 44552,
+      "sha256": "67d5bbecbbda56bb93e8e3ba1aca4f49297e9969f5b9c577598d58ea8f5a9e1f"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/macrophage/ss.jpg",
+      "file": "official/1st/assets/img/character/macrophage/ss.jpg",
+      "bytes": 123477,
+      "sha256": "412a42dcc3220ddf900d2ef84de90c4470ec9e0c4825b3bd6fcc745f4c58a0fe"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/macrophage/stand.png",
+      "file": "official/1st/assets/img/character/macrophage/stand.png",
+      "bytes": 424016,
+      "sha256": "4e3de2ff604534138a35e3beecfaf6ae58e373a8d05b2cfc3c838227d846752b"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/macrophage/up.png",
+      "file": "official/1st/assets/img/character/macrophage/up.png",
+      "bytes": 69132,
+      "sha256": "08ca80c804d7ad3d62a4da6f65a80161609bcbc984b4a2f774e38dc4f5415564"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/mast_cell.png",
+      "file": "official/1st/assets/img/character/mast_cell.png",
+      "bytes": 35020,
+      "sha256": "379ecdff21f493ab4605f55589f79bb5d24550aee737f07e0ec0a06f599220de"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/mast_cell/ss.jpg",
+      "file": "official/1st/assets/img/character/mast_cell/ss.jpg",
+      "bytes": 149148,
+      "sha256": "37c366c63724f9257561813adba94dea6bfdbeee6386c43a9a4a715cc32a932f"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/mast_cell/stand.png",
+      "file": "official/1st/assets/img/character/mast_cell/stand.png",
+      "bytes": 189011,
+      "sha256": "ea6d471915f6117cc04bd391db8020ec3435d7d65e164e63fcfba1d1751d97eb"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/mast_cell/up.png",
+      "file": "official/1st/assets/img/character/mast_cell/up.png",
+      "bytes": 178658,
+      "sha256": "69d67dbf68cb77ffe0f778422b2f1bf4f3f7a83462f374da1d02d444d7738cad"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/memory_cell.png",
+      "file": "official/1st/assets/img/character/memory_cell.png",
+      "bytes": 32988,
+      "sha256": "8ec11fbd121e0c1057a7a5ea88cacd8d1af6aecac394a2d87d14c2405e302123"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/memory_cell/ss.jpg",
+      "file": "official/1st/assets/img/character/memory_cell/ss.jpg",
+      "bytes": 168909,
+      "sha256": "d28f2303381108919999d04440c3de6f5cb2777459a1146b96d2d7744986c09e"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/memory_cell/stand.png",
+      "file": "official/1st/assets/img/character/memory_cell/stand.png",
+      "bytes": 185138,
+      "sha256": "095d14b6aa60b52e76035c9e99f67ccbc3143420da220335851f5df23e8778b7"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/memory_cell/up.png",
+      "file": "official/1st/assets/img/character/memory_cell/up.png",
+      "bytes": 148609,
+      "sha256": "c455708c79d4d857f8fe4e84512ca129005c1c3a841ffa11f2114d4c163ad9cb"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/memory_t_cell.png",
+      "file": "official/1st/assets/img/character/memory_t_cell.png",
+      "bytes": 62348,
+      "sha256": "8b5769dbe614d1edf2ae6fd6166ed96235c54925766a6748519655eff0e8e2bd"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/memory_t_cell/ss.jpg",
+      "file": "official/1st/assets/img/character/memory_t_cell/ss.jpg",
+      "bytes": 277975,
+      "sha256": "d52fbc4a55834a6c2646752a2172ce36e6c2141bfc70973698e3ee3dff12366a"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/monocytes.png",
+      "file": "official/1st/assets/img/character/monocytes.png",
+      "bytes": 58522,
+      "sha256": "a370b807e774fbab7780da066cab343890ac9b0edbbff9465410559d21084c6f"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/monocytes/ss.jpg",
+      "file": "official/1st/assets/img/character/monocytes/ss.jpg",
+      "bytes": 145331,
+      "sha256": "3f07437e1bc82f6ad7332c783e22c4a43531937de6b09dda483c9e3d3a7c5a92"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/myelocyte.png",
+      "file": "official/1st/assets/img/character/myelocyte.png",
+      "bytes": 54947,
+      "sha256": "eaeb675baf8a5c5fcb10b9f50ecce541fd1e126eae57b5d48fafd031e4a76503"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/myelocyte/ss.jpg",
+      "file": "official/1st/assets/img/character/myelocyte/ss.jpg",
+      "bytes": 200113,
+      "sha256": "bd392175b759d4f99b0acbd4cc6e918009d3ca66e92e37fbf7d4f70c0ff0a1ba"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/naive_t_cell.png",
+      "file": "official/1st/assets/img/character/naive_t_cell.png",
+      "bytes": 33157,
+      "sha256": "589cb60942538e138ebc76116f4552c08fcda3ed2b75faff56025587bc312640"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/naive_t_cell/ss.jpg",
+      "file": "official/1st/assets/img/character/naive_t_cell/ss.jpg",
+      "bytes": 175605,
+      "sha256": "2d6779184bc28d7692a9644a68f2e487f720ee3e5e010378a2c89dcc54b28ad5"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/naive_t_cell/stand.png",
+      "file": "official/1st/assets/img/character/naive_t_cell/stand.png",
+      "bytes": 182476,
+      "sha256": "e5f46f79bbab93a3186fa1e757e672464d33842a229b8d8d1cabcaf2986e7dac"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/naive_t_cell/up.png",
+      "file": "official/1st/assets/img/character/naive_t_cell/up.png",
+      "bytes": 164590,
+      "sha256": "12f95157dd8c708b260cca9b661b461ae58e597915532db95b9a13cbdffc79e7"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/neutrophil.png",
+      "file": "official/1st/assets/img/character/neutrophil.png",
+      "bytes": 53736,
+      "sha256": "b2d70636483b29ecd7f1492f30ac2c44f6fab61934b9a2423b5745a29109d9d0"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/neutrophil/ss.jpg",
+      "file": "official/1st/assets/img/character/neutrophil/ss.jpg",
+      "bytes": 180443,
+      "sha256": "8d757ad09ad67d6c2ed8cd832321d4d19aea73b95d72082de6118bb1f19b7529"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/nk_cell.png",
+      "file": "official/1st/assets/img/character/nk_cell.png",
+      "bytes": 35095,
+      "sha256": "b42c383c5aa599f83ff4e6a8d8b968121e8053088cd8b0674142164d1b97c84d"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/nk_cell/ss.jpg",
+      "file": "official/1st/assets/img/character/nk_cell/ss.jpg",
+      "bytes": 133460,
+      "sha256": "129136079f8c7de5ff78579a18cb81af482ef4838d5606fd32a01b713a4e99c0"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/nk_cell/stand.png",
+      "file": "official/1st/assets/img/character/nk_cell/stand.png",
+      "bytes": 217757,
+      "sha256": "426f2eb04fd1064e632c3c158e09ce24c976e8e079476e8cd854de415a2b4c08"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/platelet.png",
+      "file": "official/1st/assets/img/character/platelet.png",
+      "bytes": 36448,
+      "sha256": "0596c3605a243da569ef793cf1598b3598378c5f993d43688f03150bfffe21be"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/platelet/ss.jpg",
+      "file": "official/1st/assets/img/character/platelet/ss.jpg",
+      "bytes": 161583,
+      "sha256": "2924d30573033e1484fc4f3bd0309687faa2c53befb84f1c5664c23e7b16da7a"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/platelet/stand.png",
+      "file": "official/1st/assets/img/character/platelet/stand.png",
+      "bytes": 207851,
+      "sha256": "fa61e5d9ea37a6a3d8d325bb2998f13151c4744470eedf5662f23b468f6e535b"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/platelet/up.png",
+      "file": "official/1st/assets/img/character/platelet/up.png",
+      "bytes": 63230,
+      "sha256": "1d5dfb3e64eae22074fc598a7d8a7ecbe0507d419d56627e42d1314b370db591"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/pollinosis.png",
+      "file": "official/1st/assets/img/character/pollinosis.png",
+      "bytes": 26063,
+      "sha256": "f2ab81a06aee32b1c463d83e94c264b48088b945258dade1e0b8bfb4e76f976a"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/pollinosis/ss.jpg",
+      "file": "official/1st/assets/img/character/pollinosis/ss.jpg",
+      "bytes": 236108,
+      "sha256": "41eb6b740f875ce4d9b66e9652fe86d41304041abfbf85568e31327081189419"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/pollinosis/stand.png",
+      "file": "official/1st/assets/img/character/pollinosis/stand.png",
+      "bytes": 104674,
+      "sha256": "0eafc2c85f85a705048dc732420d3d38c54fbbb9bc165691d1477011c223c7ce"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/regulatory_t_cell.png",
+      "file": "official/1st/assets/img/character/regulatory_t_cell.png",
+      "bytes": 37974,
+      "sha256": "5f61c5136ffaec394b20dcd615b4cd28fdce941c48bd74c3381145cda65dddd2"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/regulatory_t_cell/ss.jpg",
+      "file": "official/1st/assets/img/character/regulatory_t_cell/ss.jpg",
+      "bytes": 159788,
+      "sha256": "4ece45ec40b89f9ce313ef2e7edd3a61e653248b8cc67ae1906106ac6cca192b"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/regulatory_t_cell/stand.png",
+      "file": "official/1st/assets/img/character/regulatory_t_cell/stand.png",
+      "bytes": 174351,
+      "sha256": "b10d347080070f5ae4944377f50fe510042a122e323d7efa2bb5e2ce5ad2504d"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/regulatory_t_cell/up.png",
+      "file": "official/1st/assets/img/character/regulatory_t_cell/up.png",
+      "bytes": 197846,
+      "sha256": "4a820a0be15680661c470eeffb5261ddc2b6d2e8867a9c0f350e707e59e361a7"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/s_aeruginosa.png",
+      "file": "official/1st/assets/img/character/s_aeruginosa.png",
+      "bytes": 45380,
+      "sha256": "10528f85a78e03fe30b4902bef04a3d35cba1e910372c153060009797f83362f"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/s_aeruginosa/ss.jpg",
+      "file": "official/1st/assets/img/character/s_aeruginosa/ss.jpg",
+      "bytes": 162978,
+      "sha256": "466ccea10d374901d32d2d09501d18c33188fda46885ae01dadd6e8785818468"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/s_aeruginosa/stand.png",
+      "file": "official/1st/assets/img/character/s_aeruginosa/stand.png",
+      "bytes": 195657,
+      "sha256": "d91e0e4ad077ec3552cb956d82a2b87551f3574ecba0a0798cbfc887f47f368b"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/s_aeruginosa/up.png",
+      "file": "official/1st/assets/img/character/s_aeruginosa/up.png",
+      "bytes": 123473,
+      "sha256": "94ea977f1bb15f034014b3c12b5e5fe3356985d250234e27764483a54b40775b"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/s_anisakis.png",
+      "file": "official/1st/assets/img/character/s_anisakis.png",
+      "bytes": 30136,
+      "sha256": "da47fa02f1902d379a6810cc23a7e8373abf77662d8db52c483368d636167898"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/s_anisakis/ss.jpg",
+      "file": "official/1st/assets/img/character/s_anisakis/ss.jpg",
+      "bytes": 222623,
+      "sha256": "bf4fa0e4cdf90bc711fbd003e1a0b8c0aff2de7cd196162b7e0943861c154f4f"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/s_anisakis/stand.png",
+      "file": "official/1st/assets/img/character/s_anisakis/stand.png",
+      "bytes": 106497,
+      "sha256": "4de4140e5dd1f51e7ec96939724658a35b5b4f8a81f11d28bcf40367460f668b"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/s_anisakis/up.png",
+      "file": "official/1st/assets/img/character/s_anisakis/up.png",
+      "bytes": 117720,
+      "sha256": "ede4c3dd03f8d56700901d9b0b3e0df42a2c33e5f1c563bb8b8be6e0b5f59b01"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/s_aureus.png",
+      "file": "official/1st/assets/img/character/s_aureus.png",
+      "bytes": 40081,
+      "sha256": "a4dd6cf009d5e7715bcf91a42d7d8a24781221c050ca9684cee3b680aa2a8ef5"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/s_aureus/ss.jpg",
+      "file": "official/1st/assets/img/character/s_aureus/ss.jpg",
+      "bytes": 146324,
+      "sha256": "9566da4214e532e9ff9d02620e808daefbf79d4c424b9f25e22b51bbecf9a4b0"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/s_aureus/stand.png",
+      "file": "official/1st/assets/img/character/s_aureus/stand.png",
+      "bytes": 315547,
+      "sha256": "e5cc90f6452a3d24fee9123b8bb8df33169771cb19a837999adae134de0a3a23"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/s_aureus/up.png",
+      "file": "official/1st/assets/img/character/s_aureus/up.png",
+      "bytes": 143924,
+      "sha256": "6183fe286b49b830e9be391bf505a9ac1805ce2bafc93e222ae50b366e4e1516"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/s_campylobacter.png",
+      "file": "official/1st/assets/img/character/s_campylobacter.png",
+      "bytes": 36130,
+      "sha256": "1610fc89866dc9e4edc00f76fdbc4b5443ba74b1e5e2f3542531119cd5c30d3d"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/s_campylobacter/ss.jpg",
+      "file": "official/1st/assets/img/character/s_campylobacter/ss.jpg",
+      "bytes": 165625,
+      "sha256": "e68297e15bf183b6c435634c6d9a9f447e0785afcad352d5a321bb3916d3966e"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/s_campylobacter/stand.png",
+      "file": "official/1st/assets/img/character/s_campylobacter/stand.png",
+      "bytes": 148889,
+      "sha256": "5168dbff55e5ea4c1992fd4f16399f27388cebebf5c2a1ca97064266d66d9dda"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/s_campylobacter/up.png",
+      "file": "official/1st/assets/img/character/s_campylobacter/up.png",
+      "bytes": 141606,
+      "sha256": "90628ef77f662700e21e5c1adb47336b4358bcc9aa4f9c6cba1e5f8c57ece191"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/s_pneumoniae.png",
+      "file": "official/1st/assets/img/character/s_pneumoniae.png",
+      "bytes": 49128,
+      "sha256": "4e8de33dd19ba142bdb408eddcc29bf4f02127e0992570dd6bca5c50cdb4af8e"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/s_pneumoniae/ss.jpg",
+      "file": "official/1st/assets/img/character/s_pneumoniae/ss.jpg",
+      "bytes": 211896,
+      "sha256": "0d7e19765a69146c55b16ec923eac09ebc6c57ac5981b9d73cf7b3e78488c0f3"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/s_pneumoniae/stand.png",
+      "file": "official/1st/assets/img/character/s_pneumoniae/stand.png",
+      "bytes": 107320,
+      "sha256": "1d98b52463ff276760589cd743d2cef5e0fc4a1dbb7eead4349a23155909ef1e"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/s_pneumoniae/up.png",
+      "file": "official/1st/assets/img/character/s_pneumoniae/up.png",
+      "bytes": 52312,
+      "sha256": "085d1c86a44ccdaadd07b11af5f3baf2edc4691aed200aeb31b095502e7d5aee"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/s_pyogenes.png",
+      "file": "official/1st/assets/img/character/s_pyogenes.png",
+      "bytes": 31492,
+      "sha256": "e78fa45ed97d5f660dec9141c2b1580b16012710387660a92eea14001721173c"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/s_pyogenes/ss.jpg",
+      "file": "official/1st/assets/img/character/s_pyogenes/ss.jpg",
+      "bytes": 154234,
+      "sha256": "a8547037825b519a788b8befc805dd48d5d458ef06d539acf78d02eb44dc9094"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/s_pyogenes/stand.png",
+      "file": "official/1st/assets/img/character/s_pyogenes/stand.png",
+      "bytes": 385327,
+      "sha256": "cd3a8534dd653ad24fce47555022f32b0b65f29289649d56ed9b4862e5479298"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/s_pyogenes/up.png",
+      "file": "official/1st/assets/img/character/s_pyogenes/up.png",
+      "bytes": 160292,
+      "sha256": "b02514a0088c1c5803fc66c51ecc037ead2a68323c3c066c1bdf43757344161c"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/s_vibrio.png",
+      "file": "official/1st/assets/img/character/s_vibrio.png",
+      "bytes": 38243,
+      "sha256": "34ef2a25b42bb1bbd97d65d3c37f3401c5753afb89c9a71a8efbc254267a36a1"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/s_vibrio/ss.jpg",
+      "file": "official/1st/assets/img/character/s_vibrio/ss.jpg",
+      "bytes": 222477,
+      "sha256": "dffca7c4af7f5584b55b0f1567ec24368801934ba6ebc9c88619299fe7c5f9af"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/s_vibrio/stand.png",
+      "file": "official/1st/assets/img/character/s_vibrio/stand.png",
+      "bytes": 198600,
+      "sha256": "4eb998ea5e2de632701b9b8c57f847807839fa483e67937e1e55d57837d8ab3e"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/thymocyte_cell.png",
+      "file": "official/1st/assets/img/character/thymocyte_cell.png",
+      "bytes": 52304,
+      "sha256": "21e9e8be43c33c3222342039b7268e0b21e0955c996292e9c9d47cc3453838ef"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/1st/assets/img/character/thymocyte_cell/ss.jpg",
+      "file": "official/1st/assets/img/character/thymocyte_cell/ss.jpg",
+      "bytes": 86883,
+      "sha256": "6bf8db1ace61e49ed099e8f69b1c0249879c80a8e21e88b8ac1fb524fc0c7080"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/assets/img/character/chara_01.png",
+      "file": "official/assets/img/character/chara_01.png",
+      "bytes": 53756,
+      "sha256": "7a365ec5b2d52b9c5033c7d08c19bc43cfec858982c63d521499ba71007e8cc9"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/assets/img/character/chara_02.png",
+      "file": "official/assets/img/character/chara_02.png",
+      "bytes": 119480,
+      "sha256": "604de4f4327fdf021c754255da9771a9ce13cc092ccaacb0a8d2cc9629e0d637"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/assets/img/character/chara_03.png",
+      "file": "official/assets/img/character/chara_03.png",
+      "bytes": 67260,
+      "sha256": "094db692a4ee7199b4a5759b60d38a6e13f9cea356c79d6ea4ee888557d40789"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/assets/img/character/chara_04.png",
+      "file": "official/assets/img/character/chara_04.png",
+      "bytes": 110659,
+      "sha256": "3f2befc6e91b20fe826837c9ea92704f4403daefa254ceb306ddbf545a4869c0"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/assets/img/character/chara_05.png",
+      "file": "official/assets/img/character/chara_05.png",
+      "bytes": 46469,
+      "sha256": "3d37883163394a3aad5b0953561bda153bfa33755fc8e1b2dea3acf3e5080cb6"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/assets/img/character/chara_06.png",
+      "file": "official/assets/img/character/chara_06.png",
+      "bytes": 60351,
+      "sha256": "4d44c9346b3525a1222d4c4a29d0961e3c70a3e479be33c1ab997481181b1ab7"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/assets/img/character/chara_07.png",
+      "file": "official/assets/img/character/chara_07.png",
+      "bytes": 67990,
+      "sha256": "e13cb3c24c7592bd5d279ed1f7efee6adf2099484fe8125ee5f875f4ffff5aa8"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/assets/img/character/chara_08.png",
+      "file": "official/assets/img/character/chara_08.png",
+      "bytes": 48126,
+      "sha256": "050821e4252b19d3a1bf917d83df37d08a8e1d1f507350faa82403be62ae97e8"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/assets/img/character/chara_09.png",
+      "file": "official/assets/img/character/chara_09.png",
+      "bytes": 30345,
+      "sha256": "9a56e4eaa1bac5071771a9a32f02d88f976010790db963b0b3a8d5dc5a090c23"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/assets/img/character/chara_10.png",
+      "file": "official/assets/img/character/chara_10.png",
+      "bytes": 139798,
+      "sha256": "6d7b214a06190ce71981b7e04b232469639ad196cd16cb64f2ea545f9a24bd70"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/assets/img/character/chara_11.png",
+      "file": "official/assets/img/character/chara_11.png",
+      "bytes": 318439,
+      "sha256": "518876953c440bcb868b773833f30f80eca7471cb7aa5acb800248a4a6b2decf"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/assets/img/character/thumb_01.png",
+      "file": "official/assets/img/character/thumb_01.png",
+      "bytes": 18789,
+      "sha256": "37b925136f6e8f952c8338358efd89d65e1e94dc4f9baa40e37e469fc6d3e532"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/assets/img/character/thumb_02.png",
+      "file": "official/assets/img/character/thumb_02.png",
+      "bytes": 82649,
+      "sha256": "70bc9f211182481dcd588ddf5db61080d5c911ef784f33f533507fdc9ec38e78"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/assets/img/character/thumb_03.png",
+      "file": "official/assets/img/character/thumb_03.png",
+      "bytes": 18177,
+      "sha256": "2266794af2cc1542b6ed33b0dd0ff08677e01a87f483578f22061664baca04a4"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/assets/img/character/thumb_04.png",
+      "file": "official/assets/img/character/thumb_04.png",
+      "bytes": 22637,
+      "sha256": "f3e8cc3bf6f04818a5a62e76f135af667606e9b67a30c423baf73be266d0de01"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/assets/img/character/thumb_05.png",
+      "file": "official/assets/img/character/thumb_05.png",
+      "bytes": 21503,
+      "sha256": "bbb780f9837a15ef6b74a4f5fd39b51e77ed1d4ba99b33a9b60a1618f89fdf10"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/assets/img/character/thumb_06.png",
+      "file": "official/assets/img/character/thumb_06.png",
+      "bytes": 17354,
+      "sha256": "b57fe83121e77b7ff3f9bc50a4ec367a95ee0cb62945220bc892afc9a41cae40"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/assets/img/character/thumb_07.png",
+      "file": "official/assets/img/character/thumb_07.png",
+      "bytes": 16362,
+      "sha256": "4c70569464a1252f9f9fb5a58d48296e0fe8d0c77f6a24160b4e3aaa4140f6a9"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/assets/img/character/thumb_08.png",
+      "file": "official/assets/img/character/thumb_08.png",
+      "bytes": 12491,
+      "sha256": "03a569e8754f5cf2a5fb688c941731eca82e2180a41252af73e515dd4329a196"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/assets/img/character/thumb_09.png",
+      "file": "official/assets/img/character/thumb_09.png",
+      "bytes": 15366,
+      "sha256": "75865fcfca8ca834649806acf0e5c3754a8a7ce50af2c430ac1fbcaadba0110a"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/assets/img/character/thumb_10.png",
+      "file": "official/assets/img/character/thumb_10.png",
+      "bytes": 22640,
+      "sha256": "a10ae4f4f5a28debd9d8c80a130a401180cade68bcbb0700881116281450d5bc"
+    },
+    {
+      "url": "https://cellsatwork-anime.com/assets/img/character/thumb_11.png",
+      "file": "official/assets/img/character/thumb_11.png",
+      "bytes": 70250,
+      "sha256": "4c14ebb202dac0f24ad813e4b43f7fa224f0fccc7669371bf227093d1937d60c"
+    }
+  ],
+  "portraits": {
+    "red_blood_cell": "https://cellsatwork-anime.com/assets/img/character/chara_01.png",
+    "neutrophil": "https://cellsatwork-anime.com/assets/img/character/chara_02.png",
+    "killer_t": "https://cellsatwork-anime.com/assets/img/character/chara_03.png",
+    "macrophage": "https://cellsatwork-anime.com/assets/img/character/chara_04.png",
+    "platelet": "https://cellsatwork-anime.com/assets/img/character/chara_05.png",
+    "b_cell": "https://cellsatwork-anime.com/1st/assets/img/character/b_cell/stand.png",
+    "pneumococcus": "https://cellsatwork-anime.com/1st/assets/img/character/s_pneumoniae/stand.png",
+    "staphylococcus": "https://cellsatwork-anime.com/1st/assets/img/character/s_aureus/stand.png",
+    "pseudomonas": "https://cellsatwork-anime.com/1st/assets/img/character/s_aeruginosa/stand.png",
+    "streptococcus": "https://cellsatwork-anime.com/1st/assets/img/character/s_pyogenes/stand.png"
+  }
+}

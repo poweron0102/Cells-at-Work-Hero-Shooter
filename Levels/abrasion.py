@@ -14,7 +14,7 @@ from UserComponents.cells.world import build_abrasion
 
 
 def init(game):
-    game.background_color = rl.Color(224, 202, 177, 255)
+    game.background_color = rl.Color(199, 220, 214, 255)
     game.physics_world = BulletPhysicsWorld()
     camera = game.CreateItem().AddComponent(Camera3D(vfov=75))
     arena = game.CreateItem().AddComponent(Arena(game.session.is_server))

@@ -20,29 +20,30 @@ class Hero:
     secondary: str
     ultimate: str
     limit: int = 1
+    jump_height: float = 1.2
 
 
 HEROES = {
     "neutrophil": Hero("NEUTROPHIL 1146", CELLS, "COMBATENTE", 200, 6.2, 17, .105, 32,
-                       (221, 235, 230), "Phagocytic Rush", "Faca", "Chemotactic Signal", 2),
+                       (221, 235, 230), "Phagocytic Rush", "Faca", "Chemotactic Signal", 2, 2.0),
     "macrophage": Hero("MACROPHAGE", CELLS, "CONTENCAO / ANTIGENO", 280, 5.0, 12, .8, 8,
                        (234, 190, 196), "Antigen Sample", "Machado", "Hyperactivation"),
     "b_cell": Hero("B CELL", CELLS, "PRECISAO / ANTI-COLONIA", 180, 5.8, 42, .38, 14,
                   (111, 197, 244), "Neutralization", "Coronhada", "Massive Antibodies"),
     "killer_t": Hero("KILLER T", CELLS, "BREACHER", 250, 6.0, 24, .16, 27,
-                    (62, 79, 91), "Cytotoxic Charge", "Execute", "Full Activation"),
+                    (62, 79, 91), "Cytotoxic Charge", "Execute", "Full Activation", jump_height=3.6),
     "pneumococcus": Hero("PNEUMOCOCCUS", BACTERIA, "PRESSAO FRONTAL", 270, 5.1, 24, .22, 24,
                         (173, 119, 213), "Capsule Harden", "Invasive Charge", "Pneumonia Cloud"),
     "staphylococcus": Hero("STAPHYLOCOCCUS", BACTERIA, "COLONIZACAO", 230, 5.3, 25, .28, 24,
                           (237, 184, 77), "Colony Seed", "Aggregate", "Bacterial Cluster"),
     "pseudomonas": Hero("PSEUDOMONAS", BACTERIA, "CONTROLE DE TERRITORIO", 210, 5.8, 21, .19, 28,
-                       (99, 195, 150), "Biofilm", "Acid Burst", "Mature Biofilm"),
+                       (99, 195, 150), "Biofilm", "Acid Burst", "Mature Biofilm", jump_height=3.6),
     "streptococcus": Hero("STREPTOCOCCUS", BACTERIA, "FLANQUEADOR", 180, 7.2, 13, .08, 36,
-                         (229, 115, 158), "Spread", "Hemolysis", "Rapid Spread"),
+                         (229, 115, 158), "Spread", "Hemolysis", "Rapid Spread", jump_height=2.0),
 }
 
-POINTS = [(-13, 0), (0, -3), (13, 0)]
-CORE_POSITIONS = [(-11, -15), (11, -15)]
+POINTS = [(-28, 0), (0, -6), (28, 0)]
+CORE_POSITIONS = [(-28, -35), (28, -35)]
 PHASE_NAMES = ["BREACH", "IDENTIFICATION", "COLONIZATION"]
 PHASE_SECONDS = [180, 150, 210]
 

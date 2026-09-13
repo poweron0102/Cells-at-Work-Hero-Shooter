@@ -6,6 +6,7 @@ import select
 import time
 from collections import deque
 from EasyCells3D.scheduler import Scheduler
+from EasyCells3D.NetworkTCP import _decode
 
 
 class NetworkServerUDP:
@@ -69,7 +70,7 @@ class NetworkServerUDP:
 
                     # If the packet contains real data (not just a handshake), queue it
                     try:
-                        msg = pickle.loads(data)
+                        msg = _decode(data)
                         if msg != "HANDSHAKE":
                             self.msg_queues[client_id].append(msg)
                     except:
@@ -79,7 +80,7 @@ class NetworkServerUDP:
                     # --- Existing Client Handling ---
                     client_id = self.client_map[addr]
                     try:
-                        msg = pickle.loads(data)
+                        msg = _decode(data)
                         # Filter out repeated handshakes if client retries
                         if msg != "HANDSHAKE":
                             self.msg_queues[client_id].append(msg)
@@ -162,6 +163,8 @@ class NetworkClientUDP:
             raise ValueError("Invalid IP version")
 
         self.id: int | None = None
+        self.running = True
+        self.error = ""
 
         self.connect_thread = threading.Thread(target=self.connect)
         self.connect_thread.daemon = True
@@ -169,22 +172,37 @@ class NetworkClientUDP:
 
     def connect(self):
         # UDP connect() just filters incoming packets to this address
-        self.server_socket.connect((self.ip, self.port))
-
-        # UDP is stateless, so the server doesn't know we exist yet.
-        # We must send a Handshake packet to trigger registration.
-        self.send("HANDSHAKE")
-
-        # Get the client ID from the server
-        self.id = int(self.block_read())
-        print(f"Connected to server with id {self.id}")
-        self.connect_callback(self.id)
+        try:
+            self.server_socket.connect((self.ip, self.port))
+            self.server_socket.settimeout(.5)
+            for _ in range(10):
+                if not self.running:
+                    return
+                self.send("HANDSHAKE")
+                try:
+                    self.id = int(self.block_read())
+                    self.server_socket.settimeout(None)
+                    self.connect_callback(self.id)
+                    return
+                except (TimeoutError, ConnectionResetError):
+                    continue
+            self.error = "UDP handshake timed out"
+        except (OSError, ValueError, pickle.UnpicklingError) as exc:
+            self.error = str(exc)
 
     def send(self, data: object):
+        if not self.running:
+            return
         serialized = pickle.dumps(data)
-        self.server_socket.sendall(serialized)
+        try:
+            self.server_socket.sendall(serialized)
+        except OSError as exc:
+            self.error = str(exc)
 
     def read(self) -> Any:
+        # Only the handshake thread reads until it has received the peer ID.
+        if self.id is None or not self.running:
+            return None
         # Use select to check if data is available (non-blocking check)
         ready_to_read, _, _ = select.select([self.server_socket], [], [], 0)
         if not ready_to_read:
@@ -192,18 +210,22 @@ class NetworkClientUDP:
 
         try:
             data, _ = self.server_socket.recvfrom(65535)
-            return pickle.loads(data)
-        except ConnectionResetError:
+            message = _decode(data)
+            if message == "close":
+                self.running = False
+                return None
+            return message
+        except (OSError, pickle.UnpicklingError, EOFError):
             # UDP ICMP Port Unreachable can sometimes trigger this on Windows
             return None
 
     def block_read(self) -> Any:
         # Blocking read
         data, _ = self.server_socket.recvfrom(65535)
-        return pickle.loads(data)
+        return _decode(data)
 
     def close(self):
-        self.send("close")
+        self.running = False
         self.server_socket.close()
 
 

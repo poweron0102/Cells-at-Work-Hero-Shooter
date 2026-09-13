@@ -55,7 +55,7 @@ def Rpc(send_to: SendTo = SendTo.ALL, require_owner: bool = True, protocol: Prot
                     # Passa o protocolo definido para o send_rpc
                     instance.send_rpc(func.__name__, args[1:], send_to, protocol)
 
-                    if NetworkManager.instance.is_server and send_to == SendTo.ALL:
+                    if NetworkManager.instance.is_server and send_to in (SendTo.ALL, SendTo.SERVER):
                         return func(instance, *args[1:], **kwargs)
                     return None
 
@@ -71,7 +71,7 @@ def Rpc(send_to: SendTo = SendTo.ALL, require_owner: bool = True, protocol: Prot
                 if not getattr(static_comp, "_is_executing_rpc", False):
                     static_comp.send_rpc(func.__name__, args, send_to, protocol)
 
-                    if NetworkManager.instance.is_server and send_to == SendTo.ALL:
+                    if NetworkManager.instance.is_server and send_to in (SendTo.ALL, SendTo.SERVER):
                         return func(*args, **kwargs)
                     return None
 
@@ -293,7 +293,9 @@ class NetworkManager(Component):
                 self.server_callback_tcp if is_server else self.client_callback_tcp),
         }
         if enable_udp:
-            self.transports[Protocol.UDP] = UdpTransport(ip, port, ip_version, is_server,
+            if is_server and port == 0:
+                self.port = self.transports[Protocol.TCP]._impl.server_socket.getsockname()[1]
+            self.transports[Protocol.UDP] = UdpTransport(ip, self.port, ip_version, is_server,
                 self.server_callback_udp if is_server else self.client_callback_udp)
 
     # --- Callbacks ---
