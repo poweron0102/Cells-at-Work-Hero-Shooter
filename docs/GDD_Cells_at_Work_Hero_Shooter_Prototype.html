@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>GDD — Cells at Work! Hero Shooter — Protótipo Inicial</title>
+<style>
+:root{
+  --bg:#0b0d10;
+  --panel:#12161b;
+  --panel2:#171c22;
+  --text:#f5f7fa;
+  --muted:#aeb7c2;
+  --line:#2a333d;
+  --red:#ff4d5e;
+  --red2:#d92f42;
+  --blue:#5bb8ff;
+  --green:#5ad69a;
+  --yellow:#ffd166;
+  --orange:#ff9f43;
+  --purple:#b68cff;
+  --white:#ffffff;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0;
+  background:radial-gradient(circle at top right,#1a1013 0,#0b0d10 34%,#0b0d10 100%);
+  color:var(--text);
+  font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  line-height:1.58;
+}
+a{color:var(--blue);text-decoration:none}
+a:hover{text-decoration:underline}
+.wrapper{display:grid;grid-template-columns:280px 1fr;min-height:100vh}
+aside{
+  position:sticky;top:0;height:100vh;overflow:auto;
+  border-right:1px solid var(--line);background:rgba(10,12,15,.94);backdrop-filter:blur(8px);
+  padding:28px 20px;
+}
+.brand{font-size:14px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+.title-mini{font-size:22px;font-weight:800;line-height:1.12;margin-bottom:18px}
+.badge{display:inline-block;padding:5px 9px;border:1px solid var(--line);border-radius:999px;font-size:12px;color:var(--muted);margin:0 6px 6px 0}
+nav{margin-top:22px}
+nav a{display:block;color:#dfe6ee;padding:8px 10px;border-radius:8px;font-size:14px;margin:2px 0}
+nav a:hover{background:#171c22;text-decoration:none}
+main{max-width:1200px;width:100%;padding:48px 56px 80px}
+.hero{
+  border:1px solid var(--line);border-radius:24px;padding:42px;
+  background:linear-gradient(135deg,rgba(255,77,94,.12),rgba(91,184,255,.06) 45%,rgba(255,255,255,.02));
+  box-shadow:0 20px 60px rgba(0,0,0,.25);
+}
+.kicker{color:var(--red);font-weight:800;text-transform:uppercase;letter-spacing:.16em;font-size:13px}
+h1{font-size:46px;line-height:1.03;margin:10px 0 16px;letter-spacing:-.035em}
+.subtitle{font-size:19px;color:#cfd7df;max-width:850px}
+.meta{display:flex;flex-wrap:wrap;gap:10px;margin-top:24px}
+.meta span{padding:8px 12px;background:#11161b;border:1px solid var(--line);border-radius:999px;font-size:13px;color:#d7dee6}
+section{margin-top:46px;scroll-margin-top:24px}
+h2{font-size:30px;margin:0 0 18px;letter-spacing:-.02em}
+h3{font-size:21px;margin:26px 0 10px}
+h4{font-size:16px;margin:20px 0 8px;color:#e9eef3}
+p{color:#d4dbe2}
+.lead{font-size:18px;color:#eef3f7}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}
+.card{background:linear-gradient(180deg,var(--panel),#101419);border:1px solid var(--line);border-radius:16px;padding:20px}
+.card h3,.card h4{margin-top:0}
+.card p:last-child{margin-bottom:0}
+.callout{border-left:4px solid var(--red);background:#15181d;padding:18px 20px;border-radius:0 12px 12px 0;margin:18px 0}
+.callout.blue{border-left-color:var(--blue)}
+.callout.green{border-left-color:var(--green)}
+.callout.yellow{border-left-color:var(--yellow)}
+.callout strong{color:#fff}
+.pill{display:inline-block;font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:5px 8px;border-radius:999px;border:1px solid var(--line);margin-right:6px}
+.pill.cells{color:#f3f7fb;background:#f4f7fa12}
+.pill.bacteria{color:#ffb4bd;background:#ff4d5e14}
+.pill.system{color:#9fd2ff;background:#5bb8ff14}
+table{width:100%;border-collapse:separate;border-spacing:0;background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden;margin:14px 0 20px}
+th,td{padding:13px 14px;border-bottom:1px solid var(--line);vertical-align:top;text-align:left}
+th{background:#171c22;color:#f6f8fa;font-size:13px;text-transform:uppercase;letter-spacing:.06em}
+tr:last-child td{border-bottom:0}
+td{color:#d5dce4}
+.flow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:18px 0}
+.node{padding:10px 14px;border:1px solid var(--line);background:#13181e;border-radius:11px;font-weight:700}
+.arrow{color:var(--muted);font-weight:900}
+.meter{height:14px;background:#222932;border-radius:999px;overflow:hidden;border:1px solid #313b46;margin:8px 0 6px}
+.meter > span{display:block;height:100%;background:linear-gradient(90deg,var(--yellow),var(--orange),var(--red));width:65%}
+.small{font-size:13px;color:var(--muted)}
+ul,ol{color:#d6dde5;padding-left:22px}
+li{margin:7px 0}
+hr{border:0;border-top:1px solid var(--line);margin:34px 0}
+.tagline{font-size:26px;font-weight:800;line-height:1.25;margin:20px 0;color:#fff}
+.roster-grid{display:grid;grid-template-columns:1fr 1fr;gap:22px}
+.hero-card{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:22px}
+.hero-card h3{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.hero-card .role{font-size:12px;color:var(--muted);font-weight:600}
+.kit{display:grid;gap:10px;margin-top:14px}
+.ability{background:#0f1317;border:1px solid #25303a;border-radius:12px;padding:12px 14px}
+.ability b{display:block;color:#fff;margin-bottom:2px}
+.timeline{position:relative;margin:24px 0;padding-left:24px}
+.timeline:before{content:"";position:absolute;left:7px;top:4px;bottom:4px;width:2px;background:#33404c}
+.step{position:relative;margin:0 0 22px;padding-left:18px}
+.step:before{content:"";position:absolute;left:-21px;top:7px;width:10px;height:10px;border-radius:50%;background:var(--red);box-shadow:0 0 0 4px #ff4d5e20}
+.step h4{margin:0 0 4px}
+footer{margin-top:64px;padding-top:24px;border-top:1px solid var(--line);color:var(--muted);font-size:13px}
+@media (max-width: 980px){
+ .wrapper{grid-template-columns:1fr}
+ aside{position:relative;height:auto;border-right:0;border-bottom:1px solid var(--line)}
+ nav{columns:2}
+ main{padding:32px 22px 60px}
+ .grid,.grid3,.roster-grid{grid-template-columns:1fr}
+ h1{font-size:38px}
+}
+@media print{
+ body{background:#fff;color:#111}
+ aside{display:none}.wrapper{display:block}main{max-width:none;padding:0}
+ .hero,.card,.hero-card,table{box-shadow:none;background:#fff;color:#111;border-color:#bbb}
+ h1,h2,h3,h4,p,td,li,.lead,.subtitle{color:#111!important}
+ .meta span,.node,.ability{background:#fff;color:#111;border-color:#bbb}
+}
+</style>
+</head>
+<body>
+<div class="wrapper">
+<aside>
+  <div class="brand">Game Design Document</div>
+  <div class="title-mini">Cells at Work!<br>Hero Shooter</div>
+  <div>
+    <span class="badge">Protótipo inicial</span>
+    <span class="badge">FPS 3v3</span>
+    <span class="badge">Casual / Caótico</span>
+  </div>
+  <nav>
+    <a href="#visao">1. Visão</a>
+    <a href="#pilares">2. Pilares</a>
+    <a href="#fantasia">3. Fantasia das facções</a>
+    <a href="#loop">4. Core Loop</a>
+    <a href="#progressao">5. Progressão das células</a>
+    <a href="#stress">6. Systemic Stress</a>
+    <a href="#respawn">7. Morte e troca</a>
+    <a href="#roster">8. Roster inicial</a>
+    <a href="#npcs">9. NPCs e objetivos vivos</a>
+    <a href="#abrasion">10. Mapa: Abrasion</a>
+    <a href="#eventos">11. Eventos fisiológicos</a>
+    <a href="#hud">12. HUD</a>
+    <a href="#balance">13. Diretrizes de balanceamento</a>
+    <a href="#escopo">14. Escopo do protótipo</a>
+    <a href="#futuro">15. Expansões futuras</a>
+  </nav>
+</aside>
+
+<main>
+<header class="hero">
+  <div class="kicker">GDD — Vertical Slice / Proof of Concept</div>
+  <h1>Cells at Work! — Hero Shooter 3v3</h1>
+  <p class="subtitle">FPS competitivo-casual assimétrico em que bactérias tentam estabelecer uma infecção enquanto células de defesa escalam sua resposta ao longo da partida. A vitória é sempre determinada pelos objetivos específicos do mapa; o estado fisiológico do corpo altera as condições da partida, mas nunca decide o vencedor por si só.</p>
+  <div class="meta">
+    <span>Perspectiva: 1ª pessoa</span>
+    <span>Formato: 3v3</span>
+    <span>Partidas: ~8–12 min</span>
+    <span>Movimentação: simples / acessível</span>
+    <span>Troca de herói: ao morrer</span>
+    <span>Foco: objetivos + caos sistêmico</span>
+  </div>
+</header>
+
+<section id="visao">
+  <h2>1. Visão do jogo</h2>
+  <p class="lead"><strong>Fantasy:</strong> jogar uma batalha microscópica dentro do corpo humano, usando personagens reais de <em>Cells at Work!</em>, com gameplay de FPS e uma estrutura de partida que representa a escalada de uma resposta imunológica.</p>
+  <div class="callout">
+    <strong>High concept:</strong> “Um hero shooter 3v3 em que o time das bactérias tenta completar objetivos de infecção enquanto o time das células começa apenas com a resposta imune inata e desbloqueia células mais especializadas conforme identifica a ameaça.”
+  </div>
+  <p>O jogo não busca simulação biológica rigorosa. O objetivo é manter <strong>coerência mínima com a função de cada personagem</strong>, evitando transformar células que não combatem no anime em heróis armados apenas para preencher funções de shooter.</p>
+</section>
+
+<section id="pilares">
+  <h2>2. Pilares de design</h2>
+  <div class="grid">
+    <div class="card">
+      <h3>Resposta imune escalável</h3>
+      <p>As células começam com opções limitadas e desbloqueiam heróis mais especializados conforme realizam objetivos imunológicos e identificam a ameaça.</p>
+    </div>
+    <div class="card">
+      <h3>Assimetria real</h3>
+      <p>Células e bactérias não possuem loops espelhados. Células respondem, contêm e se adaptam; bactérias invadem, aderem, colonizam e tentam consolidar sua presença.</p>
+    </div>
+    <div class="card">
+      <h3>O corpo como mapa vivo</h3>
+      <p>Inflamação, coagulação, febre, fluxo sanguíneo e outros fenômenos alteram rotas e condições de combate sem substituir o objetivo principal.</p>
+    </div>
+    <div class="card">
+      <h3>Casual, legível e caótico</h3>
+      <p>Movimentação simples, partidas curtas e habilidades visualmente marcantes. O caos vem do estado do corpo e dos objetivos, não de sistemas excessivamente complexos de movimentação.</p>
+    </div>
+  </div>
+</section>
+
+<section id="fantasia">
+  <h2>3. Fantasia e identidade das facções</h2>
+  <div class="grid">
+    <div class="card">
+      <span class="pill cells">Células</span>
+      <h3>Conter → identificar → adaptar → eliminar</h3>
+      <p>Começam em desvantagem de variedade, mas evoluem ao longo da partida. O time ganha novas ferramentas conforme a resposta imunológica avança.</p>
+      <ul>
+        <li>Mais fortes no jogo reativo e no controle de crise.</li>
+        <li>Recebem novas opções de heróis durante a partida.</li>
+        <li>Utilizam respostas imunológicas globais que aumentam o estresse do corpo.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <span class="pill bacteria">Bactérias</span>
+      <h3>Invadir → espalhar → aderir → colonizar</h3>
+      <p>Começam com seu roster disponível e tentam criar pressão antes que a resposta adaptativa das células fique forte demais.</p>
+      <ul>
+        <li>Mais fortes em expansão territorial e sabotagem.</li>
+        <li>Dependem de colônias, biofilmes e subobjetivos.</li>
+        <li>Quanto mais avançam, mais o próprio corpo entra em crise.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="loop">
+  <h2>4. Core Loop</h2>
+  <h3>Loop das células</h3>
+  <div class="flow">
+    <span class="node">Detectar</span><span class="arrow">→</span>
+    <span class="node">Conter</span><span class="arrow">→</span>
+    <span class="node">Fagocitar / coletar</span><span class="arrow">→</span>
+    <span class="node">Identificar</span><span class="arrow">→</span>
+    <span class="node">Desbloquear resposta</span><span class="arrow">→</span>
+    <span class="node">Contra-atacar</span>
+  </div>
+  <h3>Loop das bactérias</h3>
+  <div class="flow">
+    <span class="node">Entrar</span><span class="arrow">→</span>
+    <span class="node">Espalhar</span><span class="arrow">→</span>
+    <span class="node">Aderir</span><span class="arrow">→</span>
+    <span class="node">Criar colônia</span><span class="arrow">→</span>
+    <span class="node">Proteger</span><span class="arrow">→</span>
+    <span class="node">Completar objetivo</span>
+  </div>
+  <div class="callout blue"><strong>Regra central:</strong> kills ajudam, mas não são a condição principal de progresso. O jogo deve incentivar eliminar o inimigo para abrir espaço para cumprir objetivos.</div>
+</section>
+
+<section id="progressao">
+  <h2>5. Progressão das células durante a partida</h2>
+  <p>O time das células não possui acesso ao roster inteiro desde o início. A partida representa uma resposta imunológica que começa inata e se torna progressivamente mais especializada.</p>
+  <div class="card">
+    <h3>Composição inicial</h3>
+    <p><strong>2× Neutrófilos + 1× Macrófago</strong></p>
+    <p class="small">A repetição de Neutrófilos é permitida porque eles representam a resposta inicial abundante e generalista.</p>
+  </div>
+
+  <h3>Antigen Recognition</h3>
+  <p>Uma barra de reconhecimento representa quanto o sistema imune já aprendeu sobre a ameaça atual.</p>
+  <div class="meter"><span style="width:45%;background:linear-gradient(90deg,#5bb8ff,#b68cff)"></span></div>
+  <p class="small">UNKNOWN PATHOGEN → ANTIGEN IDENTIFIED → ADAPTIVE RESPONSE AVAILABLE</p>
+
+  <table>
+    <thead><tr><th>Ação</th><th>Impacto sugerido</th><th>Objetivo de design</th></tr></thead>
+    <tbody>
+      <tr><td>Macrófago fagocita invasor derrotado</td><td>Alto</td><td>Principal forma de acelerar a identificação.</td></tr>
+      <tr><td>Destruir Colony Core</td><td>Médio</td><td>Permite progresso mesmo se o Macrófago estiver sob muita pressão.</td></tr>
+      <tr><td>Completar subobjetivo defensivo</td><td>Médio</td><td>Recompensa jogo orientado ao mapa.</td></tr>
+      <tr><td>Kill simples</td><td>Baixo ou nenhum</td><td>Evita transformar a partida em Team Deathmatch.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Desbloqueios temáticos</h3>
+  <div class="grid">
+    <div class="card"><h4>B Cell</h4><p>Desbloqueado quando o sistema identifica uma ameaça bacteriana extracelular / antígeno suficiente.</p></div>
+    <div class="card"><h4>Killer T</h4><p>Idealmente desbloqueado quando o mapa introduz células do tecido infectadas ou outro subobjetivo que justifique sua presença.</p></div>
+  </div>
+  <div class="callout green"><strong>Regra de roster:</strong> células especializadas devem entrar apenas quando a ameaça do mapa justifica sua função. Isso explica, por exemplo, por que Eosinophil não faz parte do protótipo sem parasitas.</div>
+</section>
+
+<section id="stress">
+  <h2>6. Systemic Stress — diretor dinâmico da partida</h2>
+  <p><strong>Systemic Stress não é condição de vitória ou derrota.</strong> A vitória é determinada exclusivamente pelos objetivos do mapa.</p>
+  <p>A barra mede o quanto o organismo está fisiologicamente pressionado e controla a intensidade e a frequência de eventos sistêmicos.</p>
+  <div class="meter"><span style="width:72%"></span></div>
+  <p class="small">0% = organismo estável · 100% = crise sistêmica / caos máximo</p>
+
+  <table>
+    <thead><tr><th>Faixa</th><th>Estado</th><th>Comportamento</th></tr></thead>
+    <tbody>
+      <tr><td>0–30%</td><td>Stable</td><td>Mapa quase normal, poucos eventos.</td></tr>
+      <tr><td>30–60%</td><td>Stressed</td><td>Inflamação local, mudanças leves de fluxo e rotas.</td></tr>
+      <tr><td>60–85%</td><td>Severe Response</td><td>Febre, edema, vasodilatação, coagulação mais frequente.</td></tr>
+      <tr><td>85–100%</td><td>Systemic Crisis</td><td>Eventos fortes, frequentes e imprevisíveis. A partida continua normalmente.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>O que aumenta o stress</h3>
+  <ul>
+    <li>Colônias bacterianas ativas.</li>
+    <li>Subobjetivos bacterianos concluídos.</li>
+    <li>Passagem do tempo em ritmo leve.</li>
+    <li>Respostas imunológicas globais utilizadas pelas células.</li>
+  </ul>
+  <p>O sistema deve permitir algum alívio de stress por ações defensivas, mas não precisa obrigatoriamente voltar a zero.</p>
+
+  <h3>Ultimates / Immune Responses</h3>
+  <p>Em vez de barras individuais de ultimate, as células utilizam <strong>respostas imunológicas compartilhadas</strong>. Ativá-las aumenta Systemic Stress e entra em um cooldown global para evitar spam e disputas constantes entre jogadores.</p>
+  <div class="callout yellow"><strong>Princípio:</strong> usar uma resposta poderosa pode salvar um objetivo agora, mas tornar o restante da partida mais caótico.</div>
+</section>
+
+<section id="respawn">
+  <h2>7. Morte, respawn e troca de personagem</h2>
+  <p>Ao morrer, o jogador das células não “ressuscita” a mesma célula de forma literal. O corpo envia outra célula para a região.</p>
+  <ol>
+    <li>Jogador é eliminado.</li>
+    <li>Curto tempo de respawn (~4–7 s no protótipo).</li>
+    <li>Abre-se uma tela com as células atualmente liberadas.</li>
+    <li>Jogador pode manter o personagem ou trocar.</li>
+    <li>Limites de simultaneidade são aplicados por personagem.</li>
+  </ol>
+  <table>
+    <thead><tr><th>Personagem</th><th>Limite simultâneo sugerido</th></tr></thead>
+    <tbody>
+      <tr><td>Neutrófilo</td><td>2</td></tr>
+      <tr><td>Macrófago</td><td>1</td></tr>
+      <tr><td>B Cell</td><td>1</td></tr>
+      <tr><td>Killer T</td><td>1</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="roster">
+  <h2>8. Roster inicial do protótipo</h2>
+  <p>O protótipo deve começar com <strong>4 células jogáveis e 4 bactérias jogáveis</strong>. Os kits abaixo são conceituais e ainda não representam números finais de balanceamento.</p>
+
+  <div class="roster-grid">
+    <div>
+      <h3><span class="pill cells">Células</span></h3>
+      <article class="hero-card">
+        <h3>Neutrophil 1146 <span class="role">Combatente / Generalista</span></h3>
+        <p>Herói inicial. Fácil de entender, móvel e eficiente em combate direto.</p>
+        <div class="kit">
+          <div class="ability"><b>Arma principal — SMG citotóxica</b>Curto/médio alcance, cadência alta e recoil controlável.</div>
+          <div class="ability"><b>Secundário — Faca</b>Melee forte para finalizar alvos próximos.</div>
+          <div class="ability"><b>Chemotaxis</b>Destaca rastros de inimigos feridos e colônias próximas.</div>
+          <div class="ability"><b>Phagocytic Rush</b>Dash simples que causa impacto e reposiciona o jogador.</div>
+          <div class="ability"><b>Immune Response — Chemotactic Signal</b>Revela rastros das bactérias para toda a equipe por alguns segundos e aumenta Systemic Stress.</div>
+        </div>
+      </article>
+
+      <article class="hero-card">
+        <h3>Macrophage <span class="role">Bruiser / Objetivo</span></h3>
+        <p>Personagem inicial essencial para acelerar o reconhecimento de antígeno.</p>
+        <div class="kit">
+          <div class="ability"><b>Arma principal — Shotgun / Axe híbrido</b>Disparo curto e golpe melee pesado.</div>
+          <div class="ability"><b>Phagocytosis</b>Interage com restos de invasores derrotados para coletar antígeno e contribuir para o desbloqueio de células.</div>
+          <div class="ability"><b>Antigen Sample</b>Marca temporariamente um inimigo atingido para facilitar perseguição em equipe.</div>
+          <div class="ability"><b>Immune Response — Hyperactivation</b>Aumenta temporariamente resistência e velocidade de fagocitose; aumenta Systemic Stress.</div>
+        </div>
+      </article>
+
+      <article class="hero-card">
+        <h3>B Cell <span class="role">Marksman / Anti-colônia</span></h3>
+        <p>Desbloqueado durante a partida após identificação adequada da ameaça.</p>
+        <div class="kit">
+          <div class="ability"><b>Antibody Rifle</b>Rifle semiautomático de médio alcance.</div>
+          <div class="ability"><b>Antigen Lock</b>Acertos repetidos no mesmo alvo melhoram temporariamente sua eficiência contra ele.</div>
+          <div class="ability"><b>Neutralization</b>Granada/efeito que desabilita ou enfraquece temporariamente características bacterianas.</div>
+          <div class="ability"><b>Immune Response — Massive Antibody Production</b>Grande pressão de área e anti-colônia; aumenta bastante Systemic Stress.</div>
+        </div>
+      </article>
+
+      <article class="hero-card">
+        <h3>Killer T <span class="role">Breacher / Agressor</span></h3>
+        <p>Idealmente liberado quando há células do tecido infectadas ou ameaça equivalente.</p>
+        <div class="kit">
+          <div class="ability"><b>Burst Rifle</b>Rajadas pesadas, alta pressão a curta/média distância.</div>
+          <div class="ability"><b>Cytotoxic Charge</b>Avanço agressivo que derruba ou desloca inimigos.</div>
+          <div class="ability"><b>Execute</b>Finalização melee contra inimigos em baixa vida.</div>
+          <div class="ability"><b>Immune Response — Full Activation</b>Estado ofensivo temporário de alto impacto; aumenta Systemic Stress.</div>
+        </div>
+      </article>
+    </div>
+
+    <div>
+      <h3><span class="pill bacteria">Bactérias</span></h3>
+      <article class="hero-card">
+        <h3>Pneumococcus <span class="role">Bruiser / Pressão frontal</span></h3>
+        <p>Resistente e ótimo para abrir espaço em objetivos.</p>
+        <div class="kit">
+          <div class="ability"><b>Capsule Cannon</b>Arma automática de cadência moderada.</div>
+          <div class="ability"><b>Capsule</b>Barra defensiva adicional que regenera fora de combate.</div>
+          <div class="ability"><b>Capsule Harden</b>Redução de dano temporária.</div>
+          <div class="ability"><b>Invasive Charge</b>Avanço que empurra defensores e abre espaço.</div>
+          <div class="ability"><b>Especial — Pneumonia Cloud</b>Zona de controle que reduz visibilidade e favorece presença bacteriana.</div>
+        </div>
+      </article>
+
+      <article class="hero-card">
+        <h3>Staphylococcus aureus <span class="role">Summoner / Colonização</span></h3>
+        <p>Especialista em criar e defender estruturas bacterianas.</p>
+        <div class="kit">
+          <div class="ability"><b>Cluster Gun</b>Projéteis que podem aderir a superfícies.</div>
+          <div class="ability"><b>Colony Seed</b>Planta um núcleo que cresce caso não seja destruído.</div>
+          <div class="ability"><b>Aggregate</b>Absorve biomassa/estruturas próximas para obter escudo temporário.</div>
+          <div class="ability"><b>Especial — Bacterial Cluster</b>Forma temporária mais resistente e ameaçadora.</div>
+        </div>
+      </article>
+
+      <article class="hero-card">
+        <h3>Pseudomonas aeruginosa <span class="role">Controller / Território</span></h3>
+        <p>Controla áreas e melhora a capacidade das bactérias de manter posições.</p>
+        <div class="kit">
+          <div class="ability"><b>Acid Rifle</b>Projéteis que deixam pequenas zonas de pressão.</div>
+          <div class="ability"><b>Biofilm</b>Área que beneficia bactérias e atrapalha movimentação das células.</div>
+          <div class="ability"><b>Opportunistic Infection</b>Maior eficiência contra alvos já feridos.</div>
+          <div class="ability"><b>Especial — Mature Biofilm</b>Grande região de controle com nódulos destrutíveis.</div>
+        </div>
+      </article>
+
+      <article class="hero-card">
+        <h3>Streptococcus pyogenes <span class="role">Rushdown / Flanker</span></h3>
+        <p>Personagem rápido, simples e agressivo, focado em criar pressão lateral.</p>
+        <div class="kit">
+          <div class="ability"><b>Rapid SMG</b>Alta cadência, alcance efetivo menor.</div>
+          <div class="ability"><b>Hemolysis</b>Explosão curta com recuperação limitada de vida.</div>
+          <div class="ability"><b>Spread</b>Dash com cargas limitadas.</div>
+          <div class="ability"><b>Especial — Rapid Spread</b>Eliminações restauram mobilidade por curto período.</div>
+        </div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section id="npcs">
+  <h2>9. NPCs e “objetivos vivos”</h2>
+  <p>NPCs não devem funcionar como bots de combate no protótipo. Eles existem para reforçar o universo e criar objetivos sistêmicos.</p>
+  <table>
+    <thead><tr><th>Elemento</th><th>Função</th></tr></thead>
+    <tbody>
+      <tr><td>Platelets</td><td>Reparam ferimentos, constroem/coagulam rotas e alteram o layout durante eventos.</td></tr>
+      <tr><td>Red Blood Cells</td><td>Transporte e objetivos de mapa; podem atravessar áreas e servir de referência visual.</td></tr>
+      <tr><td>Dendritic Cell</td><td>Elemento de objetivo / processamento de antígeno, não herói jogável.</td></tr>
+      <tr><td>Helper T / Regulatory T</td><td>Possíveis personagens de interface, eventos ou narrativa; não combatentes jogáveis no protótipo.</td></tr>
+      <tr><td>Colônias bacterianas</td><td>Estruturas imóveis/progressivas que sustentam objetivos, aumentam stress e alteram a região.</td></tr>
+      <tr><td>Células do tecido</td><td>Podem funcionar como subobjetivos passivos e, se infectadas, justificar desbloqueio de Killer T.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="abrasion">
+  <h2>10. Primeiro mapa do protótipo — Abrasion</h2>
+  <p><strong>Premissa:</strong> um ferimento rompe a barreira epitelial. As bactérias tentam transformar a entrada em uma infecção estabelecida; as células tentam detectar, conter e eliminar a invasão.</p>
+
+  <div class="timeline">
+    <div class="step">
+      <h4>Fase 1 — Breach</h4>
+      <p><strong>Bactérias:</strong> atravessar e contaminar 2 de 3 pontos de entrada.</p>
+      <p><strong>Células:</strong> defender os pontos com 2 Neutrófilos + Macrófago.</p>
+      <p><strong>Resultado:</strong> se as bactérias avançarem, abrem acesso ao tecido interno e elevam Systemic Stress.</p>
+    </div>
+    <div class="step">
+      <h4>Fase 2 — Identification</h4>
+      <p><strong>Bactérias:</strong> começar a plantar e proteger focos iniciais de colonização.</p>
+      <p><strong>Células:</strong> eliminar invasores e permitir que o Macrófago fagocite/colete amostras.</p>
+      <p><strong>Momento-chave:</strong> ao atingir o limiar de reconhecimento, B Cell é desbloqueado.</p>
+    </div>
+    <div class="step">
+      <h4>Fase 3 — Colonization</h4>
+      <p><strong>Bactérias:</strong> estabelecer e manter Colony Cores em áreas determinadas.</p>
+      <p><strong>Células:</strong> destruir os Colony Cores antes que o progresso de colonização termine.</p>
+      <p><strong>Escalada:</strong> eventos fisiológicos ficam mais intensos à medida que Systemic Stress sobe.</p>
+    </div>
+    <div class="step">
+      <h4>Fase final — Containment / Established Infection</h4>
+      <p><strong>Vitória das células:</strong> eliminar o último foco / impedir a consolidação da colônia.</p>
+      <p><strong>Vitória das bactérias:</strong> completar o objetivo final do mapa e consolidar a infecção.</p>
+      <p><strong>Importante:</strong> Systemic Stress pode estar em 100% para qualquer um dos lados vencer.</p>
+    </div>
+  </div>
+
+  <div class="callout"><strong>Objetivo do mapa:</strong> a partida deve contar uma história de “entrada → identificação → escalada → contenção ou infecção”, não apenas repetir o mesmo ponto de captura.</div>
+</section>
+
+<section id="eventos">
+  <h2>11. Eventos fisiológicos</h2>
+  <p>Eventos são selecionados pelo “diretor” com base em Systemic Stress. Eles alteram o combate, mas não substituem o objetivo.</p>
+  <div class="grid3">
+    <div class="card"><h3>Inflammation</h3><p>Corredores incham, linhas de visão mudam e algumas passagens ficam menores.</p></div>
+    <div class="card"><h3>Coagulation</h3><p>Platelets começam a fechar ou reconstruir uma rota após aviso visual/sonoro.</p></div>
+    <div class="card"><h3>Fever</h3><p>Alteração global temporária que pode reduzir regeneração bacteriana e também afetar conforto/controle das células.</p></div>
+    <div class="card"><h3>Blood Flow Increase</h3><p>Correntes empurram jogadores ou aceleram deslocamento em regiões específicas.</p></div>
+    <div class="card"><h3>Edema</h3><p>Expansão de tecido cria bloqueios, cover temporário ou mudanças de rota.</p></div>
+    <div class="card"><h3>Emergency Response</h3><p>Evento raro de alto stress, com alteração forte do mapa e leitura clara antes de acontecer.</p></div>
+  </div>
+  <p class="small">Diretriz: eventos devem atingir ambos os times de alguma forma; “mais stress” significa “mais caos”, não “buff automático para bactérias”.</p>
+</section>
+
+<section id="hud">
+  <h2>12. HUD e informação</h2>
+  <div class="grid">
+    <div class="card">
+      <h3>HUD das células</h3>
+      <ul>
+        <li>Systemic Stress global.</li>
+        <li>Antigen Recognition.</li>
+        <li>Objetivos ativos do mapa.</li>
+        <li>Heróis desbloqueados / bloqueados na tela de respawn.</li>
+        <li>Estado do cooldown global de Immune Response.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>HUD das bactérias</h3>
+      <ul>
+        <li>Progresso dos objetivos de infecção.</li>
+        <li>Número e maturidade das colônias.</li>
+        <li>Systemic Stress como informação de contexto.</li>
+        <li>Indicadores de áreas seguras / biofilm / rotas de invasão.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="callout blue"><strong>Prioridade de UX:</strong> jogadores devem entender em segundos “o que preciso fazer agora”, mesmo sem conhecimento de imunologia.</div>
+</section>
+
+<section id="balance">
+  <h2>13. Diretrizes de balanceamento</h2>
+  <ul>
+    <li><strong>TTK:</strong> intermediário; duelos normais devem durar tempo suficiente para usar habilidades e reagir, mas sem virar combate de esponja de dano.</li>
+    <li><strong>Headshots:</strong> importantes, porém raramente fatais em um único disparo.</li>
+    <li><strong>Movimentação:</strong> corrida, pulo, crouch/slide opcional e dashes apenas quando fazem parte do kit. Sem wallrun sistêmico no protótipo.</li>
+    <li><strong>Role queue:</strong> inexistente.</li>
+    <li><strong>Healers dedicados:</strong> evitar. Preferir regeneração limitada fora de combate e sustain individual.</li>
+    <li><strong>Objetivos:</strong> devem espalhar o 3v3 pelo mapa em pequenos conflitos paralelos, não concentrar todos em um único círculo.</li>
+    <li><strong>Heróis desbloqueados:</strong> mais fortes/especializados, mas não simplesmente upgrades absolutos; Neutrófilo deve continuar viável no fim da partida.</li>
+    <li><strong>Assimetria:</strong> balancear taxa de vitória, não equivalência de mecânicas.</li>
+  </ul>
+</section>
+
+<section id="escopo">
+  <h2>14. Escopo recomendado do protótipo</h2>
+  <p>O primeiro objetivo não é construir um jogo completo, e sim provar três perguntas:</p>
+  <ol>
+    <li>O combate FPS 3v3 funciona?</li>
+    <li>A progressão de células durante a partida é divertida e compreensível?</li>
+    <li>Systemic Stress torna a partida mais dinâmica sem roubar importância dos objetivos?</li>
+  </ol>
+
+  <h3>Vertical slice mínimo</h3>
+  <table>
+    <thead><tr><th>Sistema</th><th>Escopo</th></tr></thead>
+    <tbody>
+      <tr><td>Mapa</td><td>1 mapa: Abrasion.</td></tr>
+      <tr><td>Modo</td><td>1 fluxo de objetivos em 3 fases.</td></tr>
+      <tr><td>Jogadores</td><td>3v3.</td></tr>
+      <tr><td>Células</td><td>Neutrophil, Macrophage, B Cell, Killer T.</td></tr>
+      <tr><td>Bactérias</td><td>Pneumococcus, Staphylococcus aureus, Pseudomonas aeruginosa, Streptococcus pyogenes.</td></tr>
+      <tr><td>Progressão</td><td>Antigen Recognition + desbloqueio de B Cell / Killer T.</td></tr>
+      <tr><td>Diretor</td><td>Systemic Stress com 3–4 eventos.</td></tr>
+      <tr><td>NPCs</td><td>Platelets + células do tecido / colônias como objetivos.</td></tr>
+      <tr><td>Respawn</td><td>Troca de personagem após morte.</td></tr>
+      <tr><td>Arte</td><td>Blockout estilizado; sem necessidade de assets finais.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Ordem sugerida de implementação</h3>
+  <ol>
+    <li>Movimentação, tiro, dano, respawn e times.</li>
+    <li>Blockout de Abrasion.</li>
+    <li>Neutrophil + Pneumococcus como primeiro duelo.</li>
+    <li>Objetivo de Breach.</li>
+    <li>Macrophage + coleta de antígeno.</li>
+    <li>Antigen Recognition e troca de personagem.</li>
+    <li>B Cell e Staphylococcus / sistema de colônias.</li>
+    <li>Systemic Stress.</li>
+    <li>Primeiro evento fisiológico: Coagulation.</li>
+    <li>Adicionar Killer T, Pseudomonas e Streptococcus após o loop principal funcionar.</li>
+  </ol>
+</section>
+
+<section id="futuro">
+  <h2>15. Possíveis expansões futuras</h2>
+  <div class="grid">
+    <div class="card"><h3>Novos mapas</h3><p>Lungs, Bloodstream, Intestine, Lymph Node e Bone Marrow, cada um com objetivos exclusivos.</p></div>
+    <div class="card"><h3>Novas ameaças</h3><p>Vírus, parasitas, Cancer Cell e outros agentes como modos ou facções futuras.</p></div>
+    <div class="card"><h3>Novas células</h3><p>NK Cell, Eosinophil e outras apenas quando houver ameaça coerente que justifique sua função.</p></div>
+    <div class="card"><h3>Eventos médicos</h3><p>Medication, vacinação, reações alérgicas e outras condições sistêmicas como modificadores especiais.</p></div>
+  </div>
+</section>
+
+<section>
+  <h2>Resumo executivo do protótipo</h2>
+  <p class="tagline">Um FPS 3v3 em que as bactérias tentam vencer o mapa antes que o sistema imune entenda a ameaça, desbloqueie respostas especializadas e transforme o próprio corpo em uma arena cada vez mais caótica.</p>
+  <div class="callout green">
+    <strong>Regra final que deve permanecer fixa durante o desenvolvimento:</strong> objetivos determinam vitória; Systemic Stress determina as condições da luta.
+  </div>
+</section>
+
+<footer>
+  Documento de conceito para protótipo inicial. Números, nomes de habilidades e valores de balanceamento são provisórios e devem ser validados em playtests. Projeto conceitual baseado em propriedade intelectual de terceiros; qualquer lançamento comercial exigiria avaliação de licenciamento e direitos.
+</footer>
+</main>
+</div>
+</body>
+</html>
