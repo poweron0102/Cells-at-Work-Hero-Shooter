@@ -1,4 +1,4 @@
-"""Authoritative objective rules; stress never decides the winner."""
+"""Shared objective rules; stress never decides the winner."""
 from dataclasses import dataclass, field, asdict
 from .catalog import CELLS, BACTERIA, PHASE_SECONDS
 

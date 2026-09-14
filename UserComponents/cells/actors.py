@@ -1,21 +1,21 @@
 """Combatant lifecycle and hero abilities, attached to each Item."""
 import math
-from EasyCells3D.Components import Component
-from EasyCells3D.NetworkComponents import NetworkTransform
-from EasyCells3D.Geometry import Vec3
+from EasyCells3D.NetworkComponents import NetworkComponent, NetworkTransform, NetworkVariable, Rpc, SendTo
+from EasyCells3D.Geometry import Vec3, Quaternion
 from EasyCells3D.PhysicsComponents3D import PhysicsBody3D, CharacterController3D, CapsuleShape, BodyType
 from .catalog import HEROES, CELLS, CORE_POSITIONS
 from .combat import Weapon, direction
 from .visuals import CombatantVisual
-from .network import TRANSFORM_ID_BASE
 
 
-class Combatant(Component):
-    def __init__(self, arena, slot, hero, team):
+class Combatant(NetworkComponent):
+    def __init__(self, arena, slot, hero, team, owner):
+        super().__init__(identifier=1000+slot, owner=owner)
         self.arena, self.slot, self.hero, self.team = arena, slot, hero, team
-        self.health = HEROES[hero].health
-        self.shield = 70 if hero == "pneumococcus" else 0
-        self.alive = True
+        self.health = NetworkVariable(HEROES[hero].health, 2000+slot*4, owner)
+        self.shield = NetworkVariable(70 if hero == "pneumococcus" else 0, 2001+slot*4, owner)
+        self.kills = NetworkVariable(0, 2002+slot*4, owner)
+        self.deaths = NetworkVariable(0, 2003+slot*4, owner)
         self.respawn = 0
         self.yaw = 0 if team == CELLS else math.pi
         self.pitch = 0
@@ -23,39 +23,65 @@ class Combatant(Component):
         self.boost = self.harden = self.dash = self.reveal = self.neutralized = 0
         self.since_hit = 10
         self.hit_marker = self.hurt = 0
-        self.kills = self.deaths = self.shot = 0
+        self.shot = 0
+        self.controls = {}
         self.previous = {}
 
     def init(self):
+        super().init()
         self.body = self.GetComponent(PhysicsBody3D)
         self.controller = self.GetComponent(CharacterController3D)
         self.weapon = self.GetComponent(Weapon)
 
-    def damage(self, amount, source):
+    @property
+    def local(self):
+        return self.owner == self.game.session.manager.id
+
+    @property
+    def alive(self):
+        return self.health.value > 0
+
+    def damage(self, amount, source, neutralize=False):
+        if self.local:
+            self.take_hit(amount, source.slot, neutralize)
+        else:
+            self.hit(amount, source.slot, neutralize)
+
+    @Rpc(send_to=SendTo.OWNER, require_owner=False)
+    def hit(self, amount, source, neutralize=False):
+        if self.local:
+            self.take_hit(amount, source, neutralize)
+
+    def take_hit(self, amount, source, neutralize=False):
+        source = self.arena.actors[source]
         if not self.alive or source.team == self.team:
             return
         if self.harden > 0 and self.neutralized <= 0:
             amount *= .5
-        absorbed = min(self.shield, amount)
-        self.shield -= absorbed
-        self.health = max(0, self.health - amount + absorbed)
+        absorbed = min(self.shield.value, amount)
+        self.shield.value -= absorbed
+        self.health.value = max(0, self.health.value - amount + absorbed)
+        if neutralize:
+            self.neutralized = 6
         self.since_hit, self.hurt = 0, .25
-        if self.health <= 0:
-            self.alive = False
+        if not self.alive:
             self.respawn = 6
-            self.deaths += 1
-            source.kills += 1
+            self.deaths.value += 1
+            source.credit_kill()
             self.body.enable = False
-            if self.team != CELLS:
-                self.arena.samples.append(dict(pos=self.transform.position.to_tuple, life=24))
-            self.arena.state.announce(f"{HEROES[source.hero].name} eliminou {HEROES[self.hero].name}")
-            if source.hero == "streptococcus" and source.boost > 0:
-                source.ability_cd = 0
+            self.arena.eliminated(self.slot, source.slot, self.deaths.value, self.transform.position.to_tuple)
+
+    @Rpc(send_to=SendTo.ALL, require_owner=False)
+    def credit_kill(self):
+        if self.local:
+            self.kills.value += 1
+            if self.hero == "streptococcus" and self.boost > 0:
+                self.ability_cd = 0
 
     def spawn(self):
-        self.hero = self.game.session.roster[self.slot]["hero"]
-        self.health, self.alive = HEROES[self.hero].health, True
-        self.shield = 70 if self.hero == "pneumococcus" else 0
+        self.hero = self.game.session.roster.value[self.slot]["hero"]
+        self.health.value = HEROES[self.hero].health
+        self.shield.value = 70 if self.hero == "pneumococcus" else 0
         self.ability_cd = self.secondary_cd = self.special_cd = 0
         self.boost = self.harden = self.dash = self.reveal = self.neutralized = 0
         self.previous = {}
@@ -63,26 +89,51 @@ class Combatant(Component):
         self.weapon.timer = self.weapon.reload_time = 0
         self.body.enable = True
         self.body.teleport(self.arena.spawn_position(self.slot))
+        self.spawned(self.hero)
+
+    @Rpc(send_to=SendTo.NOT_ME)
+    def spawned(self, hero):
+        self.hero = hero
+
+    @Rpc(send_to=SendTo.ALL, require_owner=False)
+    def reveal_enemies(self, seconds):
+        self.reveal = seconds
 
     def loop(self):
-        if not self.arena.authority:
+        owner = self.game.session.roster.value[self.slot]["owner"]
+        if owner != self.owner:
+            self.owner = owner
+            self.GetComponent(NetworkTransform).owner = owner
+            for variable in (self.health, self.shield, self.kills, self.deaths):
+                variable.owner = owner
+            self.body.body_type = BodyType.DYNAMIC if self.local else BodyType.KINEMATIC
+        if self.body.enable and not self.alive:
+            self.respawn = 6
+        self.body.enable = self.alive
+        if self.game.session.status != "playing":
             return
         dt = min(.05, self.game.delta_time)
         for key in ("ability_cd", "secondary_cd", "special_cd", "boost", "harden", "dash", "reveal", "neutralized", "hit_marker", "hurt"):
             setattr(self, key, max(0, getattr(self, key)-dt))
         if not self.alive:
             self.respawn -= dt
-            if self.respawn <= 0:
+            if self.local and self.respawn <= 0:
                 self.spawn()
+            return
+        if not self.local:
+            facing = self.transform.rotation.rotate_vector(Vec3(0, 0, 1))
+            self.yaw = math.atan2(facing.x, facing.z)
             return
         self.since_hit += dt
         if self.since_hit > 5 and self.arena.state.event != "fever":
-            self.health = min(HEROES[self.hero].health, self.health+dt*5)
-            if self.hero == "pneumococcus" and self.neutralized <= 0:
-                self.shield = min(70, self.shield+dt*12)
-        player = self.game.session.roster[self.slot]
-        cmd = self.arena.bot_command(self) if player["bot"] else self.game.session.command(self.slot)
+            if self.health.value < HEROES[self.hero].health:
+                self.health.value = min(HEROES[self.hero].health, self.health.value+dt*5)
+            if self.hero == "pneumococcus" and self.neutralized <= 0 and self.shield.value < 70:
+                self.shield.value = min(70, self.shield.value+dt*12)
+        player = self.game.session.roster.value[self.slot]
+        cmd = self.arena.brain.command(self) if player["bot"] else self.controls
         self.yaw, self.pitch = cmd.get("yaw", self.yaw), cmd.get("pitch", self.pitch)
+        self.transform.rotation = Quaternion.from_euler_angles(Vec3(0, self.yaw, 0))
         forward = direction(self.yaw)
         right = Vec3(math.cos(self.yaw), 0, math.sin(self.yaw))
         move = forward*cmd.get("z", 0)+right*cmd.get("x", 0)
@@ -133,11 +184,11 @@ class Combatant(Component):
             self.dash = .3
         elif self.hero == "staphylococcus":
             nearby = any((self.transform.position-Vec3(x, 1, z)).magnitude() < 8 and self.arena.state.cores[i] > 0 for i, (x, z) in enumerate(CORE_POSITIONS))
-            self.shield = min(120, self.shield + (100 if nearby else 30))
+            self.shield.value = min(120, self.shield.value + (100 if nearby else 30))
         else:
             self.area_damage(4, 45)
             if self.hero == "streptococcus":
-                self.health = min(HEROES[self.hero].health, self.health+35)
+                self.health.value = min(HEROES[self.hero].health, self.health.value+35)
 
     def ability(self):
         if self.ability_cd > 0 or self.neutralized > 0:
@@ -163,24 +214,27 @@ class Combatant(Component):
             self.zone("biofilm", 5, 12)
 
     def zone(self, kind, radius, life):
-        self.arena.zones.append(dict(kind=kind, pos=self.transform.position.to_tuple, radius=radius, life=life))
+        position = self.transform.position.to_tuple
+        self.arena.zones.append(dict(kind=kind, pos=position, radius=radius, life=life, owner=self.slot))
+        self.arena.add_zone(kind, position, radius, life, self.slot)
 
     def area_damage(self, radius, amount, neutralize=False):
         for body in self.game.physics_world.overlap_sphere(self.transform.position, radius, 4 if self.team == CELLS else 2):
             target = self.arena.actor_for_body(body)
             if target and self.arena.visible(self, target):
-                target.damage(amount, self)
-                if neutralize:
-                    target.neutralized = 6
+                target.damage(amount, self, neutralize)
 
     def ultimate(self):
         if self.team == CELLS:
-            if not self.arena.state.response():
+            if self.special_cd > 0 or self.arena.state.immune_cooldown > 0 or self.arena.state.winner:
                 return
+            self.special_cd = 45
+            self.arena.response_started()
             if self.hero == "neutrophil":
+                self.reveal = 9
                 for actor in self.arena.actors.values():
-                    if actor.team == CELLS:
-                        actor.reveal = 9
+                    if actor.team == CELLS and actor is not self:
+                        actor.reveal_enemies(9)
             elif self.hero == "macrophage":
                 self.harden = 10
                 self.arena.collect(self, 9)
@@ -198,7 +252,7 @@ class Combatant(Component):
             elif self.hero == "pseudomonas":
                 self.zone("biofilm", 9, 18)
             elif self.hero == "staphylococcus":
-                self.shield, self.boost = 160, 10
+                self.shield.value, self.boost = 160, 10
             else:
                 self.boost, self.ability_cd = 10, 0
 
@@ -207,17 +261,16 @@ def load_combatant(game, arena, slot, player):
     item = game.CreateItem()
     item.name = f"Combatant {slot} / {player['hero']}"
     item.transform.position = arena.spawn_position(slot)
-    actor = item.AddComponent(Combatant(arena, slot, player["hero"], player["team"]))
+    actor = item.AddComponent(Combatant(arena, slot, player["hero"], player["team"], player["owner"]))
     item.AddComponent(PhysicsBody3D(CapsuleShape(.45, 1), mass=80, lock_rotation=True,
                                    allow_sleep=False, friction=0,
-                                   body_type=BodyType.DYNAMIC if arena.authority else BodyType.KINEMATIC,
+                                   body_type=BodyType.DYNAMIC if actor.local else BodyType.KINEMATIC,
                                    collision_group=2 if player["team"] == CELLS else 4))
     item.AddComponent(CharacterController3D(jump_height=HEROES[player['hero']].jump_height))
     item.AddComponent(Weapon(actor))
     item.AddComponent(CombatantVisual(actor))
     item.AddComponent(NetworkTransform(
-        identifier=TRANSFORM_ID_BASE + slot, owner=0, sync_frequency=1/30,
-        sync_rot_x=False, sync_rot_y=False, sync_rot_z=False,
+        identifier=100_000 + slot, owner=player["owner"], sync_frequency=1/30,
         sync_scale_x=False, sync_scale_y=False, sync_scale_z=False,
         interpolation_speed=22,
     ))

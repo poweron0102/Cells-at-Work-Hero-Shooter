@@ -43,11 +43,11 @@ class CombatantVisual(Renderable3D):
         distance = (p-self.last_position).magnitude() if self.last_position else 0
         self.last_position = Vec3(p.x, p.y, p.z)
         self.phase += min(distance, .5)*5
-        self.model.draw(p-Vec3(0, .95, 0), a.yaw, self.phase, distance > .002, a.reveal, a.shield)
+        self.model.draw(p-Vec3(0, .95, 0), a.yaw, self.phase, distance > .002, a.reveal, a.shield.value)
         ring = color((80, 224, 189) if a.team == CELLS else (236, 155, 99))
         # Foot ring follows the actor onto roofs instead of remaining on the street.
         rl.draw_cylinder_wires((p-Vec3(0, .92, 0)).to_raylib(), .57, .57, .02, 20, ring)
-        if a.shield > 0:
+        if a.shield.value > 0:
             rl.draw_sphere_wires(p.to_raylib(), 1.0, 8, 8, color((126, 206, 244)))
 
 

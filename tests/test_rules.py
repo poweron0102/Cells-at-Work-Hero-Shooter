@@ -1,7 +1,6 @@
 import unittest
 from UserComponents.cells.rules import MatchState
 from UserComponents.cells.catalog import CELLS, BACTERIA, can_select, unlocked
-from UserComponents.cells.network import clean_command
 
 
 class RuleTests(unittest.TestCase):
@@ -53,13 +52,6 @@ class RuleTests(unittest.TestCase):
         self.assertFalse(can_select("macrophage", BACTERIA, roster))
         self.assertFalse(can_select("killer_t", CELLS, roster, 100, False))
 
-    def test_input_rejects_nan_and_ignores_client_authority_fields(self):
-        self.assertEqual(clean_command({"yaw": float("nan")}), {})
-        command = clean_command({"x": 500, "health": 99999, "fire": "true", "pitch": 99})
-        self.assertEqual(command["x"], 1)
-        self.assertEqual(command["pitch"], 1.45)
-        self.assertNotIn("health", command)
-        self.assertFalse(command["fire"])
 
 
 if __name__ == "__main__":

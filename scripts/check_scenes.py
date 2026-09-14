@@ -8,7 +8,7 @@ sys.path.insert(0, str(ROOT))
 import pyray as rl
 from EasyCells3D import Game
 from EasyCells3D.Components import Component
-from UserComponents.cells.network import connect, disconnect
+from UserComponents.cells.session import connect, disconnect
 
 
 class SceneProbe(Component):

@@ -89,9 +89,13 @@ As cenas `menu`, `lobby`, `selection`, `abrasion` e `results` ficam em `Levels/`
 Cada cena monta objetos e componentes; regras, física, combate, rede, interface e
 fábricas ficam em `UserComponents/cells/`, seguindo `GUIA_DESENVOLVIMENTO.md`.
 
-A rede usa `NetworkManager` diretamente: comandos e estado são métodos `@Rpc`
-em `NetworkComponent`; posições são sincronizadas por `NetworkTransform` via UDP,
-com `owner=0` para manter a autoridade no servidor.
+Cada jogador simula seu movimento, mira, arma, habilidades e respawn localmente.
+`NetworkTransform` envia posição e rotação por UDP, com o jogador como `owner`;
+a biblioteca interpola e descarta posições antigas. Vida, escudo e placar usam
+`NetworkVariable`; acertos, zonas, coletas e transições usam RPCs diretamente
+nos componentes de jogo. Não há fila de comandos nem snapshot periódico da partida.
+O anfitrião conduz os bots, as vagas da sala e o relógio dos objetivos compartilhados.
+TCP e UDP compartilham a identidade atribuída pela biblioteca.
 
 ```powershell
 .venv\Scripts\python.exe -m unittest discover -s tests -v

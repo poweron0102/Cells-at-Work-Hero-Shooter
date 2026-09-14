@@ -2,7 +2,7 @@
 import pyray as rl
 from .ui_base import Canvas, INK, MUTED, PAPER, TEAL, RED, LINE, WHITE
 from .catalog import HEROES, CELLS, BACTERIA, can_select, unlocked
-from .network import connect, disconnect
+from .session import connect, disconnect
 
 
 class MenuScreen(Canvas):
@@ -81,7 +81,7 @@ class LobbyScreen(Canvas):
         net = self.game.session
         self.text("OPERACAO ABRASION", 45, 110, 42)
         self.text("Escolha sua funcao. Prepare a equipe. Proteja ou invada.", 47, 164, 18, MUTED)
-        self.text(f"{sum(not p['bot'] for p in net.roster.values())} / 6 CONECTADOS", 1018, 121, 19, TEAL)
+        self.text(f"{sum(not p['bot'] for p in net.roster.value.values())} / 6 CONECTADOS", 1018, 121, 19, TEAL)
         for team, x, title, subtitle, accent in [(CELLS, 46, "DEFESA IMUNE", "CONTER / IDENTIFICAR / ELIMINAR", TEAL),
                                                 (BACTERIA, 658, "INVASAO BACTERIANA", "INVADIR / ADERIR / COLONIZAR", RED)]:
             self.panel(x, 214, 576, 324, WHITE)
@@ -90,7 +90,7 @@ class LobbyScreen(Canvas):
             self.text(subtitle, x+23, 273, 12, MUTED)
             for row, slot in enumerate(range(3) if team == CELLS else range(3, 6)):
                 y = 310+row*70
-                p = net.roster.get(slot)
+                p = net.roster.value.get(slot)
                 self.line(x+20, y+57, 534)
                 self.text(f"0{slot%3+1}", x+24, y+7, 21, accent)
                 if p:
@@ -100,28 +100,28 @@ class LobbyScreen(Canvas):
                     self.text("Aguardando combatente...", x+79, y+13, 19, MUTED)
         self.button("ESCOLHER HEROI", 46, 564, 246, lambda: self.game.new_game("selection"), True, net.local_slot is not None)
         self.button("SAIR", 309, 564, 103, lambda: leave(self.game))
-        if net.is_server:
+        if net.manager.is_server:
             self.button("TREINO + BOTS", 676, 564, 250, lambda: net.start(True))
-            self.button("INICIAR 3v3  >", 944, 564, 290, lambda: net.start(False), True, len(net.roster) == 6)
+            self.button("INICIAR 3v3  >", 944, 564, 290, lambda: net.start(False), True, len(net.roster.value) == 6)
         else:
             self.text("O anfitriao inicia a partida.", 901, 580, 20, MUTED)
-        self.text(net.error or f"REDE LOCAL  /  TCP + UDP {net.port}  /  {'Compartilhe o IPv4 deste computador com a equipe.' if net.is_server else net.ip}", 48, 636, 14, RED if net.error else MUTED)
+        self.text(net.error or f"REDE LOCAL  /  TCP + UDP {net.manager.port}  /  {'Compartilhe o IPv4 deste computador com a equipe.' if net.manager.is_server else net.manager.ip}", 48, 636, 14, RED if net.error else MUTED)
 
 
 class SelectionScreen(Canvas):
     def render(self):
         self.chrome("03 / SELECAO DE PERSONAGEM")
         net = self.game.session
-        local = net.roster.get(net.local_slot)
+        local = net.roster.value.get(net.local_slot)
         self.text("CADA CELULA TEM UMA FUNCAO.", 46, 109, 38)
         self.text("Selecione para ocupar uma vaga. Especialistas imunes sao liberados durante a partida.", 48, 164, 17, MUTED)
         for i, (key, hero) in enumerate(HEROES.items()):
             col, row = i % 4, i // 4
             x, y = 46+col*300, 218+row*184
             selected = local and local["hero"] == key
-            available = can_select(key, hero.team, net.roster, exclude=net.local_slot)
+            available = can_select(key, hero.team, net.roster.value, exclude=net.local_slot)
             if local and local["team"] != hero.team:
-                available = available and sum(p["team"] == hero.team for p in net.roster.values()) < 3
+                available = available and sum(p["team"] == hero.team for p in net.roster.value.values()) < 3
             self.panel(x, y, 279, 165, (218, 231, 211) if selected else WHITE)
             self.panel(x, y, 4, 165, TEAL if hero.team == CELLS else RED)
             self.text(hero.name, x+17, y+14, 19)
@@ -139,13 +139,13 @@ class ResultScreen(Canvas):
     def render(self):
         self.chrome("05 / RELATORIO DA OPERACAO")
         net = self.game.session
-        data = net.latest or {"state": {}, "actors": {}}
+        data = net.result or {"state": {}, "actors": {}}
         state = data["state"]
         winner = state.get("winner", CELLS)
         self.text("INFECCAO CONTIDA" if winner == CELLS else "INFECCAO ESTABELECIDA", 46, 115, 48, TEAL if winner == CELLS else RED)
         self.text("O resultado foi determinado pelos objetivos de Abrasion.", 49, 178, 20, MUTED)
         self.text(f"TEMPO  {int(state.get('elapsed', 0))//60:02}:{int(state.get('elapsed', 0))%60:02}       ANTIGENO  {int(state.get('recognition', 0))}%       STRESS  {int(state.get('stress', 0))}%", 49, 223, 17)
-        for i, (slot, player) in enumerate(sorted(net.roster.items())):
+        for i, (slot, player) in enumerate(sorted(net.roster.value.items())):
             y = 289+i*45
             a = data["actors"].get(slot, {})
             self.panel(46, y, 1188, 39, WHITE)

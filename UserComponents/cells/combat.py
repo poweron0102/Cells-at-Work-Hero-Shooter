@@ -1,4 +1,4 @@
-"""Damage and weapons use engine physics queries, with server authority."""
+"""The player fires and resolves hits using local engine physics queries."""
 import math
 import random
 from EasyCells3D.Components import Component
@@ -23,7 +23,7 @@ class Weapon(Component):
 
     def loop(self):
         a = self.actor
-        if not a.arena.authority or not a.alive:
+        if not a.local or not a.alive:
             return
         dt = min(.05, self.game.delta_time)
         self.timer = max(0, self.timer - dt)
@@ -60,7 +60,9 @@ class Weapon(Component):
             endpoint = hit.point if hit else origin + aim*45
             if hit and a.hero == "pseudomonas":
                 a.arena.zones.append(dict(kind="acid", pos=endpoint.to_tuple, radius=1.4, life=2, owner=a.slot))
+                a.arena.add_zone("acid", endpoint.to_tuple, 1.4, 2, a.slot)
             a.arena.tracers.append(dict(a=origin.to_tuple, b=endpoint.to_tuple, life=.1))
+            a.arena.trace(origin.to_tuple, endpoint.to_tuple)
             if not hit or not hit.body:
                 continue
             target = a.arena.actor_for_body(hit.body)
@@ -72,7 +74,7 @@ class Weapon(Component):
                     self.lock_hits = self.lock_hits + 1 if self.last_target == target.slot else 1
                     self.last_target = target.slot
                     damage *= min(1.5, 1 + self.lock_hits*.08)
-                if a.hero == "pseudomonas" and target.health < HEROES[target.hero].health*.5:
+                if a.hero == "pseudomonas" and target.health.value < HEROES[target.hero].health*.5:
                     damage *= 1.3
                 target.damage(damage, a)
                 a.hit_marker = .15
@@ -92,7 +94,7 @@ class Weapon(Component):
             target = a.arena.actor_for_body(body)
             if target and a.arena.visible(a, target):
                 damage = 90 if a.hero == "macrophage" else 65
-                if a.hero == "killer_t" and target.health < 80:
+                if a.hero == "killer_t" and target.health.value < 80:
                     damage = 120
                 target.damage(damage, a)
                 a.hit_marker = .15

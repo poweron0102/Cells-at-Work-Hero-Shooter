@@ -1,4 +1,4 @@
-"""Run one host and five real clients on loopback, with authoritative simulation."""
+"""Run one host and five clients with player-owned movement and combat."""
 import json
 import os
 from pathlib import Path
@@ -41,8 +41,10 @@ def main():
                 print(Path(logs[i].name).read_text(encoding="utf8"))
             raise SystemExit("Multiplayer integration failed")
         for role in ["host", "client1", "client2", "client3", "client4", "client5"]:
-            print((output/f"{role}.json").read_text(encoding="utf8"))
-        print("PASS: one host + five clients; native RPCs (TCP), NetworkTransform (UDP), phases, antigen, death/respawn and event.")
+            report = json.loads((output/f"{role}.json").read_text(encoding="utf8"))
+            report.pop("result")
+            print(json.dumps(report))
+        print("PASS: six peers; local movement/fire without host responses, client hits, native TCP/UDP, objectives, respawn and disconnect takeover.")
     finally:
         for process in processes:
             if process.poll() is None:

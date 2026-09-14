@@ -3,7 +3,7 @@ import math
 import unittest
 from simulation_support import headless_game, mount_arena, step
 from EasyCells3D.Geometry import Vec3
-from UserComponents.cells.network import connect
+from UserComponents.cells.session import connect
 from UserComponents.cells.catalog import HEROES, POINTS, CORE_POSITIONS
 
 
@@ -12,7 +12,7 @@ class TraversalTests(unittest.TestCase):
         self.game = headless_game()
         self.net = connect(self.game, '127.0.0.1', 0, True, 'Traversal')
         self.net.start(True)
-        for player in self.net.roster.values():
+        for player in self.net.roster.value.values():
             player['bot'] = False
         self.arena = mount_arena(self.game)
         for _ in range(30):
@@ -24,7 +24,7 @@ class TraversalTests(unittest.TestCase):
 
     def place(self, hero, position):
         self.actor.hero = hero
-        self.net.commands[0] = {}
+        self.actor.controls = {}
         self.actor.body.teleport(Vec3(*position))
         self.actor.previous = {}
         for _ in range(25):
@@ -32,7 +32,7 @@ class TraversalTests(unittest.TestCase):
 
     def drive(self, frames, **command):
         for _ in range(frames):
-            self.net.input(command)
+            self.actor.controls = command
             step(self.game)
 
     def test_slowest_hero_walks_up_ramp_and_lands_on_roof(self):

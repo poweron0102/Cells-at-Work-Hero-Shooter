@@ -1,7 +1,7 @@
 import unittest
 from simulation_support import headless_game, mount_arena, step
 from EasyCells3D.Geometry import Vec3
-from UserComponents.cells.network import connect
+from UserComponents.cells.session import connect
 from UserComponents.cells.catalog import HEROES
 from UserComponents.cells.world import block
 
@@ -12,7 +12,7 @@ class CombatIntegrationTests(unittest.TestCase):
         self.net = connect(self.game, "127.0.0.1", 0, True, "Test host")
         self.net.start(True)
         # Keep all test actors still, using the production no-input path.
-        for p in self.net.roster.values():
+        for p in self.net.roster.value.values():
             p["bot"] = False
         self.arena = mount_arena(self.game)
         for _ in range(60):
@@ -26,15 +26,15 @@ class CombatIntegrationTests(unittest.TestCase):
         self.game.close()
 
     def test_hitscan_damages_enemy_and_cover_blocks_it(self):
-        health = self.target.health+self.target.shield
+        health = self.target.health.value+self.target.shield.value
         self.shooter.weapon.fire()
-        self.assertLess(self.target.health+self.target.shield, health)
+        self.assertLess(self.target.health.value+self.target.shield.value, health)
         block(self.game, "Test cover", (0, 1, 17), (3, 3, 1), (100, 100, 100))
         step(self.game)
         self.shooter.weapon.timer = 0
-        health = self.target.health+self.target.shield
+        health = self.target.health.value+self.target.shield.value
         self.shooter.weapon.fire()
-        self.assertEqual(self.target.health+self.target.shield, health)
+        self.assertEqual(self.target.health.value+self.target.shield.value, health)
 
     def test_jump_uses_engine_ground_check_and_gravity(self):
         for _ in range(20):
@@ -62,7 +62,7 @@ class CombatIntegrationTests(unittest.TestCase):
             step(self.game)
         self.assertTrue(self.target.alive)
         self.assertTrue(self.target.body.enable)
-        self.assertEqual(self.target.health, HEROES[self.target.hero].health)
+        self.assertEqual(self.target.health.value, HEROES[self.target.hero].health)
 
     def test_collection_cannot_pass_through_cover(self):
         self.arena.state.phase = 1

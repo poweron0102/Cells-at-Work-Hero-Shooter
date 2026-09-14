@@ -11,10 +11,12 @@ from EasyCells3D.NetworkTCP import _decode
 
 class NetworkServerUDP:
     def __init__(self, ip: str, port: int, ip_version: int = 4,
-                 connect_callback: Callable[[int], None] = lambda x: None):
+                 connect_callback: Callable[[int], None] = lambda x: None,
+                 peer_exists: Callable[[int], bool] | None = None):
         self.ip = ip
         self.port = port
         self.ip_version = ip_version
+        self.peer_exists = peer_exists
 
         # Clients list stores tuples of (ip, port)
         # Index 0 is reserved/None to match original 1-based logic
@@ -54,10 +56,25 @@ class NetworkServerUDP:
                 # This blocks until data is received.
                 data, addr = self.server_socket.recvfrom(65535)
 
-                if addr not in self.client_map:
+                msg = _decode(data)
+                handshake = msg == "HANDSHAKE" or (
+                    isinstance(msg, tuple) and len(msg) == 2 and msg[0] == "HANDSHAKE")
+                if handshake:
+                    client_id = msg[1] if isinstance(msg, tuple) else self.client_map.get(addr, len(self.clients))
+                    if not isinstance(client_id, int) or client_id <= 0:
+                        continue
+                    if self.peer_exists is not None and (
+                            msg == "HANDSHAKE" or not self.peer_exists(client_id)):
+                        continue
+                    if addr in self.client_map:
+                        if self.client_map[addr] == client_id:
+                            self.send(client_id, client_id)
+                        continue
                     # --- New Client Handling ---
-                    self.clients.append(addr)
-                    client_id = len(self.clients) - 1
+                    if client_id < len(self.clients) and self.clients[client_id] is not None:
+                        continue
+                    self.clients.extend([None] * max(0, client_id + 1 - len(self.clients)))
+                    self.clients[client_id] = addr
                     self.client_map[addr] = client_id
                     self.msg_queues[client_id] = deque()
 
@@ -68,25 +85,15 @@ class NetworkServerUDP:
 
                     Scheduler.instance.create_task(self._run_connect_callback(client_id))
 
-                    # If the packet contains real data (not just a handshake), queue it
-                    try:
-                        msg = _decode(data)
-                        if msg != "HANDSHAKE":
-                            self.msg_queues[client_id].append(msg)
-                    except:
-                        pass  # Ignore decode errors on handshake
-
                 else:
-                    # --- Existing Client Handling ---
-                    client_id = self.client_map[addr]
-                    try:
-                        msg = _decode(data)
-                        # Filter out repeated handshakes if client retries
-                        if msg != "HANDSHAKE":
-                            self.msg_queues[client_id].append(msg)
-                    except Exception as e:
-                        print(f"Error decoding data from {client_id}: {e}")
+                    queue = self.msg_queues.get(self.client_map.get(addr))
+                    if queue is not None:
+                        queue.append(msg)
 
+            except (pickle.UnpicklingError, EOFError, ValueError, TypeError):
+                continue
+            except ConnectionResetError:
+                continue  # Windows may report a departed UDP peer on the shared socket.
             except OSError:
                 # Socket likely closed
                 break
@@ -150,10 +157,12 @@ class NetworkServerUDP:
 
 class NetworkClientUDP:
     def __init__(self, ip: str, port: int, ip_version: int = 4,
-                 connect_callback: Callable[[int], None] = lambda x: None):
+                 connect_callback: Callable[[int], None] = lambda x: None,
+                 peer_id: Callable[[], int | None] | None = None):
         self.ip = ip
         self.port = port
         self.connect_callback = connect_callback
+        self.peer_id = peer_id
 
         if ip_version == 6:
             self.server_socket = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
@@ -175,15 +184,30 @@ class NetworkClientUDP:
         try:
             self.server_socket.connect((self.ip, self.port))
             self.server_socket.settimeout(.5)
+            deadline = time.monotonic() + 5
+            while self.peer_id is not None and self.peer_id() is None:
+                if not self.running:
+                    return
+                if time.monotonic() >= deadline:
+                    self.error = "TCP handshake timed out"
+                    return
+                time.sleep(.01)
+            handshake = ("HANDSHAKE", self.peer_id()) if self.peer_id is not None else "HANDSHAKE"
             for _ in range(10):
                 if not self.running:
                     return
-                self.send("HANDSHAKE")
+                self.send(handshake)
                 try:
-                    self.id = int(self.block_read())
-                    self.server_socket.settimeout(None)
-                    self.connect_callback(self.id)
-                    return
+                    deadline = time.monotonic() + .5
+                    while time.monotonic() < deadline:
+                        self.server_socket.settimeout(max(.001, deadline-time.monotonic()))
+                        reply = self.block_read()
+                        # A lost ACK can leave gameplay datagrams ahead of the retry's ACK.
+                        if isinstance(reply, int) and (self.peer_id is None or reply == self.peer_id()):
+                            self.id = reply
+                            self.server_socket.settimeout(None)
+                            self.connect_callback(self.id)
+                            return
                 except (TimeoutError, ConnectionResetError):
                     continue
             self.error = "UDP handshake timed out"
@@ -192,6 +216,9 @@ class NetworkClientUDP:
 
     def send(self, data: object):
         if not self.running:
+            return
+        if self.id is None and data != "HANDSHAKE" and not (
+                isinstance(data, tuple) and len(data) == 2 and data[0] == "HANDSHAKE"):
             return
         serialized = pickle.dumps(data)
         try:
@@ -211,6 +238,8 @@ class NetworkClientUDP:
         try:
             data, _ = self.server_socket.recvfrom(65535)
             message = _decode(data)
+            if isinstance(message, int):
+                return None  # A repeated handshake acknowledgement.
             if message == "close":
                 self.running = False
                 return None

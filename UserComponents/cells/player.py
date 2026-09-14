@@ -1,9 +1,8 @@
-"""Local input and first-person camera; motion is simulated by the host."""
+"""Local input and first-person camera; controls never travel over the network."""
 import math
 import pyray as rl
 from EasyCells3D.Components import Component
 from EasyCells3D.Geometry import Vec3, Quaternion
-from .combat import direction
 from .cursor import set_cursor_captured
 
 
@@ -12,9 +11,7 @@ class PlayerInput(Component):
         self.arena, self.camera = arena, camera
         self.yaw = self.pitch = 0
         self.paused = False
-        self.send_timer = 0
         self.last_slot = None
-        self.pending_jump = False
 
     def loop(self):
         net = self.game.session
@@ -39,18 +36,12 @@ class PlayerInput(Component):
                                           * Quaternion.from_axis_angle(Vec3(1, 0, 0), self.pitch))
         down = lambda key: captured and rl.is_key_down(key)
         k = rl.KeyboardKey
-        self.pending_jump = self.pending_jump or (captured and rl.is_key_pressed(k.KEY_SPACE))
-        command = dict(x=float(down(k.KEY_D))-float(down(k.KEY_A)), z=float(down(k.KEY_W))-float(down(k.KEY_S)),
-                       yaw=self.yaw, pitch=self.pitch, jump=self.pending_jump,
+        actor.controls = dict(x=float(down(k.KEY_D))-float(down(k.KEY_A)), z=float(down(k.KEY_W))-float(down(k.KEY_S)),
+                       yaw=self.yaw, pitch=self.pitch, jump=captured and rl.is_key_pressed(k.KEY_SPACE),
                        fire=captured and rl.is_mouse_button_down(rl.MouseButton.MOUSE_BUTTON_LEFT),
                        secondary=captured and rl.is_mouse_button_down(rl.MouseButton.MOUSE_BUTTON_RIGHT),
                        ability=bool(down(k.KEY_Q)), ultimate=bool(down(k.KEY_F)), interact=bool(down(k.KEY_E)),
                        reload=bool(down(k.KEY_R)), sprint=bool(down(k.KEY_LEFT_SHIFT)))
-        self.send_timer -= self.game.delta_time
-        if net.is_server or self.send_timer <= 0:
-            net.input(command)
-            self.pending_jump = False
-            self.send_timer = 1/30
 
     def on_destroy(self):
         set_cursor_captured(False)

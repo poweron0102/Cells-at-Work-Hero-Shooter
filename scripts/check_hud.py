@@ -16,7 +16,7 @@ from EasyCells3D.Components import Component
 from UserComponents.cells.catalog import HEROES
 from UserComponents.cells.hud import CombatHUD, INK, WHITE
 from UserComponents.cells.hud_portraits import FACES, ROOT as FACE_ROOT, draw_face
-from UserComponents.cells.network import connect
+from UserComponents.cells.session import connect
 
 
 class HUDProbe(Component):
@@ -34,7 +34,9 @@ class HUDProbe(Component):
         hud = next(r for camera in self.game.cameras for r in getattr(camera, 'renderables', [])
                    if isinstance(r, CombatHUD))
         arena = hud.arena
-        arena.authority = False  # Freeze the simulation while exercising display snapshots.
+        arena.enable = False
+        for combatant in arena.actors.values():
+            combatant.enable = False
         actor = arena.actors[self.game.session.local_slot]
         state = arena.state
         index, step = divmod(self.frame-10, 8)
@@ -57,8 +59,8 @@ class HUDProbe(Component):
         hero = list(HEROES)[index]
         kit = HEROES[hero]
         if step == 0:
-            actor.hero, actor.team, actor.health = hero, kit.team, kit.health
-            actor.alive, actor.shield, actor.neutralized = True, 0, 0
+            actor.hero, actor.team, actor.health.value = hero, kit.team, kit.health
+            actor.shield.value, actor.neutralized = 0, 0
             actor.ability_cd = actor.special_cd = 0
             actor.weapon.ammo, actor.weapon.reload_time = kit.magazine, 0
             state.immune_cooldown = state.notice_time = 0
@@ -67,7 +69,7 @@ class HUDProbe(Component):
             state.event = ''
         elif step == 2:
             rl.take_screenshot(f'.scratch/hud/{hero}-ready.png')
-            actor.health, actor.hurt = kit.health*.2, .25
+            actor.health.value, actor.hurt = kit.health*.2, .25
             actor.weapon.ammo, actor.weapon.reload_time = 0, 1.4
             actor.ability_cd = 6.2
             actor.special_cd = state.immune_cooldown = 24
@@ -80,7 +82,7 @@ class HUDProbe(Component):
             actor.hurt = 0
         elif step == 6:
             rl.take_screenshot(f'.scratch/hud/{hero}-critical.png')
-            actor.health = kit.health
+            actor.health.value = kit.health
             actor.ability_cd = 9
         elif step == 7:
             assert hud.face_state == 'special', hero

@@ -1,5 +1,4 @@
 """Physiological events affect both teams and never award a victory."""
-from EasyCells3D.Components import Component
 
 EVENTS = ("coagulation", "blood_flow", "inflammation", "fever")
 LABELS = {"coagulation": "COAGULACAO: plaquetas fecharao a passagem central",
@@ -8,15 +7,14 @@ LABELS = {"coagulation": "COAGULACAO: plaquetas fecharao a passagem central",
           "fever": "FEBRE: regeneracao suspensa para ambos os times"}
 
 
-class StressDirector(Component):
+class StressDirector:
     def __init__(self, arena):
         self.arena = arena
 
-    def loop(self):
+    def tick(self, dt):
         a, s = self.arena, self.arena.state
-        if not a.authority or s.winner:
+        if s.winner:
             return
-        dt = min(.05, self.game.delta_time)
         if s.event_warning > 0:
             s.event_warning = max(0, s.event_warning-dt)
             if s.event_warning == 0:
@@ -38,7 +36,7 @@ class StressDirector(Component):
             # Clear the announced gate volume before enabling its collider.
             for actor in a.actors.values():
                 p = actor.transform.position
-                if actor.alive and abs(p.x) < 3.6 and abs(p.z-7) < 1.1:
+                if actor.local and actor.alive and abs(p.x) < 3.6 and abs(p.z-7) < 1.1:
                     from EasyCells3D.Geometry import Vec3
                     actor.body.teleport(Vec3(p.x, p.y, 5.6 if p.z < 7 else 8.4))
         a.gate.enable = closing

@@ -266,6 +266,7 @@ class NetworkManager(Component):
             is_server: bool,
             connect_callback: Callable[[int], None] = None,
             enable_udp: bool = True,
+            disconnect_callback: Callable[[int], None] = None,
     ):
         NetworkManager.instance = self
         self.is_server = is_server
@@ -274,6 +275,9 @@ class NetworkManager(Component):
         self.id = 0 if is_server else -1
 
         self.connect_callbacks: list[Callable[[int], None]] = []
+        self.disconnect_callbacks = [] if disconnect_callback is None else [disconnect_callback]
+        self._connected_peers = set()
+        self._reported_disconnect = False
         if connect_callback is not None:
             self.connect_callbacks.append(connect_callback)
 
@@ -296,7 +300,8 @@ class NetworkManager(Component):
             if is_server and port == 0:
                 self.port = self.transports[Protocol.TCP]._impl.server_socket.getsockname()[1]
             self.transports[Protocol.UDP] = UdpTransport(ip, self.port, ip_version, is_server,
-                self.server_callback_udp if is_server else self.client_callback_udp)
+                self.server_callback_udp if is_server else self.client_callback_udp,
+                self.transports[Protocol.TCP])
 
     # --- Callbacks ---
     # Nota: Assumimos que o TCP é a conexão "Mestre" para definir o ID e disparar o callback do usuário
@@ -308,9 +313,7 @@ class NetworkManager(Component):
 
     def client_callback_udp(self, client_id: int):
         self._udp_connected = True
-        # Idealmente o ID do UDP deve bater com o do TCP.
-        # Como as classes são separadas, esperamos que a ordem de conexão seja consistente.
-        pass
+        # UDP registers the identity already assigned by the TCP handshake.
 
     def _check_connection_complete(self, client_id):
         # Dispara o callback do usuário quando o TCP conecta (UDP pode vir depois ou falhar silenciosamente)
@@ -360,6 +363,25 @@ class NetworkManager(Component):
             self._server_loop()
         else:
             self._client_loop()
+        tcp = self.transports[Protocol.TCP]
+        if self.is_server:
+            connected = {cid for cid in range(1, len(tcp.clients)) if tcp.clients[cid] is not None}
+            for cid in self._connected_peers - connected:
+                if Protocol.UDP in self.transports:
+                    self.transports[Protocol.UDP]._impl.close_client(cid)
+                for callback in self.disconnect_callbacks:
+                    callback(cid)
+            self._connected_peers = connected
+        elif self._tcp_connected and not tcp._impl.connected and not self._reported_disconnect:
+            self._reported_disconnect = True
+            for callback in self.disconnect_callbacks:
+                callback(0)
+
+    @property
+    def error(self):
+        """Connection/handshake errors from the enabled transports."""
+        return next((transport._impl.error for transport in self.transports.values()
+                     if getattr(transport._impl, "error", "")), "")
 
     def _server_loop(self):
         for transport in self.transports.values():
@@ -415,3 +437,5 @@ class NetworkManager(Component):
     def on_destroy(self):
         for transport in self.transports.values():
             transport.close()
+        if NetworkManager.instance is self:
+            NetworkManager.instance = None

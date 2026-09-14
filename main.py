@@ -5,7 +5,7 @@ from pathlib import Path
 import pyray as rl
 from EasyCells3D import Game
 from EasyCells3D.Components import Component
-from UserComponents.cells.network import connect
+from UserComponents.cells.session import connect
 
 
 class FrameLimit(Component):

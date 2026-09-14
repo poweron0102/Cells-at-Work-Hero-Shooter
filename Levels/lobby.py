@@ -9,5 +9,5 @@ def init(game):
 
 
 def loop(game):
-    if game.session.status == "playing":
+    if game.session.status in ("loading", "playing"):
         game.new_game("abrasion")

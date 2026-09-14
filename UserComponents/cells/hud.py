@@ -103,10 +103,10 @@ class CombatHUD(Canvas):
             self.circle(x+w-8, y+232, 2+math.sin(s.elapsed*3)*.5, RED)
 
     def health(self, actor, kit, s):
-        special = s.immune_cooldown if actor.team == CELLS else actor.special_cd
-        snapshot = (actor.hero, actor.health, actor.ability_cd, special, s.phase, s.maturity)
+        special = max(s.immune_cooldown, actor.special_cd) if actor.team == CELLS else actor.special_cd
+        snapshot = (actor.hero, actor.health.value, actor.ability_cd, special, s.phase, s.maturity)
         if self.previous and self.previous[0] == actor.hero:
-            if actor.health < self.previous[1]:
+            if actor.health.value < self.previous[1]:
                 self.face_state, self.face_until = 'hurt', s.elapsed+.65
             elif actor.ability_cd > self.previous[2] or special > self.previous[3]:
                 self.face_state, self.face_until = 'special', s.elapsed+1.2
@@ -118,18 +118,18 @@ class CombatHUD(Canvas):
             self.face_until = 0
             self.colony_until = 0
         self.previous = snapshot
-        low = actor.health <= kit.health*.3
+        low = actor.health.value <= kit.health*.3
         expression = self.face_state if s.elapsed < self.face_until else 'low' if low else 'normal'
         x, y = 24, 608
         self.frame(x, y, 304, 88, PAPER)
         self.panel(x+6, y+6, 72, 76, INK)
         draw_face(self, actor.hero, expression, x+6, y+6, 72)
-        self.text(str(max(0, math.ceil(actor.health))), x+88, y+1, 40, RED if low else INK)
+        self.text(str(max(0, math.ceil(actor.health.value))), x+88, y+1, 40, RED if low else INK)
         self.text(f'/ {kit.health} HP', x+158, y+18, 17, INK)
-        self.bar(x+88, y+44, 202, actor.health/kit.health, RED if low else TEAL, 10)
+        self.bar(x+88, y+44, 202, actor.health.value/kit.health, RED if low else TEAL, 10)
         self.fitted(kit.name, x+88, y+61, 198, 16, INK)
-        if actor.shield:
-            self.text(f'+{int(actor.shield)}', x+252, y+8, 12, INK)
+        if actor.shield.value:
+            self.text(f'+{int(actor.shield.value)}', x+252, y+8, 12, INK)
         if low and actor.alive:
             self.text('VIDA BAIXA', x+8, y-19, 14, RED)
 
@@ -168,7 +168,7 @@ class CombatHUD(Canvas):
             self.text(f'{actor.weapon.reload_time:.1f}s', x+149, y+23, 14, INK)
         self.line(x+8, y+48, w-16, MUTED)
         for i, (key, label, cd) in enumerate((('Q', kit.ability, actor.ability_cd),
-                ('F', kit.ultimate, s.immune_cooldown if actor.team == CELLS else actor.special_cd))):
+                ('F', kit.ultimate, max(s.immune_cooldown, actor.special_cd) if actor.team == CELLS else actor.special_cd))):
             sx = x+1+i*119
             self.panel(sx, y+50, 119, 102, INK)
             tint = MUTED if cd > 0 or actor.neutralized > 0 or not actor.alive else TEAL
@@ -233,9 +233,9 @@ class CombatHUD(Canvas):
         for target in a.actors.values():
             if target.slot == actor.slot or not target.alive:
                 continue
-            chemotaxis = actor.hero == "neutrophil" and target.health < HEROES[target.hero].health*.5 and (target.transform.position-actor.transform.position).magnitude() < 15
+            chemotaxis = actor.hero == "neutrophil" and target.health.value < HEROES[target.hero].health*.5 and (target.transform.position-actor.transform.position).magnitude() < 15
             if target.team == actor.team or actor.reveal > 0 or chemotaxis:
-                self.marker(target.transform.position+Vec3(0, 1.4, 0), net.roster[target.slot]["name"][:9] + (f"  {int(target.health)} HP" if target.health < HEROES[target.hero].health else ""), (142, 239, 204) if target.team == actor.team else (255, 171, 127))
+                self.marker(target.transform.position+Vec3(0, 1.4, 0), net.roster.value[target.slot]["name"][:9] + (f"  {int(target.health.value)} HP" if target.health.value < HEROES[target.hero].health else ""), (142, 239, 204) if target.team == actor.team else (255, 171, 127))
         if actor.alive:
             # Stylized viewmodel, tied to local weapon shot and reload state.
             bob = math.sin(s.elapsed*8)*2
@@ -287,6 +287,6 @@ class CombatHUD(Canvas):
         self.text("Escolha seu proximo personagem entre as vagas disponiveis.", 288, 378, 16, MUTED)
         net, s = self.game.session, self.arena.state
         for i, key in enumerate(h for h in HEROES if HEROES[h].team == actor.team):
-            enabled = can_select(key, actor.team, net.roster, s.recognition, s.infected, actor.slot)
-            self.button(HEROES[key].name.split()[0], 284+i*183, 420, 170, lambda h=key: net.choose(h), net.roster[actor.slot]["hero"] == key, enabled)
+            enabled = can_select(key, actor.team, net.roster.value, s.recognition, s.infected, actor.slot)
+            self.button(HEROES[key].name.split()[0], 284+i*183, 420, 170, lambda h=key: net.choose(h), net.roster.value[actor.slot]["hero"] == key, enabled)
         self.text("B CELL: 50% antigeno    /    KILLER T: tecido infectado    /    Limites por equipe ativos", 288, 490, 13, MUTED)

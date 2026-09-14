@@ -5,7 +5,6 @@ from EasyCells3D.Components import Camera3D
 from EasyCells3D.PhysicsComponents3D import BulletPhysicsWorld
 from UserComponents.cells.arena import Arena
 from UserComponents.cells.actors import load_combatant
-from UserComponents.cells.director import StressDirector
 from UserComponents.cells.world import build_abrasion
 
 
@@ -18,11 +17,10 @@ def headless_game():
 
 def mount_arena(game):
     game.physics_world = BulletPhysicsWorld()
-    arena = game.CreateItem().AddComponent(Arena(game.session.is_server))
+    arena = game.CreateItem().AddComponent(Arena())
     arena.navigator, arena.gate = build_abrasion(game)
-    for slot, player in game.session.roster.items():
+    for slot, player in game.session.roster.value.items():
         arena.actors[slot] = load_combatant(game, arena, slot, player)
-    game.CreateItem().AddComponent(StressDirector(arena))
     return arena
 
 

@@ -35,13 +35,13 @@ class AudioFeedback(Component):
             return
         if actor.shot != self.shot:
             self.play("shot")
-        if actor.health < self.health and self.health < 10000:
+        if actor.health.value < self.health and self.health < 10000:
             self.play("hurt")
         if actor.hit_marker > self.last_hit:
             self.play("hit")
         if self.arena.state.event_index != self.event:
             self.play("event")
-        self.shot, self.health, self.last_hit = actor.shot, actor.health, actor.hit_marker
+        self.shot, self.health, self.last_hit = actor.shot, actor.health.value, actor.hit_marker
         self.event = self.arena.state.event_index
 
     def on_destroy(self):

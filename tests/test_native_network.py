@@ -67,6 +67,7 @@ class NativeNetworkTests(unittest.TestCase):
 
     def test_network_transform_interpolates_and_snaps_respawn(self):
         game = headless_game()
+        NetworkManager.instance = SimpleNamespace(is_server=False, id=1)
         try:
             transform = self.make_transform(game, 992, interpolation_speed=10)
             transform.deserialize(pack("ifff", 1, 2, 0, 0))
@@ -115,6 +116,27 @@ class NativeNetworkTests(unittest.TestCase):
             transform = self.make_transform(game, 995)
             transform.handle_incoming_rpc("sync_transform", (pack("ifff", 1, 100, 100, 100),), sender_id=4)
             self.assertEqual(transform.transform.position.to_tuple, (0, 0, 0))
+        finally:
+            game.close()
+
+    def test_owner_transfer_starts_sending_and_stops_interpolating(self):
+        game = headless_game()
+        manager = SimpleNamespace(is_server=True, id=0, broadcast=Mock())
+        NetworkManager.instance = manager
+        try:
+            transform = self.make_transform(game, 996, interpolation_speed=10)
+            transform.owner = 2
+            transform.init()
+            game.scheduler.update()
+            self.assertFalse(manager.broadcast.called)
+            transform.deserialize(pack("ifff", 50, 2, 0, 0))
+            transform.owner = 0
+            transform.loop()
+            self.assertIsNone(transform._target_position)
+            game.run_time += .1
+            game.scheduler.update()
+            self.assertTrue(manager.broadcast.called)
+            self.assertGreater(transform.cont, 50)
         finally:
             game.close()
 

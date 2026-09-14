@@ -11,7 +11,7 @@
 | `Levels/results.py` | Relatório e saída da sessão |
 | `catalog.py` | Dados dos oito kits, facções, limites e desbloqueios |
 | `rules.py` | Estado da partida e condições de progresso/vitória testáveis sem janela |
-| `network.py` | `NetworkComponent` de sessão e canais de comandos com `@Rpc` |
+| `session.py` | Sala, seleção de heróis e transições com RPCs e `NetworkVariable` |
 | `actors.py` / `combat.py` | Componentes de combatente, arma, dano, habilidades e respawn |
 | `arena.py` | Objetivos vivos, amostras, núcleos e coordenação da simulação |
 | `director.py` | Eventos fisiológicos e alteração da passagem central |
@@ -40,41 +40,40 @@ a interface utiliza a camada atual `CameraUI`, sem pygame.
 
 ## Rede
 
-O anfitrião também joga e é a autoridade de todos os combatentes, objetivos,
-cooldowns e eventos. A conexão usa um `NetworkManager` da biblioteca, sem subclassificar
-seu despachante ou ler/enviar pacotes pelo gameplay. TCP e UDP usam a porta 25765.
+Cada jogador simula entrada, física, mira, hitscan, munição, recarga, habilidades
+e respawn localmente. O jogo usa os RPCs, `NetworkVariable` e `NetworkTransform`
+diretamente. Não há canais de comandos, sanitização de inputs remotos,
+snapshots periódicos, reconciliação ou código de transporte no gameplay.
 
-`ArenaNetwork` herda de `NetworkComponent`. Cada conexão recebe outro componente,
-`PeerCommands`, cujo `owner` é o ID TCP atribuído pela engine. Seus métodos `join`,
-`choose_hero` e `submit_input` usam `@Rpc(send_to=SendTo.SERVER, require_owner=True)`.
-A engine verifica a propriedade do componente antes de executar a chamada.
-Clientes enviam intenção de movimento, mira e botões a 30 Hz, sem enviar posições,
-dano, vida ou resultado. O host passa pelo mesmo método RPC para sua entrada local.
+- **Movimento:** `NetworkTransform`, UDP a 30 Hz, `owner` do jogador. Sequência,
+  descarte de posições antigas, interpolação e reenvio ficam na biblioteca.
+  Um datagrama perdido não bloqueia o seguinte.
+- **Tiros:** o atirador resolve o raycast e informa o acerto por RPC TCP ao dono
+  do alvo. O alvo aplica dano, escudo, neutralização e morte; variáveis nativas
+  publicam vida, escudo e placar. Traçantes são RPCs UDP.
+- **Habilidades:** ativação e cooldowns locais; RPCs TCP comunicam zonas,
+  revelação de inimigos e resposta imune compartilhada.
+- **Objetivos:** o anfitrião envia incrementos do relógio e presença nos pontos
+  aproximadamente a 10 Hz. Todos executam as mesmas regras de objetivos e eventos.
+  Esses RPCs usam TCP porque cada incremento contribui para o progresso; não são
+  estados substituíveis por versões mais novas. Movimento e disparos locais
+  continuam mesmo quando esses eventos atrasam.
+- **Sala:** uma variável nativa guarda as vagas; RPCs cuidam de entrada, seleção
+  e transições. A partida começa quando todos montaram a arena. Apenas o relatório
+  final contém os dados consolidados de objetivos e placar.
+- **Desconexão:** o callback da biblioteca libera a vaga no lobby ou passa o
+  combatente para um bot do anfitrião. O jogo não inspeciona sockets ou transportes.
 
-O método `ArenaNetwork.receive_match_state`, com `@Rpc(send_to=SendTo.CLIENTS)` e
-`owner=0`, publica os dados de lobby, objetivos e combate a 20 Hz. Esses dados não
-contêm posições de combatentes. Erros destinados a um jogador usam
-`NetworkManager.call_rpc_on_client`.
+TCP e UDP usam a porta 25765 e o mesmo ID de jogador. O UDP registra o ID recebido
+no handshake TCP, independentemente da ordem das conexões. A biblioteca responde
+a handshakes repetidos e limpa a associação UDP quando o TCP encerra.
 
-Cada combatente tem um `NetworkTransform` nativo com ID estável e **`owner=0`**.
-Isso mantém a escrita do transform no servidor. O componente serializa e transmite
-posições por seu RPC UDP `sync_transform`, com frequência de 30 Hz. A interpolação,
-rejeição de pacotes antigos e recuperação de um estado estacionário após perda de
-datagrama ficam no próprio `NetworkTransform`, não nos componentes de gameplay.
-
-Os IDs de handshake UDP/TCP da biblioteca continuam independentes. Aqui, os
-comandos de jogadores e chamadas para clientes específicos usam TCP; transforms
-são enviados por broadcast do servidor a todos os clientes UDP. O jogo não usa
-um ID TCP para endereçar um cliente UDP nem aceita transforms de clientes.
-
-- Seis vagas, três por time; o host valida todas as escolhas.
-- Células iniciam com dois neutrófilos e um macrófago em uma sala completa.
-- Desconexão no lobby libera a vaga; durante a partida, um bot assume a vaga.
-- Entradas tardias em uma partida iniciada são recusadas, com mensagem no lobby.
-- Fechar o host encerra a sessão; clientes mostram perda de conexão e saída ao menu.
-- Sem migração de host, matchmaking, relay, autenticação ou compensação de latência.
-- O alvo desta entrega é LAN. O teste automatizado usa loopback; não foi feita uma
-  partida entre seis computadores físicos nem validação de internet/WAN.
+Os testes usam um host e cinco clientes em processos separados. Suspendem a
+leitura de respostas do host para verificar movimento, tiro, habilidade e recarga
+locais; verificam dano entre clientes, respawn, objetivos e transferência para bot.
+Testes de transporte invertem a ordem dos handshakes e perdem a primeira confirmação.
+A validação usa loopback, sem teste entre computadores físicos ou WAN. Entradas
+tardias são recusadas; não há migração de host ou matchmaking.
 
 ## Ajustes necessários na biblioteca
 
@@ -83,16 +82,18 @@ um ID TCP para endereçar um cliente UDP nem aceita transforms de clientes.
   sockets; timeout; `TCP_NODELAY`; limite de tamanho de pacote. Desserialização
   aceita dados primitivos, mas rejeita instâncias executáveis via pickle.
   RPCs/NetworkVariables que enviem instâncias Python precisam convertê-las em
-  dados primitivos; os snapshots deste jogo já fazem isso.
+  dados primitivos; os RPCs e variáveis deste jogo usam esses tipos.
 - `NetworkManager`: flags de conexão inicializadas antes das threads; quando a
   porta solicitada é zero, TCP e UDP compartilham a mesma porta atribuída. A opção
   `enable_udp` continua disponível, mas o jogo utiliza ambos os protocolos.
+  Expõe erros e callbacks de desconexão, e associa UDP à identidade TCP.
 - `Rpc`: `SendTo.SERVER` executa também quando quem chama é o próprio host.
   `Protocol` é exportado por `NetworkComponents`, como no exemplo do guia.
 - `NetworkTransform`: interpolação opcional (desativada por padrão), correção
   imediata de teleporte, reenvio periódico de estado estacionário para recuperar
   datagramas perdidos, rejeição de pacotes antigos/tamanho inválido e cancelamento
-  da coroutine ao destruir o componente.
+  da coroutine ao destruir o componente. A coroutine acompanha trocas de dono
+  para permitir que o host assuma um combatente desconectado.
 - `NetworkUDP`: a thread de handshake é a única leitora até obter o ID; tentativas
   limitadas com timeout; encerramento tolerante a desconexão. Usa a mesma leitura
   restrita a dados primitivos do transporte TCP.

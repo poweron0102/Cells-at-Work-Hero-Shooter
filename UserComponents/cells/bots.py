@@ -59,6 +59,6 @@ class BotBrain:
                     z=(move.x*forward_x+move.z*forward_z)/length if moving else 0,
                     fire=fire, interact=True, sprint=not fire, reload=actor.weapon.ammo == 0,
                     ability=bool(enemy) and actor.hero not in ("neutrophil", "killer_t", "streptococcus"),
-                    ultimate=bool(enemy) and actor.health < 90,
+                    ultimate=bool(enemy) and actor.health.value < 90,
                     jump=bool(path) and actor.controller.is_grounded
                     and (waypoint.y > position.y+.7 or actor.body.velocity.magnitude() < .5))
