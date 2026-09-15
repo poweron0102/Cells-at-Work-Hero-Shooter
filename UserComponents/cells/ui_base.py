@@ -33,7 +33,7 @@ class Canvas(RenderableUI):
         self.font = rl.get_font_default()
         self.custom_font = False
         # Windows' UI font provides readable small text without bundling a system font.
-        font_path = Path("C:/Windows/Fonts/segoeui.ttf")
+        font_path = Path("Assets/fonts/Inter.ttf")
         if font_path.exists():
             self.font = rl.load_font_ex(str(font_path), 64, rl.ffi.NULL, 0)
             self.custom_font = True
