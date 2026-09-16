@@ -1,0 +1,107 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1060" viewBox="0 0 1200 1060" role="img" aria-labelledby="title desc">
+  <title id="title">Bairro de canais e pontes — planta esquemática 3v3</title>
+  <desc id="desc">Base das células ao sul e ferida ao norte. Escolta pela avenida e ponte central. Ruas laterais em circuitos levam a três edifícios de entrega. Canal atravessa sob a ponte. Reconhecimento na praça central. Sem escala.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8Z" fill="#207c96"/></marker>
+    <style>
+      text{font-family:Segoe UI,Arial,sans-serif;fill:#343b40;font-size:16px}
+      .head{font-size:28px;font-weight:700}.sub{font-size:15px;fill:#616769}.label{font-weight:700}.small{font-size:13px}
+      .road{fill:none;stroke:#eadcc0;stroke-width:38;stroke-linecap:round;stroke-linejoin:round}
+      .edge{fill:none;stroke:#b99f72;stroke-width:2;stroke-dasharray:4 7}
+      .building{fill:#e9bd82;stroke:#a67b50;stroke-width:2}
+      .node{fill:#fffdf8;stroke:#9c825d;stroke-width:2}
+    </style>
+  </defs>
+  <rect width="1200" height="1060" fill="#faf7ef"/>
+  <text x="40" y="48" class="head">Bairro de canais e pontes</text>
+  <text x="40" y="76" class="sub">Planta conceitual • 3v3 • sem escala • norte no topo • plano de 16/09/2026</text>
+  <rect x="36" y="100" width="818" height="850" rx="22" fill="#f1eadc" stroke="#d4c8b4"/>
+  <!-- Ruas e bifurcações: S, P, O, L e N. -->
+  <path class="road" d="M445 811 L445 755 L445 655 L475 590 L445 495 L445 390 L475 340 L445 285 L445 220"/>
+  <path class="road" d="M445 755 L250 755 L205 680 L205 495 L205 345 L300 285 L445 285 L605 285 L685 350 L685 495 L685 675 L625 755 L445 755"/>
+  <path class="road" d="M205 495 L445 495 L685 495"/>
+  <path class="road" d="M350 845 L350 795 L445 755 M540 845 L540 795 L625 755"/>
+  <path class="road" d="M665 182 L735 225 L685 350 M665 182 L565 220 L445 285"/>
+  <path class="edge" d="M445 755 L250 755 L205 680 L205 495 L205 345 L300 285 L445 285 L605 285 L685 350 L685 495 L685 675 L625 755 L445 755 M205 495 H685"/>
+  <!-- Canal local abaixo das ruas; travessias preservam os circuitos. -->
+  <path d="M75 595 C210 550 300 555 425 577 S660 603 820 555" fill="none" stroke="#a4d2c1" stroke-width="53"/>
+  <path d="M75 595 C210 550 300 555 425 577 S660 603 820 555" fill="none" stroke="#d5eee1" stroke-width="31"/>
+  <path d="M205 610 L205 535 M685 630 L685 553" stroke="#b98564" stroke-width="45"/>
+  <path d="M205 610 L205 535 M685 630 L685 553" stroke="#edceb0" stroke-width="31"/>
+  <path d="M453 632 L492 550" stroke="#b98564" stroke-width="57"/>
+  <path d="M453 632 L492 550" stroke="#edceb0" stroke-width="41"/>
+  <path d="M150 575 L177 525 M260 575 L245 635 M630 590 L652 545 M750 580 L735 640" fill="none" stroke="#c2ad88" stroke-width="15"/>
+  <text x="80" y="653" class="small">Canal raso • saídas por rampas</text>
+  <text x="495" y="645" class="small">Passagem sob a ponte</text>
+  <!-- Destinos ficam ao lado das ruas, com duas entradas indicadas. -->
+  <rect x="67" y="678" width="111" height="65" rx="7" class="building"/>
+  <text x="78" y="704" class="label">Edifício A</text><text x="78" y="728" class="small">Entrega O₂</text>
+  <path d="M178 690 L205 675 M150 743 L250 755" fill="none" stroke="#a67b50" stroke-width="5"/>
+  <rect x="725" y="367" width="114" height="70" rx="7" class="building"/>
+  <text x="737" y="393" class="label">Edifício B</text><text x="737" y="416" class="small">Entrega O₂</text>
+  <path d="M725 380 L685 360 M725 427 L685 455" fill="none" stroke="#a67b50" stroke-width="5"/>
+  <rect x="220" y="187" width="122" height="61" rx="7" class="building"/>
+  <text x="232" y="212" class="label">Edifício C</text><text x="232" y="234" class="small">Entrega O₂</text>
+  <path d="M235 248 L260 311 M326 248 L345 285" fill="none" stroke="#a67b50" stroke-width="5"/>
+  <text x="73" y="329" class="small">Rua noroeste</text>
+  <text x="73" y="795" class="small">Rua sudoeste</text><text x="659" y="788" class="small">Rua sudeste</text>
+  <!-- Espaços de construção ilustrativos, não pontos fixos. -->
+  <rect x="83" y="368" width="90" height="70" rx="12" fill="#ddd2e6" stroke="#907a9e" stroke-dasharray="5 4"/>
+  <text x="95" y="397" class="small">Pátio</text><text x="95" y="417" class="small">2 acessos</text>
+  <path d="M130 368 L205 345 M173 415 L205 445" fill="none" stroke="#907a9e" stroke-width="3"/>
+  <rect x="720" y="667" width="105" height="66" rx="12" fill="#ddd2e6" stroke="#907a9e" stroke-dasharray="5 4"/>
+  <text x="730" y="695" class="small">Recuo</text><text x="730" y="715" class="small">2 acessos</text>
+  <path d="M720 682 L685 660 M765 733 L625 755" fill="none" stroke="#907a9e" stroke-width="3"/>
+  <!-- Objetivos e marcos -->
+  <rect x="348" y="126" width="196" height="99" rx="12" fill="#ebae99" stroke="#a66250" stroke-width="2"/>
+  <text x="382" y="155" class="label">FERIDA / OBRA</text><text x="369" y="180" class="small">Destino das plaquetas</text><text x="375" y="203" class="small">Andaimes e materiais</text>
+  <rect x="590" y="120" width="220" height="81" rx="12" fill="#d4c7e2" stroke="#79638f" stroke-width="2"/>
+  <text x="608" y="148" class="label">Entrada bacteriana</text><text x="608" y="171" class="small">Renascimento protegido</text><text x="608" y="190" class="small">Fecha com a ferida</text>
+  <rect x="280" y="834" width="330" height="86" rx="13" fill="#c4dbe5" stroke="#527b8c" stroke-width="2"/>
+  <text x="317" y="866" class="label">BASE DAS CÉLULAS</text><text x="312" y="893" class="small">Estação de serviço • duas saídas</text>
+  <rect x="292" y="656" width="112" height="61" rx="8" fill="#eed7a8" stroke="#b59965"/>
+  <text x="304" y="679" class="small">Distribuição</text><text x="304" y="699" class="small">de oxigênio</text>
+  <path d="M350 717 L350 738 L425 755" fill="none" stroke="#b59965" stroke-width="3"/>
+  <text x="490" y="702" class="label">Avenida arterial</text><text x="490" y="724" class="small">Arcos vermelhos • cobertura</text>
+  <text x="277" y="459" class="label">Praça da ponte</text>
+  <rect x="496" y="420" width="126" height="47" rx="8" fill="#e6e8c2" stroke="#8c9452"/>
+  <text x="508" y="441" class="small">Reconhecimento</text><text x="508" y="459" class="small">Após a ferida</text>
+  <path d="M500 467 L475 495 M607 467 L625 495" fill="none" stroke="#8c9452" stroke-width="3"/>
+  <!-- Percurso da escolta -->
+  <path d="M445 811 L445 755 L445 655 L475 590 L445 495 L445 390 L475 340 L445 285 L445 235" fill="none" stroke="#207c96" stroke-width="6" stroke-dasharray="12 7" marker-end="url(#arrow)"/>
+  <text x="487" y="815" class="small">Partida das plaquetas</text>
+  <g text-anchor="middle">
+    <circle class="node" cx="445" cy="755" r="15"/><text x="445" y="761">S</text>
+    <circle class="node" cx="445" cy="495" r="15"/><text x="445" y="501">P</text>
+    <circle class="node" cx="205" cy="495" r="15"/><text x="205" y="501">O</text>
+    <circle class="node" cx="685" cy="495" r="15"/><text x="685" y="501">L</text>
+    <circle class="node" cx="445" cy="285" r="15"/><text x="445" y="291">N</text>
+  </g>
+  <!-- Legenda -->
+  <text x="887" y="133" class="label">LEGENDA</text>
+  <path d="M889 165 H938" stroke="#207c96" stroke-width="5" stroke-dasharray="10 5"/>
+  <text x="889" y="191">Escolta contínua</text>
+  <path d="M889 225 H938" stroke="#d6c19a" stroke-width="14"/>
+  <text x="889" y="251">Ruas de mão dupla</text>
+  <text x="889" y="273" class="small">Hemácias e jogadores</text>
+  <path d="M889 305 H938" stroke="#a4d2c1" stroke-width="18"/>
+  <text x="889" y="333">Canal inferior</text>
+  <path d="M889 366 H938" stroke="#b98564" stroke-width="18"/>
+  <text x="889" y="395">Ponte / travessia superior</text>
+  <rect x="889" y="420" width="48" height="24" class="building"/>
+  <text x="889" y="470">Destinos distintos A / B / C</text>
+  <rect x="889" y="495" width="48" height="24" rx="5" fill="#ddd2e6" stroke="#907a9e" stroke-dasharray="5 4"/>
+  <text x="889" y="546">Exemplos para colônias</text>
+  <text x="889" y="568" class="small">Construção continua livre.</text>
+  <text x="889" y="625" class="label">COMO LER</text>
+  <text x="889" y="656" class="small">S / P / O / L / N: bifurcações.</text>
+  <text x="889" y="683" class="small">Rotas alternativas na tabela</text>
+  <text x="889" y="704" class="small">do plano do mapa.</text>
+  <text x="889" y="741" class="small">Alturas se cruzam sem</text>
+  <text x="889" y="762" class="small">conexão automática:</text>
+  <text x="889" y="783" class="small">usar rampas e escadas.</text>
+  <text x="889" y="824" class="small">Não estão detalhadas todas</text>
+  <text x="889" y="845" class="small">as coberturas ou fachadas.</text>
+  <text x="40" y="990" class="label">Intenção: mudar de tarefa sem abandonar a ação por uma caminhada longa.</text>
+  <text x="40" y="1022" class="sub">Medidas e equilíbrio serão testados em uma futura versão simples do nível. Nenhuma implementação nesta entrega.</text>
+</svg>

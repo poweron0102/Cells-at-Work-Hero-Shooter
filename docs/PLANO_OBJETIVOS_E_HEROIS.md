@@ -6,6 +6,11 @@ Plano registrado em 15/09/2026 a partir das decisões da entrevista de design.
 Este documento não representa funcionalidades já implementadas. A solicitação
 desta etapa é registrar o plano, sem modificar o código do jogo.
 
+Complemento de design aprovado em 16/09/2026: [plano do mapa e planta
+esquemática](PLANO_MAPA.md), com bairro de canais e pontes para 3v3, entregas
+de oxigênio em edifícios diferentes, rotas alternativas e fuga das hemácias.
+Esse complemento também é planejamento, sem implementação nesta etapa.
+
 O redesenho substitui as fases e vitórias baseadas em cronômetro por escolta,
 economia, construção e combate. Não existe um conceito de região contaminável:
 a infecção é representada exclusivamente pelas colônias construídas pelos jogadores.
