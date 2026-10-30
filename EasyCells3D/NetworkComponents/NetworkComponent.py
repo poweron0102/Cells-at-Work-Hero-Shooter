@@ -124,6 +124,8 @@ class NetworkComponent(Component):
         packet = (OP_RPC, self.identifier, method_name, args)
         nm = NetworkManager.instance
 
+        print(f"Enviando RPC estática: {method_name} com args: {args}")
+
         if nm.is_server:
             if send_to == SendTo.ALL or send_to == SendTo.CLIENTS:
                 nm.broadcast(packet, protocol)

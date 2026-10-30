@@ -1,0 +1,40 @@
+{
+  "coordinate_system": "Blender Z up, north +Y, meters",
+  "markers": {
+    "spawn_cells": [
+      0,
+      -44,
+      0
+    ],
+    "spawn_bacteria": [
+      27,
+      44,
+      0
+    ],
+    "oxygen_A": [
+      -31,
+      -26,
+      0
+    ],
+    "oxygen_B": [
+      31,
+      24,
+      0
+    ],
+    "oxygen_C": [
+      -18,
+      43,
+      0
+    ],
+    "recon": [
+      -5,
+      9,
+      0
+    ],
+    "wound": [
+      2,
+      41,
+      0
+    ]
+  }
+}
