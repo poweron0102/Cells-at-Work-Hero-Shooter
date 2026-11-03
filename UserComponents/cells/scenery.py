@@ -2,7 +2,8 @@
 
 O GLB guarda cor por vertice e, em UV.x, o id do padrao (tijolo, pedra,
 ladrilho, madeira, agua animada...). O shader desenha os padroes no espaco do
-mundo, aplica luz em faixas (cel shading), ceu em degrade e neblina quente.
+mundo, usa a iluminacao pre-calculada do GLB, ceu em degrade e neblina quente.
+Exports sem bake mantem a luz em faixas (cel shading).
 Carregado sob demanda: servidores e testes sem GPU nunca abrem o modelo.
 """
 import pyray as rl
@@ -22,12 +23,15 @@ out vec3 wPos;
 out vec3 wNor;
 out vec4 vCol;
 out float vPat;
+out float vBaked;
 void main() {
     vec4 w = matModel * vec4(vertexPosition, 1.0);
     wPos = w.xyz;
     wNor = normalize(mat3(matModel) * vertexNormal);
     vCol = vertexColor;
     vPat = vertexTexCoord.x;
+    // glTF exporters may flip V: both 1.5 and -0.5 mark baked data.
+    vBaked = step(0.75, abs(vertexTexCoord.y - 0.5));
     gl_Position = mvp * vec4(vertexPosition, 1.0);
 }
 '''
@@ -37,6 +41,7 @@ in vec3 wPos;
 in vec3 wNor;
 in vec4 vCol;
 in float vPat;
+in float vBaked;
 uniform vec4 colDiffuse;
 uniform vec3 viewPos;
 uniform float time;
@@ -163,7 +168,7 @@ void main() {
         col = mix(col, col * vec3(1.35, 1.05, 1.1), l * 0.6);
         col = mix(col, col * 0.6, 1.0 - smoothstep(0.02, 0.06, v.x));
     }
-    if (lit) {
+    if (lit && vBaked < 0.5) {
         vec3 L = normalize(vec3(-0.42, 0.82, 0.38));
         float d = dot(n, L);
         float band = d > 0.38 ? 1.0 : (d > -0.02 ? 0.86 : 0.74);

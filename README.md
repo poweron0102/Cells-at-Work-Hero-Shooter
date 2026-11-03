@@ -142,7 +142,9 @@ O jogo carrega `Assets/Maps/BairroArterial/BairroArterial.glb`, `runtime.json`
 (colisão, marcadores, rotas) e `nav.json` (navegação dos bots); não precisa do
 Blender. Os padrões (tijolo, pedras irregulares, ladrilhos, madeira, água) são
 desenhados por um shader em `UserComponents/cells/scenery.py` a partir do id
-gravado no UV de cada face. Para editar e reexportar, veja
+gravado no UV de cada face. Sombras do sol e oclusão ambiente são pré-calculadas
+nas cores por vértice durante a exportação, sem ray tracing em tempo de jogo.
+Para editar, refazer o bake e reexportar, veja
 [docs/MAPA_BAIRRO_ARTERIAL.md](docs/MAPA_BAIRRO_ARTERIAL.md).
 
 ## Personagens

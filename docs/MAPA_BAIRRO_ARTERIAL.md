@@ -12,6 +12,7 @@ de layout é reprodutível.
 | `scripts/distrito_layout.py` | Layout por zonas, marcadores (spawns, escolta, rotas das hemácias, destinos A/B/C, posto de reconhecimento, sugestões de colônia). |
 | `scripts/build_distrito.py` | Monta a cena no Blender: coleções **Arte**, **Colisao** e **Marcadores**. |
 | `scripts/export_distrito.py` | Salva o `.blend`, exporta o GLB e escreve `runtime.json`. |
+| `scripts/bake_distrito.py` | Bake de sombras solares suaves e oclusão do céu/contato nas cores por vértice do GLB. |
 | `scripts/build_navmesh.py` | Gera `nav.json` (grade em camadas para os bots) a partir da colisão. |
 | `scripts/rebuild_distrito.py` | Monta e exporta em um único processo do Blender sem janela. |
 | `scripts/check_map_overlaps.py` | Detecta faces coplanares sobrepostas (z-fight); também roda em `tests/test_map_geometry.py`. |
@@ -68,6 +69,32 @@ desenhado pelo shader de `UserComponents/cells/scenery.py`:
 
 A exportação junta as faces por zona em blocos de até 60 mil vértices (limite de
 índices de 16 bits do raylib), mantendo poucos *draw calls*.
+
+## Bake da iluminação
+
+A exportação aplica o bake por padrão, sem alterar as malhas ou as cores do
+`.blend` editável. O GLB recebe subdivisões de aproximadamente 85 cm na área
+principal (3 m no horizonte), luz solar quente, preenchimento frio do céu e
+oclusão de contato. O cálculo usa a geometria de arte, incluindo sacadas,
+árvores e pontes, com 24 raios de ambiente e cinco raios solares por amostra.
+É uma aproximação estática por vértice, sem iluminação indireta com múltiplos
+rebotes; sombras de personagens continuam fora deste bake.
+
+`UV.y = 1.5` identifica as superfícies pré-iluminadas: o shader não reaplica a
+iluminação direcional sobre elas. `UV.x` continua identificando os padrões.
+Água e materiais luminosos preservam a animação e a aparência própria.
+Os blocos do bake têm até 48 mil cantos para respeitar os índices do raylib.
+
+Para refazer apenas o bake/export a partir do `.blend` atual:
+
+```powershell
+& 'C:\Program Files\Blender Foundation\Blender 5.2\blender.exe' --background Assets\Maps\BairroArterial\BairroArterial.blend --python scripts\bake_distrito.py
+.venv\Scripts\python.exe scripts\render_district.py
+```
+
+O bake não muda colisão, rotas ou marcadores. Para exportar temporariamente
+sem bake, chame `export(save_blend=False, bake=False)` no Blender. O shader
+mantém a iluminação direcional anterior para esses exports (`UV.y = 0.5`).
 
 ## Regras que a geometria precisa manter
 

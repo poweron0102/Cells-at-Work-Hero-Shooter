@@ -14,7 +14,9 @@ Os caminhos usados pelo jogo permanecem estáveis.
 
 O Bairro dos Canais e suas ferramentas exclusivas foram retirados. Seus atlas,
 renders e exports não devem ser adicionados novamente. O Bairro Arterial usa
-cores por vértice e padrões no shader, sem os atlas do mapa anterior.
+cores por vértice com iluminação pré-calculada e padrões no shader, sem os
+atlas do mapa anterior. O bake é refeito por `scripts/bake_distrito.py` no
+Blender e também faz parte da exportação padrão.
 
 Backups do Blender (`.blend1`, `.blend2`, etc.), logs e capturas de validação
 são arquivos locais ignorados pelo Git. Salve capturas em `.scratch/` ou

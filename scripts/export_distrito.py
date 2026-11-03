@@ -12,9 +12,11 @@ Em segundo plano:
 """
 import json
 import os
+import sys
 
 import bpy
 
+_RUN_EXPORT = __name__ == '__main__' or 'REPO' in globals()
 REPO = globals().get('REPO') or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(REPO, 'Assets', 'Maps', 'BairroArterial')
 
@@ -23,20 +25,34 @@ def to_game(v):
     return (round(v[0], 4), round(v[2], 4), round(-v[1], 4))
 
 
-def export(save_blend=True):
+def export(save_blend=True, bake=True):
     os.makedirs(OUT, exist_ok=True)
     if save_blend:
         bpy.ops.wm.save_as_mainfile(filepath=os.path.join(OUT, 'BairroArterial.blend'), copy=True)
     art = bpy.data.collections['Arte']
-    bpy.ops.object.select_all(action='DESELECT')
-    for ob in art.objects:
-        if ob.type == 'MESH':
-            ob.select_set(True)
-            bpy.context.view_layer.objects.active = ob
-    bpy.ops.export_scene.gltf(filepath=os.path.join(OUT, 'BairroArterial.glb'), use_selection=True,
-                              export_format='GLB', export_yup=True, export_apply=True,
-                              export_vertex_color='ACTIVE', export_materials='NONE',
-                              export_normals=True, export_texcoords=True)
+    temporary = None
+    try:
+        objects = art.objects
+        if bake:
+            sys.path.insert(0, os.path.join(REPO, 'scripts'))
+            from bake_distrito import bake_objects, remove_bake
+            temporary, objects = bake_objects(art)
+        bpy.ops.object.select_all(action='DESELECT')
+        for ob in objects:
+            if ob.type == 'MESH':
+                ob.select_set(True)
+                bpy.context.view_layer.objects.active = ob
+        # Export atomically so an interrupted bake keeps the last playable map.
+        target = os.path.join(OUT, 'BairroArterial.glb')
+        pending = os.path.join(OUT, '_BairroArterial.pending.glb')
+        bpy.ops.export_scene.gltf(filepath=pending, use_selection=True,
+                                  export_format='GLB', export_yup=True, export_apply=True,
+                                  export_vertex_color='ACTIVE', export_materials='NONE',
+                                  export_normals=True, export_texcoords=True)
+        os.replace(pending, target)
+    finally:
+        if temporary is not None:
+            remove_bake(temporary)
     # Collision triangles, in game coordinates.
     vertices, indices = [], []
     for ob in bpy.data.collections['Colisao'].objects:
@@ -61,5 +77,5 @@ def export(save_blend=True):
     print(f'Exportado: {len(art.objects)} objetos de arte, {len(indices)//3} triangulos de colisao, {len(points)} marcadores')
 
 
-if __name__ == '__main__' or 'REPO' in globals():
+if _RUN_EXPORT:
     export(globals().get('SAVE_BLEND', True))
