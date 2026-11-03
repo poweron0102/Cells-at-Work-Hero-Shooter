@@ -23,6 +23,7 @@ def main():
             logs.append(log)
             args = [sys.executable, "tests/network_peer.py", role, str(port), str(output/f"{role}.json")]
             processes.append(subprocess.Popen(args, cwd=ROOT, stdout=log, stderr=subprocess.STDOUT,
+                                             env={**os.environ, "PYTHONIOENCODING": "utf-8"},
                                              creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0))
             if i == 0:
                 time.sleep(.8)

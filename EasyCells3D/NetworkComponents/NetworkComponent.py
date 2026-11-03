@@ -6,6 +6,7 @@ from weakref import WeakValueDictionary
 
 from EasyCells3D.Components.Component import Component
 from EasyCells3D.Transport import Transport, TcpTransport, UdpTransport
+from EasyCells3D.NetworkComponents.RpcLog import RpcLog
 
 # --- Constantes de Protocolo ---
 OP_RPC = 1
@@ -124,7 +125,7 @@ class NetworkComponent(Component):
         packet = (OP_RPC, self.identifier, method_name, args)
         nm = NetworkManager.instance
 
-        print(f"Enviando RPC estática: {method_name} com args: {args}")
+        # Cada envio é registrado pelo RpcLog em NetworkManager.send_to_*/broadcast (--rpc-log).
 
         if nm.is_server:
             if send_to == SendTo.ALL or send_to == SendTo.CLIENTS:
@@ -148,22 +149,22 @@ class NetworkComponent(Component):
                 config = method._rpc_config
             else:
                 print(f"Erro: RPC Estático '{method_name}' não registrado.")
-                return
+                return "not_found"
         else:
             if not hasattr(self, method_name):
                 print(f"Erro: RPC '{method_name}' não encontrado no objeto {self.identifier}")
-                return
+                return "not_found"
             method = getattr(self, method_name)
             if hasattr(method, "_rpc_config"):
                 config = method._rpc_config
 
         if method is None or config is None:
-            return
+            return "not_rpc"
 
         if NetworkManager.instance.is_server and config["require_owner"]:
             if sender_id != self.owner:
                 print(f"Negado: RPC {method_name} no objeto {self.identifier} exige permissão de dono.")
-                return
+                return "denied"
 
         try:
             self._is_executing_rpc = True
@@ -179,6 +180,7 @@ class NetworkComponent(Component):
             # Usa o protocolo definido na config do RPC para retransmitir
             protocol = config.get("protocol", Protocol.TCP)
             self._server_relay_rpc(method_name, args, config["send_to"], sender_id, protocol)
+        return "ok"
 
     def _server_relay_rpc(self, method_name: str, args: tuple, send_to: SendTo, sender_id: int, protocol: Protocol):
         """Lógica de retransmissão do servidor (Relay)."""
@@ -239,7 +241,7 @@ class NetworkVariable[T]:
             new_val = args[0]
             if nm.is_server:
                 if self.require_owner and sender_id != self.owner:
-                    return
+                    return "denied"
 
                 self._value = new_val
                 packet = (OP_VAR, self.var_id, VAR_SET, (new_val,))
@@ -256,6 +258,7 @@ class NetworkVariable[T]:
             if nm.is_server:
                 packet = (OP_VAR, self.var_id, VAR_SET, (self._value,))
                 nm.send_to_client(packet, sender_id, Protocol.TCP)
+        return "ok"
 
 
 class NetworkManager(Component):
@@ -271,6 +274,7 @@ class NetworkManager(Component):
             disconnect_callback: Callable[[int], None] = None,
     ):
         NetworkManager.instance = self
+        RpcLog.enable_from_env()
         self.is_server = is_server
         self.ip = ip
         self.port = port
@@ -338,6 +342,8 @@ class NetworkManager(Component):
         if self.is_server:
             return  # Servidor não envia para servidor
 
+        if RpcLog.enabled:
+            RpcLog.log_send(self, packet, protocol, "server")
         self.transports[protocol].send(packet)
 
     def send_to_client(self, packet: object, client_id: int, protocol: Protocol):
@@ -345,6 +351,8 @@ class NetworkManager(Component):
         if not self.is_server:
             return
 
+        if RpcLog.enabled:
+            RpcLog.log_send(self, packet, protocol, f"client {client_id}")
         self.transports[protocol].send(packet, client_id)
 
     def broadcast(self, packet: object, protocol: Protocol):
@@ -352,7 +360,12 @@ class NetworkManager(Component):
         if not self.is_server:
             return
 
-        self.transports[protocol].broadcast(packet)
+        transport = self.transports[protocol]
+        if RpcLog.enabled:
+            clients = transport.clients
+            recipients = sum(clients[cid] is not None for cid in range(1, len(clients)))
+            RpcLog.log_send(self, packet, protocol, "broadcast", recipients)
+        transport.broadcast(packet)
 
     # --- Loop ---
 
@@ -386,16 +399,16 @@ class NetworkManager(Component):
                      if getattr(transport._impl, "error", "")), "")
 
     def _server_loop(self):
-        for transport in self.transports.values():
+        for protocol, transport in self.transports.items():
             clients = transport.clients
             for client_id in range(1, len(clients)):
                 while data := transport.read(client_id):
-                    self.process_packet(data, client_id)
+                    self.process_packet(data, client_id, protocol)
 
     def _client_loop(self):
-        for transport in self.transports.values():
+        for protocol, transport in self.transports.items():
             while data := transport.read():
-                self.process_packet(data, 0)
+                self.process_packet(data, 0, protocol)
 
     def call_rpc_on_client(self, client_id: int, rpc_method: Callable, *args):
         """Invoca um RPC num cliente específico. Tenta detectar protocolo do método."""
@@ -417,26 +430,32 @@ class NetworkManager(Component):
         self.send_to_client(packet, client_id, protocol)
 
     @staticmethod
-    def process_packet(data: tuple, sender_id: int):
+    def process_packet(data: tuple, sender_id: int, protocol: Protocol | None = None):
+        entry = RpcLog.begin_receive(NetworkManager.instance, data, sender_id, protocol) if RpcLog.enabled else None
+        status = "ignored"
         try:
             op_code, target_id, payload, args = data
 
             if op_code == OP_RPC:
                 component = NetworkComponent._active_components.get(target_id)
-                if component:
-                    component.handle_incoming_rpc(payload, args, sender_id)
+                status = component.handle_incoming_rpc(payload, args, sender_id) if component else "no_target"
 
             elif op_code == OP_VAR:
                 variable = NetworkVariable._active_variables.get(target_id)
-                if variable:
-                    variable.handle_network_update(payload, args, sender_id)
+                status = variable.handle_network_update(payload, args, sender_id) if variable else "no_target"
 
         except ValueError:
+            status = "malformed"
             print("Pacote malformado recebido.")
         except Exception as e:
+            status = "error"
             print(f"Erro processando pacote: {e}")
+        finally:
+            if entry is not None:
+                RpcLog.end_receive(entry, status or "ok")
 
     def on_destroy(self):
+        RpcLog.flush()
         for transport in self.transports.values():
             transport.close()
         if NetworkManager.instance is self:

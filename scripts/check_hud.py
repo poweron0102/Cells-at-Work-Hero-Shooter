@@ -60,21 +60,25 @@ class HUDProbe(Component):
         kit = HEROES[hero]
         if step == 0:
             actor.hero, actor.team, actor.health.value = hero, kit.team, kit.health
-            actor.shield.value, actor.neutralized = 0, 0
-            actor.ability_cd = actor.special_cd = 0
+            actor.shield.value = 0
+            actor.ability_cd = actor.secondary_cd = 0
+            actor.charge = 100
             actor.weapon.ammo, actor.weapon.reload_time = kit.magazine, 0
-            state.immune_cooldown = state.notice_time = 0
-            state.phase, state.elapsed, state.stress = 1, 100, 46
-            state.capture, state.recognition, state.maturity = [100, 100, 0], 55, 24
-            state.event = ''
+            state.notice_time = 0
+            state.elapsed, state.escort, state.recognition = 100, 60, 55
+            state.resources[actor.slot] = 7
+            if not state.colonies:
+                state.resources[4] = 99
+                state.add_colony(4, (-53, 0, -30))
+                state.colonies[-1]['dev'] = 12
         elif step == 2:
             rl.take_screenshot(f'.scratch/hud/{hero}-ready.png')
             actor.health.value, actor.hurt = kit.health*.2, .25
+            actor.hurt_from = [(actor.transform.x+5, actor.transform.z, state.elapsed)]
             actor.weapon.ammo, actor.weapon.reload_time = 0, 1.4
-            actor.ability_cd = 6.2
-            actor.special_cd = state.immune_cooldown = 24
-            state.stress = 92
-            state.maturity = 45
+            actor.ability_cd, actor.charge = 6.2, 40
+            actor.slow, actor.slow_factor, actor.marked = 2.5, .4, 4
+            state.blocked_by = [4]
         elif step == 4:
             assert hud.face_state == 'hurt', hero
             rl.take_screenshot(f'.scratch/hud/{hero}-hurt.png')

@@ -1,65 +1,191 @@
-"""Layered surface A*: streets, ramp slopes and rooftops can share an X/Z cell."""
+"""Navegacao em camadas (rua, canal, passarelas, pontes) para os bots.
+
+A grade e amostrada com raycasts na colisao exportada do Blender e salva em
+``nav.json`` ao lado do mapa (gerada por ``scripts/build_navmesh.py`` ou na
+primeira execucao). Varias alturas podem dividir a mesma coluna X/Z, o que
+preserva passagens sob pontes e passarelas.
+"""
+import hashlib
 import heapq
+import json
 import math
 from EasyCells3D.Geometry import Vec3
-from .layout import WIDTH, LENGTH
+from .layout import X0, X1, Z0, Z1, NAV_CEILINGS, MAP_FOLDER
+
+STEP = 2
+NAV_FILE = MAP_FOLDER/'nav.json'
+
+
+def map_hash():
+    return hashlib.sha1((MAP_FOLDER/'runtime.json').read_bytes()).hexdigest()[:16]
 
 
 class Navigator:
-    def __init__(self, solids, ramps):
-        self.solids, self.ramps, self.gate = solids, ramps, None
-        self.columns = {}
-        self.free = set()
-        self.obstacles = [(s.position[0], s.position[2], s.size[0], s.size[2])
-                          for s in solids if s.position[1]-s.size[1]/2 < 1.9]
-        for x in range(-WIDTH//2+2, WIDTH//2, 2):
-            for z in range(-LENGTH//2+2, LENGTH//2, 2):
-                heights = {0.0}
-                heights.update(s.top for s in solids if s.top < 10 and s.contains(x, z, -.5))
-                heights.update(h for r in ramps if (h := r.surface(x, z)) is not None)
-                nodes = []
-                for y in sorted(heights):
-                    if any(s.contains(x, z, .48) and s.top > y+.12
-                           and s.position[1]-s.size[1]/2 < y+1.95 for s in solids):
-                        continue
-                    if any((h := r.surface(x, z)) is not None and h > y+.12 for r in ramps):
-                        continue
-                    node = (x, round(y, 3), z)
-                    nodes.append(node)
-                    self.free.add(node)
-                self.columns[x, z] = nodes
+    _cached = None
 
-    def _crosses_gate(self, a, b):
-        if not self.gate or not self.gate.enable:
+    def __init__(self, world):
+        self.world = world
+        self.columns, self.edges = {}, {}
+
+    # -- construcao -------------------------------------------------------
+    def build(self):
+        import pybullet as bullet
+        world = self.world
+        columns, edges = {}, {}
+        shape = bullet.createCollisionShape(bullet.GEOM_CAPSULE, radius=.42, height=1.0,
+                                            collisionFrameOrientation=[-.70710678, 0, 0, .70710678],
+                                            physicsClientId=world.client)
+        probe = bullet.createMultiBody(baseMass=0, baseCollisionShapeIndex=shape, basePosition=[0, -100, 0],
+                                       physicsClientId=world.client)
+        bullet.setCollisionFilterGroupMask(probe, -1, 0, 0, physicsClientId=world.client)
+        bodies = [b.uid for b in world.bodies if b.enable and b.collision_group & 1]
+
+        def clear(x, y, z):
+            bullet.resetBasePositionAndOrientation(probe, [x, y+1.2, z], [0, 0, 0, 1], physicsClientId=world.client)
+            return not any(bullet.getClosestPoints(probe, uid, .01, physicsClientId=world.client) for uid in bodies)
+        surfaces = walkable_heights()
+        try:
+            for (x, z), heights in surfaces.items():
+                nodes = [y for y in heights if clear(x, y, z)]
+                if nodes:
+                    columns[(x, z)] = nodes
+            for (x, z), ys in columns.items():
+                for y in ys:
+                    out = []
+                    for dx, dz in ((STEP, 0), (-STEP, 0), (0, STEP), (0, -STEP)):
+                        for oy in columns.get((x+dx, z+dz), ()):
+                            if abs(oy-y) > 3.0:
+                                continue
+                            if all(clear(x+dx*t, max(y, oy) if abs(oy-y) > .35 else y+(oy-y)*t, z+dz*t) for t in (.33, .66)):
+                                slope = 1
+                                if abs(oy-y) > .35:
+                                    # A ramp/stair has intermediate ground at the midpoint; a ledge does not.
+                                    mid = world.raycast(Vec3(x+dx/2, max(y, oy)+1.2, z+dz/2), Vec3(0, -1, 0), 4, 1)
+                                    lo, hi = min(y, oy), max(y, oy)
+                                    slope = int(bool(mid) and lo+.15 < mid.point.y < hi-.15)
+                                out.append((x+dx, oy, z+dz, slope))
+                    edges[(x, y, z)] = out
+        finally:
+            bullet.removeBody(probe, physicsClientId=world.client)
+        self.columns, self.edges = columns, edges
+
+    def save(self, path=NAV_FILE):
+        data = dict(hash=map_hash(), step=STEP,
+                    nodes=[[x, y, z, [list(e) for e in self.edges.get((x, y, z), ())]]
+                           for (x, z), ys in self.columns.items() for y in ys])
+        path.write_text(json.dumps(data, separators=(',', ':')), encoding='utf-8')
+
+    def load(self, path=NAV_FILE):
+        if not path.exists():
             return False
-        return (min(a[2], b[2]) <= 7.85 and max(a[2], b[2]) >= 6.15
-                and min(abs(a[0]), abs(b[0])) < 3.5 and min(a[1], b[1]) < 3.6)
+        data = json.loads(path.read_text(encoding='utf-8'))
+        if data.get('hash') != map_hash():
+            return False
+        columns, edges = {}, {}
+        for x, y, z, out in data['nodes']:
+            columns.setdefault((x, z), []).append(y)
+            edges[(x, y, z)] = [tuple(e) for e in out]
+        self.columns, self.edges = columns, edges
+        return True
 
-    def path(self, start, target, jump_height=1.2):
-        def nearest(p):
-            return min(self.free, key=lambda n: (n[0]-p.x)**2+(n[2]-p.z)**2+4*(n[1]+.95-p.y)**2)
-        first, last = nearest(start), nearest(target)
+    def ensure(self):
+        if self.edges:
+            return
+        if Navigator._cached is not None:
+            self.columns, self.edges = Navigator._cached
+            return
+        if not self.load():
+            self.build()
+            try:
+                self.save()
+            except OSError:
+                pass
+        Navigator._cached = self.columns, self.edges
+
+    # -- consulta ---------------------------------------------------------
+    def nearest(self, p):
+        cx = int(round((p.x-X0-1)/STEP))*STEP+int(X0)+1
+        cz = int(round((p.z-Z0-1)/STEP))*STEP+int(Z0)+1
+        best, score = None, math.inf
+        for r in range(0, 6):
+            for dx in range(-r, r+1):
+                for dz in range(-r, r+1):
+                    if max(abs(dx), abs(dz)) != r:
+                        continue
+                    key = (cx+dx*STEP, cz+dz*STEP)
+                    for y in self.columns.get(key, ()):
+                        s = (key[0]-p.x)**2+(key[1]-p.z)**2+6*(y+.95-p.y)**2
+                        if s < score:
+                            best, score = (key[0], y, key[1]), s
+            if best is not None and r >= 1:
+                return best
+        return best
+
+    def path(self, start, target, jump_height=1.2, limit=6000):
+        self.ensure()
+        first, last = self.nearest(start), self.nearest(target)
+        if first is None or last is None:
+            return []
         queue, costs, parent = [(0, first)], {first: 0}, {}
-        while queue:
+        expanded = 0
+        while queue and expanded < limit:
             _, current = heapq.heappop(queue)
+            expanded += 1
             if current == last:
                 nodes = [current]
                 while nodes[-1] != first:
                     nodes.append(parent[nodes[-1]])
                 return [Vec3(x, y+.95, z) for x, y, z in reversed(nodes)]
-            for dx, dz in ((2, 0), (-2, 0), (0, 2), (0, -2)):
-                for other in self.columns.get((current[0]+dx, current[2]+dz), ()):
-                    rise = other[1]-current[1]
-                    if rise > jump_height-.15 or rise < -4.1 or self._crosses_gate(current, other):
-                        continue
-                    # Never route through the side of a building/under a low lintel.
-                    mx, mz = (current[0]+other[0])/2, (current[2]+other[2])/2
-                    high = max(current[1], other[1])
-                    if any(s.contains(mx, mz, .45) and s.top > high+.12
-                           and s.position[1]-s.size[1]/2 < high+1.95 for s in self.solids):
-                        continue
-                    cost = costs[current]+2+abs(rise)*.5+(2 if rise > .7 else 0)
-                    if cost < costs.get(other, math.inf):
-                        costs[other], parent[other] = cost, current
-                        heapq.heappush(queue, (cost+abs(other[0]-last[0])+abs(other[2]-last[2]), other))
+            for edge in self.edges.get(current, ()):
+                other, slope = edge[:3], edge[3]
+                rise = other[1]-current[1]
+                if not slope and rise > jump_height-.15:
+                    continue
+                cost = costs[current]+STEP+abs(rise)*.5+(2 if rise > .7 else 0)
+                if cost < costs.get(other, math.inf):
+                    costs[other], parent[other] = cost, current
+                    heapq.heappush(queue, (cost+abs(other[0]-last[0])+abs(other[2]-last[2]), other))
         return []
+
+def walkable_heights():
+    """Heights of upward-facing collision triangles at every grid column.
+
+    Reads the exported triangles directly (their winding is outward), so solid
+    slabs never produce phantom floors under the street.
+    """
+    from .layout import MAP_DATA
+    verts, idx = MAP_DATA['vertices'], MAP_DATA['indices']
+    xs = range(int(X0)+1, int(X1), STEP)
+    zs = range(int(Z0)+1, int(Z1), STEP)
+    out = {}
+    for t in range(0, len(idx), 3):
+        a, b, c = verts[idx[t]], verts[idx[t+1]], verts[idx[t+2]]
+        ux, uy, uz = b[0]-a[0], b[1]-a[1], b[2]-a[2]
+        vx, vy, vz = c[0]-a[0], c[1]-a[1], c[2]-a[2]
+        nx, ny, nz = uy*vz-uz*vy, uz*vx-ux*vz, ux*vy-uy*vx
+        length = math.sqrt(nx*nx+ny*ny+nz*nz) or 1
+        if ny/length < .6:
+            continue
+        x0, x1 = min(a[0], b[0], c[0]), max(a[0], b[0], c[0])
+        z0, z1 = min(a[2], b[2], c[2]), max(a[2], b[2], c[2])
+        det = (b[2]-c[2])*(a[0]-c[0])+(c[0]-b[0])*(a[2]-c[2])
+        if abs(det) < 1e-9:
+            continue
+        for x in xs:
+            if x < x0-1e-6 or x > x1+1e-6:
+                continue
+            for z in zs:
+                if z < z0-1e-6 or z > z1+1e-6:
+                    continue
+                l1 = ((b[2]-c[2])*(x-c[0])+(c[0]-b[0])*(z-c[2]))/det
+                l2 = ((c[2]-a[2])*(x-c[0])+(a[0]-c[0])*(z-c[2]))/det
+                l3 = 1-l1-l2
+                if min(l1, l2, l3) < -1e-6:
+                    continue
+                y = round(l1*a[1]+l2*b[1]+l3*c[1], 2)
+                ys = out.setdefault((x, z), [])
+                if all(abs(y-o) > .3 for o in ys):
+                    ys.append(y)
+    for ys in out.values():
+        ys.sort()
+    return out

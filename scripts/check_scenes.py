@@ -38,21 +38,20 @@ class SceneProbe(Component):
             game.session.arena.actors[0].damage(1000, game.session.arena.actors[3])
         elif f == 156:
             self.capture("respawn")
-            game.session.arena.state.phase = 1
+            game.session.arena.state.escort = 60
         elif f == 165:
-            self.capture("identification")
-            game.session.arena.state.phase = 2
-            game.session.arena.state.infected = True
+            self.capture("escort")
+            game.session.arena.state.escort = game.session.arena.state.escort_total
         elif f == 173:
-            self.capture("colonization")
+            self.capture("wound_closed")
             game.session.arena.state.winner = "cells"
-        elif f == 340:
+        elif f == 420:
             if game.current_level != "results":
                 raise SystemExit("FAIL: results scene not reached")
             self.capture("results")
             disconnect(game)
             game.new_game("menu")
-        elif f == 350:
+        elif f == 430:
             self.capture("menu_after_match")
             if len(game.cameras) != 1 or game.physics_world is not None:
                 raise SystemExit("FAIL: stale scene resources")

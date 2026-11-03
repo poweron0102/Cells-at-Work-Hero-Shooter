@@ -1,0 +1,96 @@
+{
+ "key": "b_cell",
+ "height": 1.88,
+ "convention": "glTF/raylib: Y para cima, personagem olha para +Z, pés em y=0 e origem entre os pés. Sufixo _l = lado esquerdo do personagem = +X; _r = lado direito = -X. \"mesh\" = índice em model.meshes do raylib (nós do GLB em ordem, um primitivo por parte). \"pivot\" = articulação no espaço do personagem (metros). \"swing\": static|arm|leg|weapon|tail|tentacle|head. \"phase\" = defasagem (rad) do ciclo; \"action\" = como a parte reage ao ataque.",
+ "mesh_count": 5,
+ "triangles": 6792,
+ "parts": [
+  {
+   "name": "body",
+   "mesh": 2,
+   "pivot": [
+    0.0,
+    0.0,
+    -0.0
+   ],
+   "parent": "body",
+   "swing": "static"
+  },
+  {
+   "name": "arm_l",
+   "mesh": 0,
+   "pivot": [
+    0.1924,
+    1.4612,
+    -0.0
+   ],
+   "parent": "body",
+   "swing": "arm",
+   "phase": 3.1416,
+   "amp": 0.55
+  },
+  {
+   "name": "arm_r",
+   "mesh": 1,
+   "pivot": [
+    -0.1924,
+    1.4612,
+    -0.0
+   ],
+   "parent": "body",
+   "swing": "arm",
+   "phase": 0.0,
+   "amp": 0.2,
+   "action": "recoil"
+  },
+  {
+   "name": "leg_l",
+   "mesh": 3,
+   "pivot": [
+    0.0957,
+    0.9256,
+    -0.0
+   ],
+   "parent": "body",
+   "swing": "leg",
+   "phase": 0.0,
+   "amp": 0.5
+  },
+  {
+   "name": "leg_r",
+   "mesh": 4,
+   "pivot": [
+    -0.0957,
+    0.9256,
+    -0.0
+   ],
+   "parent": "body",
+   "swing": "leg",
+   "phase": 3.1416,
+   "amp": 0.5
+  }
+ ],
+ "mount": {
+  "part": "arm_r",
+  "matrix": [
+   [
+    1.0,
+    0.0,
+    0.0,
+    -0.2516
+   ],
+   [
+    0.0,
+    1.0,
+    0.0,
+    1.0193
+   ],
+   [
+    0.0,
+    0.0,
+    1.0,
+    0.2053
+   ]
+  ]
+ }
+}

@@ -1,0 +1,162 @@
+{
+ "key": "pseudomonas",
+ "height": 1.5,
+ "convention": "glTF/raylib: Y para cima, personagem olha para +Z, pés em y=0 e origem entre os pés. Sufixo _l = lado esquerdo do personagem = +X; _r = lado direito = -X. \"mesh\" = índice em model.meshes do raylib (nós do GLB em ordem, um primitivo por parte). \"pivot\" = articulação no espaço do personagem (metros). \"swing\": static|arm|leg|weapon|tail|tentacle|head. \"phase\" = defasagem (rad) do ciclo; \"action\" = como a parte reage ao ataque.",
+ "mesh_count": 10,
+ "triangles": 7380,
+ "parts": [
+  {
+   "name": "body",
+   "mesh": 0,
+   "pivot": [
+    0.0,
+    -0.0051,
+    -0.0
+   ],
+   "parent": "body",
+   "swing": "static"
+  },
+  {
+   "name": "head",
+   "mesh": 1,
+   "pivot": [
+    0.0,
+    0.8449,
+    0.25
+   ],
+   "parent": "body",
+   "swing": "head",
+   "phase": 0.0,
+   "amp": 0.12,
+   "action": "lunge"
+  },
+  {
+   "name": "leg_l1",
+   "mesh": 2,
+   "pivot": [
+    0.2,
+    0.4149,
+    0.36
+   ],
+   "parent": "body",
+   "swing": "leg",
+   "phase": 0.0,
+   "amp": 0.35
+  },
+  {
+   "name": "leg_r1",
+   "mesh": 5,
+   "pivot": [
+    -0.2,
+    0.4149,
+    0.36
+   ],
+   "parent": "body",
+   "swing": "leg",
+   "phase": 3.1416,
+   "amp": 0.35
+  },
+  {
+   "name": "leg_l2",
+   "mesh": 3,
+   "pivot": [
+    0.2,
+    0.4149,
+    -0.0
+   ],
+   "parent": "body",
+   "swing": "leg",
+   "phase": 3.1416,
+   "amp": 0.35
+  },
+  {
+   "name": "leg_r2",
+   "mesh": 6,
+   "pivot": [
+    -0.2,
+    0.4149,
+    -0.0
+   ],
+   "parent": "body",
+   "swing": "leg",
+   "phase": 0.0,
+   "amp": 0.35
+  },
+  {
+   "name": "leg_l3",
+   "mesh": 4,
+   "pivot": [
+    0.2,
+    0.4149,
+    -0.34
+   ],
+   "parent": "body",
+   "swing": "leg",
+   "phase": 0.0,
+   "amp": 0.35
+  },
+  {
+   "name": "leg_r3",
+   "mesh": 7,
+   "pivot": [
+    -0.2,
+    0.4149,
+    -0.34
+   ],
+   "parent": "body",
+   "swing": "leg",
+   "phase": 3.1416,
+   "amp": 0.35
+  },
+  {
+   "name": "tentacles_a",
+   "mesh": 9,
+   "pivot": [
+    0.0,
+    0.7949,
+    0.45
+   ],
+   "parent": "body",
+   "swing": "tentacle",
+   "phase": 0.8,
+   "amp": 0.18
+  },
+  {
+   "name": "tail",
+   "mesh": 8,
+   "pivot": [
+    0.0,
+    0.4749,
+    -0.5
+   ],
+   "parent": "body",
+   "swing": "tail",
+   "phase": 0.0,
+   "amp": 0.3,
+   "action": "strike"
+  }
+ ],
+ "mount": {
+  "part": "body",
+  "matrix": [
+   [
+    1.0,
+    0.0,
+    0.0,
+    -0.26
+   ],
+   [
+    0.0,
+    1.0,
+    0.0,
+    0.9149
+   ],
+   [
+    0.0,
+    0.0,
+    1.0,
+    0.3
+   ]
+  ]
+ }
+}

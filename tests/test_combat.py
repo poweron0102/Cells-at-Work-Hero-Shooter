@@ -2,7 +2,7 @@ import unittest
 from simulation_support import headless_game, mount_arena, step
 from EasyCells3D.Geometry import Vec3
 from UserComponents.cells.session import connect
-from UserComponents.cells.catalog import HEROES
+from UserComponents.cells.catalog import HEROES, BALANCE
 from UserComponents.cells.world import block
 
 
@@ -18,23 +18,39 @@ class CombatIntegrationTests(unittest.TestCase):
         for _ in range(60):
             step(self.game)
         self.shooter, self.target = self.arena.actors[0], self.arena.actors[3]
-        self.shooter.body.teleport(Vec3(0, 1, 20))
-        self.target.body.teleport(Vec3(0, 1, 14))
+        self.shooter.body.teleport(Vec3(0, 1, 60))
+        self.target.body.teleport(Vec3(0, 1, 54))
         self.shooter.yaw = self.shooter.pitch = 0
+        step(self.game)
 
     def tearDown(self):
         self.game.close()
 
+    def total(self, actor):
+        return actor.health.value+actor.shield.value
+
     def test_hitscan_damages_enemy_and_cover_blocks_it(self):
-        health = self.target.health.value+self.target.shield.value
+        health = self.total(self.target)
         self.shooter.weapon.fire()
-        self.assertLess(self.target.health.value+self.target.shield.value, health)
-        block(self.game, "Test cover", (0, 1, 17), (3, 3, 1), (100, 100, 100))
+        self.assertLess(self.total(self.target), health)
+        block(self.game, "Test cover", (0, 1, 57), (3, 3, 1), (100, 100, 100))
         step(self.game)
         self.shooter.weapon.timer = 0
-        health = self.target.health.value+self.target.shield.value
+        health = self.total(self.target)
         self.shooter.weapon.fire()
-        self.assertEqual(self.target.health.value+self.target.shield.value, health)
+        self.assertEqual(self.total(self.target), health)
+
+    def test_dealing_damage_charges_the_special_but_time_does_not(self):
+        # Away from the escort (escorting is an objective and does charge).
+        self.shooter.body.teleport(Vec3(0, 1, 40))
+        self.target.body.teleport(Vec3(0, 1, 34))
+        self.shooter.charge = 0
+        step(self.game)
+        for _ in range(120):
+            step(self.game)
+        self.assertEqual(self.shooter.charge, 0)
+        self.shooter.weapon.fire()
+        self.assertGreater(self.shooter.charge, 0)
 
     def test_jump_uses_engine_ground_check_and_gravity(self):
         for _ in range(20):
@@ -58,19 +74,51 @@ class CombatIntegrationTests(unittest.TestCase):
         self.target.damage(2000, self.shooter)
         self.assertFalse(self.target.alive)
         self.assertFalse(self.target.body.enable)
-        for _ in range(365):
+        self.assertEqual(self.target.killer, self.shooter.slot)
+        for _ in range(int(BALANCE['respawn_seconds']*60)+5):
             step(self.game)
         self.assertTrue(self.target.alive)
         self.assertTrue(self.target.body.enable)
         self.assertEqual(self.target.health.value, HEROES[self.target.hero].health)
 
-    def test_collection_cannot_pass_through_cover(self):
-        self.arena.state.phase = 1
-        self.arena.samples = [dict(pos=(0, 1, 18), life=20)]
-        block(self.game, "Sample cover", (0, 1, 19), (3, 3, .3), (100, 100, 100))
+    def test_bacterium_drops_antigen_and_carried_resources(self):
+        self.arena.state.resources[3] = 4
+        self.target.damage(2000, self.shooter)
+        kinds = sorted(d['kind'] for d in self.arena.drops)
+        self.assertEqual(kinds, ['antigen', 'resource'])
+        self.assertEqual(self.arena.state.resources[3], 0)
+
+    def test_cells_collect_antigen_physically_and_destroy_resources(self):
+        self.arena.add_drop('antigen', self.shooter.feet, 1)
+        self.arena.add_drop('resource', self.shooter.feet, 3)
         step(self.game)
-        self.arena.collect(self.shooter)
-        self.assertEqual(self.arena.state.recognition, 0)
+        self.assertFalse(self.arena.drops)
+        self.assertEqual(self.arena.state.recognition, BALANCE['antigen_per_sample'])
+        self.assertEqual(sum(self.arena.state.resources.values()), 0)
+
+    def test_macrophage_slam_knocks_back_and_b_cell_marks(self):
+        self.shooter.hero = 'macrophage'
+        self.target.body.teleport(Vec3(0, 1, 57.5))
+        step(self.game)
+        self.shooter.ability()
+        for _ in range(10):
+            step(self.game)
+        self.assertGreater(abs(self.target.transform.z-57.5), .5)
+        self.shooter.hero = 'b_cell'
+        self.shooter.ability_cd = 0
+        self.target.body.teleport(Vec3(0, 1, 54))
+        step(self.game)
+        self.shooter.ability()
+        self.assertGreater(self.target.marked, 0)
+
+    def test_b_cell_zoom_follows_the_mouse_and_resets_on_death(self):
+        self.shooter.hero = 'b_cell'
+        self.shooter.controls = dict(secondary=True, yaw=0, pitch=0)
+        step(self.game)
+        self.assertTrue(self.shooter.zoom)
+        self.shooter.damage(5000, self.target)
+        step(self.game)
+        self.assertFalse(self.shooter.zoom)
 
 
 if __name__ == "__main__":

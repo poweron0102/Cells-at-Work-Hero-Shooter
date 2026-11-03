@@ -6,6 +6,9 @@ from EasyCells3D.Game import Camera
 
 class Renderable3D(Component):
     camera: Camera3D = None
+    # Ordem de desenho na câmera (menor primeiro; empates mantêm a ordem de registro).
+    # Transparências e o viewmodel usam valores altos para ficar por cima da cena opaca.
+    render_order: int = 0
 
     def render(self):
         pass
@@ -21,6 +24,10 @@ class Renderable3D(Component):
             self.camera.renderables.remove(self)
 
 
+
+
+def _render_order(ren):
+    return ren.render_order
 
 
 class Camera3D(Component, Camera):
@@ -88,7 +95,7 @@ class Camera3D(Component, Camera):
 
         rl.begin_mode_3d(self.rl_camera)
 
-        for ren in self.renderables:
+        for ren in sorted(self.renderables, key=_render_order):
             ren.render()
 
         rl.end_mode_3d()

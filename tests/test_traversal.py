@@ -1,10 +1,11 @@
-"""Real Bullet traversal of production ramps, roof gaps and exclusive ledges."""
+"""Travessia real (Bullet) no Bairro Arterial exportado do Blender."""
 import math
 import unittest
 from simulation_support import headless_game, mount_arena, step
 from EasyCells3D.Geometry import Vec3
 from UserComponents.cells.session import connect
-from UserComponents.cells.catalog import HEROES, POINTS, CORE_POSITIONS
+from UserComponents.cells.layout import (CELL_SPAWNS, BACTERIA_ENTRANCE, ESCORT_PATH, RBC_NODES, DESTINATIONS,
+                                         COLONY_HINTS, RECON, CANAL)
 
 
 class TraversalTests(unittest.TestCase):
@@ -35,58 +36,82 @@ class TraversalTests(unittest.TestCase):
             self.actor.controls = command
             step(self.game)
 
-    def test_slowest_hero_walks_up_ramp_and_lands_on_roof(self):
-        self.place('macrophage', (14, 1, 46.8))
-        self.drive(225, yaw=0, z=1)
-        self.drive(30)
-        self.assertLess(self.actor.transform.z, 30)
-        self.assertAlmostEqual(self.actor.transform.y, 4.95, delta=.12)
-        self.assertTrue(self.actor.controller.is_grounded)
-        start = self.actor.transform.y
-        self.drive(16, jump=True)
-        self.assertGreater(self.actor.transform.y, start+.6)
-        self.drive(90)
-        self.assertAlmostEqual(self.actor.transform.y, start, delta=.12)
+    def ground(self, x, z, top=12):
+        hit = self.game.physics_world.raycast(Vec3(x, top, z), Vec3(0, -1, 0), top+6, 1)
+        return hit.point.y if hit else None
 
-    def test_tower_requires_high_jump_from_gallery(self):
-        for hero, can_reach in (('macrophage', False), ('killer_t', True), ('pseudomonas', True)):
-            with self.subTest(hero=hero):
-                self.place(hero, (28.7, 5, 22))
-                self.drive(45, yaw=math.pi/2, z=1, jump=True)
-                self.drive(60)
-                if can_reach:
-                    self.assertGreater(self.actor.transform.x, 32)
-                    self.assertAlmostEqual(self.actor.transform.y, 7.95, delta=.15)
-                else:
-                    self.assertLess(self.actor.transform.y, 7)
+    def test_every_spawn_lands_on_safe_ground(self):
+        for slot, actor in self.arena.actors.items():
+            expected = CELL_SPAWNS[slot % 3] if slot < 3 else BACTERIA_ENTRANCE[slot % 3]
+            self.assertAlmostEqual(actor.transform.y, expected[1]+.95, delta=.15)
+            self.assertTrue(actor.controller.is_grounded)
 
-    def test_fast_flanker_crosses_gap_slow_hero_falls_safely(self):
-        for hero, can_reach in (('macrophage', False), ('streptococcus', True)):
-            with self.subTest(hero=hero):
-                self.place(hero, (-4.9, 5, -22))
-                self.drive(59, yaw=math.pi/2, z=1, sprint=True, jump=True)
-                self.drive(70)
-                if can_reach:
-                    self.assertGreater(self.actor.transform.x, 4.5)
-                    self.assertAlmostEqual(self.actor.transform.y, 4.95, delta=.15)
-                else:
-                    self.assertAlmostEqual(self.actor.transform.y, .95, delta=.15)
+    def test_markers_sit_on_walkable_ground(self):
+        for name, p in list(RBC_NODES.items())+[('recon', RECON)]+[(f'escort{i}', p) for i, p in enumerate(ESCORT_PATH)]:
+            with self.subTest(marker=name):
+                y = self.ground(p[0], p[2], p[1]+1.5)
+                self.assertIsNotNone(y)
+                self.assertAlmostEqual(y, p[1], delta=.35)
 
-    def test_spawn_routes_reach_every_objective_with_gate_open_or_closed(self):
+    def test_slowest_hero_leaves_canal_by_ramps(self):
+        # Ramps along both banks rise toward the higher end (south bank west of the central bridge).
+        for start, yaw, bank in (((-6, -1.4, 4.5), -math.pi/2, math.pi), ((6, -1.4, -4.5), math.pi/2, 0)):
+            with self.subTest(start=start):
+                self.place('macrophage', start)
+                self.drive(120, yaw=yaw, z=1)
+                self.drive(60, yaw=bank, z=1)
+                self.drive(20)
+                self.assertAlmostEqual(self.actor.transform.y, .95, delta=.2)
+                self.assertTrue(self.actor.controller.is_grounded)
+
+    def test_bridges_cross_without_falling(self):
+        for x in (-40, 0, 40):
+            with self.subTest(bridge=x):
+                self.place('macrophage', (x, 1, 16))
+                self.drive(440, yaw=0, z=1)
+                self.assertLess(self.actor.transform.z, -13)
+                self.assertAlmostEqual(self.actor.transform.y, .95, delta=.2)
+
+    def test_underpass_keeps_the_canal_route(self):
+        self.place('macrophage', (-10, -1.4, 0))
+        self.drive(260, yaw=math.pi/2, z=1)
+        self.assertGreater(self.actor.transform.x, 6)
+        self.assertAlmostEqual(self.actor.transform.y, CANAL[2]+.95, delta=.2)
+
+    def test_walkways_are_reachable_by_stairs(self):
+        self.place('macrophage', (-8.8, 1, 72))
+        self.drive(240, yaw=0, z=1)
+        self.assertGreater(self.actor.transform.y, 4.8)
+
+    def test_navigation_reaches_every_objective_from_both_bases(self):
         nav = self.arena.navigator
-        for closed in (False, True):
-            self.arena.gate.enable = closed
-            for slot in range(6):
-                for x, z in POINTS+CORE_POSITIONS:
-                    path = nav.path(self.arena.spawn_position(slot), Vec3(x, 1, z))
-                    self.assertTrue(path, (closed, slot, x, z))
-                    self.assertLess((path[-1]-Vec3(x, 1, z)).magnitude(), 2.1)
+        goals = [ESCORT_PATH[0], ESCORT_PATH[-1], RECON]+[RBC_NODES[d] for doors in DESTINATIONS.values() for d in doors]
+        goals += COLONY_HINTS
+        for start in (CELL_SPAWNS[0], BACTERIA_ENTRANCE[0]):
+            for goal in goals:
+                with self.subTest(start=start, goal=goal):
+                    path = nav.path(Vec3(start[0], start[1]+.95, start[2]), Vec3(goal[0], goal[1]+.95, goal[2]))
+                    self.assertTrue(path)
+                    self.assertLess((path[-1]-Vec3(goal[0], goal[1]+.95, goal[2])).magnitude(), 2.6)
 
-    def test_navigation_can_climb_public_roof(self):
-        path = self.arena.navigator.path(Vec3(14, 1, 46), Vec3(14, 4.95, 28))
-        self.assertTrue(path)
-        self.assertAlmostEqual(path[-1].y, 4.95)
-        self.assertTrue(any(1.5 < node.y < 4.5 for node in path))
+    def test_bases_have_no_direct_line_of_sight(self):
+        world = self.game.physics_world
+        for a in CELL_SPAWNS:
+            for b in BACTERIA_ENTRANCE:
+                start = Vec3(a[0], a[1]+1.5, a[2])
+                delta = Vec3(b[0], b[1]+1.5, b[2])-start
+                self.assertIsNotNone(world.raycast(start, delta, delta.magnitude(), 1))
+
+    def test_bot_leaves_station_and_reaches_the_escort(self):
+        self.actor.hero = 'macrophage'
+        roster = self.net.roster.value
+        roster[0]['bot'] = True
+        target = Vec3(*ESCORT_PATH[0])
+        for _ in range(1800):
+            step(self.game)
+            if Vec3(self.actor.transform.x-target.x, 0, self.actor.transform.z-target.z).magnitude() < 6:
+                break
+        self.assertLess(Vec3(self.actor.transform.x-target.x, 0, self.actor.transform.z-target.z).magnitude(), 6)
 
 
 if __name__ == '__main__':

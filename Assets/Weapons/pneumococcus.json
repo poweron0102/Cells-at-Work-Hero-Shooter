@@ -1,0 +1,85 @@
+{
+ "key": "pneumococcus",
+ "kind": "organic",
+ "convention": "glTF/raylib: Y para cima, cano para +Z, esquerda da arma em +X. Espaço \"gun\": origem na mão direita sobre o cabo. Espaço \"view\": câmera do viewmodel na origem olhando +Z. \"fp\" = matriz 3x4 gun->view da pose de repouso. \"anim\": static|bolt|mag|pulse|spin|melee. \"pivot\"/\"axis\" no espaço da parte; \"amount\" em metros (bolt/mag), escala (pulse) ou radianos (spin).",
+ "mesh_count": 4,
+ "triangles": 4424,
+ "fp": [
+  [
+   0.992205,
+   -0.089097,
+   0.087126,
+   -0.19
+  ],
+  [
+   0.087126,
+   0.995853,
+   0.026177,
+   -0.215
+  ],
+  [
+   -0.089097,
+   -0.018382,
+   0.995853,
+   0.5
+  ]
+ ],
+ "muzzle": [
+  0.0,
+  0.03,
+  0.36
+ ],
+ "eject": null,
+ "parts": [
+  {
+   "name": "body",
+   "mesh": 2,
+   "anim": "static",
+   "space": "gun",
+   "fp_only": false
+  },
+  {
+   "name": "sac",
+   "mesh": 3,
+   "anim": "pulse",
+   "space": "gun",
+   "fp_only": false,
+   "pivot": [
+    0.0,
+    0.12,
+    0.1
+   ],
+   "axis": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "amount": 0.22
+  },
+  {
+   "name": "arm_r",
+   "mesh": 1,
+   "anim": "static",
+   "space": "gun",
+   "fp_only": true
+  },
+  {
+   "name": "arm_l",
+   "mesh": 0,
+   "anim": "support",
+   "space": "gun",
+   "fp_only": true,
+   "pivot": [
+    0.44585,
+    -0.17027,
+    -0.54567
+   ],
+   "axis": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "amount": 0.0
+  }
+ ]
+}

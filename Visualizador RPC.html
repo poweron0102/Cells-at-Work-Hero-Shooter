@@ -1,0 +1,768 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Visualizador RPC | EasyCells3D</title>
+<style>
+:root {
+  color-scheme: light;
+  --page: #f9f9f7;
+  --surface-1: #fcfcfb;
+  --surface-2: #f0efec;
+  --text-primary: #0b0b0b;
+  --text-secondary: #52514e;
+  --text-muted: #898781;
+  --grid: #e1e0d9;
+  --axis: #c3c2b7;
+  --border: rgba(11, 11, 11, 0.10);
+  --series-1: #2a78d6;   /* TCP */
+  --series-2: #eb6834;   /* UDP */
+  --seq: #2a78d6;
+  --seq-track: #cde2fb;
+  --critical: #d03b3b;
+  --warning: #fab219;
+  --select: rgba(42, 120, 214, 0.12);
+  --hover: rgba(11, 11, 11, 0.04);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --page: #0d0d0d;
+    --surface-1: #1a1a19;
+    --surface-2: #232321;
+    --text-primary: #f0efec;
+    --text-secondary: #c3c2b7;
+    --text-muted: #898781;
+    --grid: #2c2c2a;
+    --axis: #383835;
+    --border: rgba(255, 255, 255, 0.10);
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --seq: #3987e5;
+    --seq-track: #184f95;
+    --select: rgba(57, 135, 229, 0.18);
+    --hover: rgba(255, 255, 255, 0.05);
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--page); color: var(--text-primary);
+  font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+header {
+  display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; justify-content: space-between;
+  padding: 16px 24px; border-bottom: 1px solid var(--border); background: var(--surface-1);
+  position: sticky; top: 0; z-index: 5;
+}
+h1 { font-size: 18px; margin: 0; font-weight: 600; }
+h1 small { font-weight: 400; color: var(--text-secondary); margin-left: 8px; font-size: 13px; }
+h2 { font-size: 15px; margin: 0; font-weight: 600; }
+.actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+button, .btn, select, input[type=search], input[type=number] {
+  font: inherit; color: var(--text-primary); background: var(--surface-1);
+  border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px;
+}
+button, .btn { cursor: pointer; }
+button:hover, .btn:hover { background: var(--hover); }
+button.primary, .btn.primary { background: var(--series-1); border-color: transparent; color: #fff; }
+button:disabled { opacity: .5; cursor: default; }
+input[type=file] { display: none; }
+label.check { display: inline-flex; gap: 6px; align-items: center; color: var(--text-secondary); cursor: pointer; }
+main { padding: 20px 24px 64px; display: grid; gap: 16px; }
+.card { background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
+.muted { color: var(--text-muted); }
+.secondary { color: var(--text-secondary); }
+
+#drop {
+  margin: 48px auto; max-width: 760px; text-align: center; padding: 48px 32px;
+  border: 2px dashed var(--axis); border-radius: 12px; background: var(--surface-1);
+}
+#drop.over, body.dragging #drop { border-color: var(--series-1); background: var(--select); }
+#drop code, .card code { background: var(--surface-2); padding: 1px 6px; border-radius: 4px; font-size: 13px; }
+#drop ol { text-align: left; display: inline-block; color: var(--text-secondary); }
+
+/* fontes */
+#sources { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.chip {
+  display: inline-flex; gap: 8px; align-items: center; padding: 6px 10px; border-radius: 999px;
+  border: 1px solid var(--border); background: var(--surface-1); cursor: pointer; user-select: none;
+}
+.chip.off { opacity: .45; text-decoration: line-through; }
+.chip .count { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.chip .warn { color: var(--text-secondary); }
+
+/* filtros */
+.filters { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
+.filters input[type=search] { min-width: 260px; flex: 1 1 260px; }
+.filters .range { color: var(--text-secondary); }
+
+/* tiles */
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+.tile { background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+.tile .label { color: var(--text-secondary); font-size: 13px; }
+.tile .value { font-size: 24px; font-weight: 600; margin-top: 2px; }
+.tile .sub { color: var(--text-muted); font-size: 12px; }
+
+/* gráfico */
+.chart-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 16px; align-items: center; margin-bottom: 8px; }
+.legend { display: flex; gap: 16px; color: var(--text-secondary); font-size: 13px; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.seg button { border: 0; border-radius: 0; padding: 4px 10px; }
+.seg button.on { background: var(--surface-2); font-weight: 600; }
+#chart-wrap { position: relative; }
+#chart { display: block; width: 100%; height: 240px; user-select: none; }
+#chart text { fill: var(--text-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+#tooltip {
+  position: absolute; pointer-events: none; background: var(--surface-1); color: var(--text-primary);
+  border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font-size: 12px;
+  box-shadow: 0 4px 16px rgba(0,0,0,.12); white-space: nowrap; display: none; z-index: 3;
+}
+#tooltip .row { display: flex; gap: 12px; justify-content: space-between; font-variant-numeric: tabular-nums; }
+#tooltip i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 6px; }
+
+/* abas e tabelas */
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); }
+.tabs button { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; padding: 8px 12px; color: var(--text-secondary); }
+.tabs button.on { border-bottom-color: var(--text-primary); color: var(--text-primary); font-weight: 600; }
+.table-wrap { overflow: auto; max-height: 70vh; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-1); }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { padding: 6px 10px; text-align: left; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+th { position: sticky; top: 0; background: var(--surface-1); color: var(--text-secondary); font-weight: 600; cursor: pointer; z-index: 1; }
+th.sorted::after { content: " ▾"; }
+th.sorted.asc::after { content: " ▴"; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+tbody tr { cursor: pointer; }
+tbody tr:hover { background: var(--hover); }
+tbody tr.sel { background: var(--select); }
+td.args { max-width: 420px; overflow: hidden; text-overflow: ellipsis; color: var(--text-secondary); font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
+.proto::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 6px; }
+.proto.TCP::before { background: var(--series-1); }
+.proto.UDP::before { background: var(--series-2); }
+.status-bad { font-weight: 600; }
+.status-bad::before { content: "⚠ "; color: var(--critical); }
+.pager { display: flex; gap: 8px; align-items: center; justify-content: flex-end; margin-top: 8px; color: var(--text-secondary); }
+.pager input { width: 80px; }
+.bar { display: inline-block; height: 8px; border-radius: 0 4px 4px 0; background: var(--seq); vertical-align: middle; margin-right: 8px; min-width: 1px; }
+.bar-track { display: inline-block; width: 90px; background: var(--seq-track); border-radius: 0 4px 4px 0; line-height: 0; vertical-align: middle; margin-right: 8px; }
+.bar-track .bar { margin: 0; }
+
+/* detalhe */
+#detail {
+  position: fixed; top: 0; right: 0; bottom: 0; width: min(520px, 100vw); background: var(--surface-1);
+  border-left: 1px solid var(--border); box-shadow: -8px 0 24px rgba(0,0,0,.12); padding: 16px 20px;
+  overflow: auto; transform: translateX(105%); transition: transform .15s ease; z-index: 10;
+}
+#detail.open { transform: none; }
+#detail dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 12px 0; }
+#detail dt { color: var(--text-secondary); }
+#detail dd { margin: 0; font-variant-numeric: tabular-nums; word-break: break-word; }
+#detail pre {
+  background: var(--surface-2); border-radius: 8px; padding: 12px; overflow: auto; max-height: 45vh;
+  font: 12px/1.4 ui-monospace, Consolas, monospace; white-space: pre-wrap; word-break: break-all;
+}
+#detail a { color: var(--series-1); cursor: pointer; }
+.detail-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Visualizador RPC <small>histórico de chamadas de rede do EasyCells3D</small></h1>
+  <div class="actions">
+    <button class="primary" id="open">Abrir logs…</button>
+    <label class="btn" id="open-fallback" hidden>Abrir logs…<input type="file" id="file" multiple accept=".jsonl,.json,.log,.txt"></label>
+    <button id="reload" disabled title="Lê os arquivos de novo do disco">Recarregar</button>
+    <label class="check" title="Relê os arquivos a cada 2 s (útil com o jogo rodando)"><input type="checkbox" id="auto" disabled> Ao vivo</label>
+  </div>
+</header>
+
+<div id="drop">
+  <h2>Arraste aqui um ou mais arquivos <code>.jsonl</code> de <code>logs/rpc/</code></h2>
+  <p class="secondary">ou use <b>Abrir logs…</b>. Vários arquivos (servidor + clientes) são combinados na mesma linha do tempo.</p>
+  <ol>
+    <li>Inicie o jogo com o log ligado: <code>Jogar.bat --host --rpc-log</code> ou <code>python main.py --join 192.168.0.10 --rpc-log meu_log.jsonl</code></li>
+    <li>Também funciona por variável de ambiente: <code>EASYCELLS_RPC_LOG=1</code> (caminho padrão) ou <code>EASYCELLS_RPC_LOG=arquivo.jsonl</code></li>
+    <li>Sem a flag, nada é gravado.</li>
+  </ol>
+</div>
+
+<main id="app" hidden>
+  <section id="sources"></section>
+
+  <section class="card filters">
+    <input type="search" id="q" placeholder="Buscar por nome do RPC, id do alvo ou argumentos…">
+    <select id="f-dir"><option value="">Direção: todas</option><option value="out">↑ Enviados</option><option value="in">↓ Recebidos</option></select>
+    <select id="f-op"><option value="">Tipo: todos</option><option value="RPC">RPC</option><option value="VAR">Variável</option></select>
+    <select id="f-proto"><option value="">Protocolo: todos</option><option value="TCP">TCP</option><option value="UDP">UDP</option></select>
+    <select id="f-status"><option value="">Status: todos</option><option value="bad">Somente problemas</option><option value="ok">Somente ok</option></select>
+    <span class="range" id="range-label"></span>
+    <button id="clear-range" hidden>Limpar intervalo</button>
+    <button id="clear-all">Limpar filtros</button>
+  </section>
+
+  <section class="tiles" id="tiles"></section>
+
+  <section class="card">
+    <div class="chart-head">
+      <div>
+        <h2 id="chart-title">Bytes na rede ao longo do tempo</h2>
+        <div class="muted" style="font-size:12px">Arraste no gráfico para filtrar um intervalo; clique numa coluna para isolar aquele trecho.</div>
+      </div>
+      <div class="legend"><span><i style="background:var(--series-1)"></i>TCP</span><span><i style="background:var(--series-2)"></i>UDP</span></div>
+      <div class="seg" id="metric"><button data-m="bytes" class="on">Bytes</button><button data-m="count">Chamadas</button></div>
+    </div>
+    <div id="chart-wrap"><svg id="chart"></svg><div id="tooltip"></div></div>
+  </section>
+
+  <section>
+    <div class="tabs"><button data-tab="history" class="on">Histórico</button><button data-tab="methods">Por método</button></div>
+    <div id="tab-history" style="margin-top:12px">
+      <div class="table-wrap"><table id="history"><thead></thead><tbody></tbody></table></div>
+      <div class="pager" id="pager"></div>
+    </div>
+    <div id="tab-methods" style="margin-top:12px" hidden>
+      <div class="table-wrap"><table id="methods"><thead></thead><tbody></tbody></table></div>
+      <p class="muted" style="font-size:12px">Clique numa linha para ver o histórico só daquela chamada. “Bytes” considera cada cópia enviada (broadcast para N clientes conta N vezes) e inclui o cabeçalho de 4 bytes do TCP.</p>
+    </div>
+  </section>
+</main>
+
+<aside id="detail" aria-live="polite"></aside>
+
+<script>
+"use strict";
+const PAGE = 250, BINS = 120;
+const STATUS = { ok: "ok", denied: "negado", not_found: "não encontrado", no_target: "sem alvo", not_rpc: "não é RPC",
+  malformed: "malformado", error: "erro", ignored: "ignorado" };
+const SEND_TO = { ALL: "Todos", SERVER: "Servidor", CLIENTS: "Clientes", OWNER: "Dono", NOT_ME: "Todos menos eu" };
+
+const state = {
+  inputs: [],            // {name, handle?, file?}
+  sources: [],           // {label, name, count, bad, enabled}
+  records: [],
+  view: [],              // filtrado (inclui intervalo)
+  chartBase: [],         // filtrado sem o intervalo
+  range: null, metric: "bytes", page: 0, tab: "history",
+  sort: { key: "abs", dir: 1 }, mSort: { key: "bytes", dir: -1 },
+  selected: null, causes: null, tMin: 0, tMax: 1,
+};
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const nf = new Intl.NumberFormat("pt-BR");
+const fmtInt = (n) => nf.format(n);
+function fmtBytes(b) {
+  if (b < 1024) return `${fmtInt(Math.round(b))} B`;
+  if (b < 1024 * 1024) return `${(b / 1024).toLocaleString("pt-BR", { maximumFractionDigits: b < 10240 ? 1 : 0 })} KB`;
+  return `${(b / 1048576).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} MB`;
+}
+function fmtCompact(n) {
+  return n >= 1000 ? `${(n / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} mil` : fmtInt(n);
+}
+function fmtTime(s) {
+  if (s < 120) return `${s.toLocaleString("pt-BR", { minimumFractionDigits: 3, maximumFractionDigits: 3 })} s`;
+  const m = Math.floor(s / 60), r = s - m * 60;
+  return `${m}:${r.toFixed(3).padStart(6, "0")}`;
+}
+const fmtTimeShort = (s) => s < 120 ? `${s.toLocaleString("pt-BR", { maximumFractionDigits: s < 10 ? 1 : 0 })} s` : `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+const isBad = (r) => r.status && r.status !== "ok";
+
+/* ---------- carregamento ---------- */
+async function pickFiles() {
+  if (window.showOpenFilePicker) {
+    try {
+      const handles = await showOpenFilePicker({ multiple: true,
+        types: [{ description: "Logs RPC", accept: { "application/x-ndjson": [".jsonl", ".json", ".log", ".txt"] } }] });
+      return load(handles.map((h) => ({ name: h.name, handle: h })));
+    } catch (e) { if (e.name === "AbortError") return; }
+  }
+  $("#file").click();
+}
+async function readInput(input) {
+  const file = input.handle ? await input.handle.getFile() : input.file;
+  return file.text();
+}
+function parse(name, text, index) {
+  let session = null, bad = 0;
+  const recs = [];
+  for (const line of text.split("\n")) {
+    if (!line.trim()) continue;
+    let o;
+    try { o = JSON.parse(line); } catch { bad++; continue; }
+    if (o.type === "session") session ??= o;
+    else if (o.type === "packet") recs.push(o);
+  }
+  const role = recs[0]?.role;
+  const peers = new Map();
+  for (const r of recs) if (r.peer > 0) peers.set(r.peer, (peers.get(r.peer) || 0) + 1);
+  const peer = [...peers].sort((a, b) => b[1] - a[1])[0]?.[0];
+  const label = role === "server" ? "Servidor" : role === "client" ? `Cliente ${peer ?? "?"}` : "Sem pacotes";
+  const start = session ? Date.parse(session.started) : NaN;
+  return { name, label, recs, bad, start, index };
+}
+async function load(inputs, keepView = false) {
+  if (!inputs.length) return;
+  const texts = await Promise.all(inputs.map(readInput));
+  const parsed = texts.map((t, i) => parse(inputs[i].name, t, i));
+  const starts = parsed.map((p) => p.start).filter((s) => !Number.isNaN(s));
+  const base = starts.length ? Math.min(...starts) : 0;
+  const prevEnabled = new Map(state.sources.map((s) => [s.name, s.enabled]));
+  state.inputs = inputs;
+  state.sources = parsed.map((p) => ({ name: p.name, label: p.label, count: p.recs.length, bad: p.bad,
+    enabled: keepView ? prevEnabled.get(p.name) ?? true : true }));
+  const records = [];
+  for (const p of parsed) {
+    const offset = Number.isNaN(p.start) ? 0 : (p.start - base) / 1000;
+    for (const r of p.recs) {
+      r.src = p.index;
+      r.abs = offset + r.t;
+      const copies = r.dir === "out" ? (r.recipients ?? 1) : 1;
+      r.copies = copies;
+      r.bytes = Math.max(r.wire ?? 0, 0) * copies;
+      r.argsText = r.args === undefined ? "" : JSON.stringify(r.args);
+      r.peerText = r.dir === "out" ? destText(r.dest) : r.from === 0 ? "do servidor" : `do cliente ${r.from}`;
+      r.key = `${p.index}:${r.seq}`;
+      records.push(r);
+    }
+  }
+  records.sort((a, b) => a.abs - b.abs || a.src - b.src || a.seq - b.seq);
+  state.records = records;
+  state.causes = null;
+  state.tMin = records.length ? records[0].abs : 0;
+  state.tMax = records.length ? Math.max(records[records.length - 1].abs, state.tMin + 0.001) : 1;
+  if (!keepView) { state.range = null; state.page = 0; state.selected = null; }
+  $("#drop").hidden = true;
+  $("#app").hidden = false;
+  $("#reload").disabled = false;
+  $("#auto").disabled = !inputs.some((i) => i.handle);
+  $("#auto").parentElement.title = $("#auto").disabled
+    ? "Disponível ao abrir pelo botão “Abrir logs…” no Chrome/Edge" : "Relê os arquivos a cada 2 s (útil com o jogo rodando)";
+  renderSources();
+  update();
+  if (state.selected) showDetail(state.records.find((r) => r.key === state.selected), false);
+}
+function destText(dest) {
+  if (dest === "server") return "→ servidor";
+  if (dest === "broadcast") return "→ broadcast";
+  if (dest?.startsWith("client ")) return `→ cliente ${dest.slice(7)}`;
+  return dest ?? "";
+}
+
+/* ---------- filtros ---------- */
+function update() {
+  const q = $("#q").value.trim().toLowerCase();
+  const dir = $("#f-dir").value, op = $("#f-op").value, proto = $("#f-proto").value, st = $("#f-status").value;
+  const enabled = state.sources.map((s) => s.enabled);
+  state.chartBase = state.records.filter((r) =>
+    enabled[r.src] && (!dir || r.dir === dir) && (!op || r.op === op) && (!proto || r.protocol === proto) &&
+    (!st || (st === "bad" ? isBad(r) : !isBad(r))) &&
+    (!q || r.name?.toLowerCase().includes(q) || String(r.target) === q || r.argsText.toLowerCase().includes(q)));
+  const [a, b] = state.range ?? [-Infinity, Infinity];
+  state.view = state.range ? state.chartBase.filter((r) => r.abs >= a && r.abs < b) : state.chartBase;
+  sortView();
+  $("#range-label").textContent = state.range ? `Intervalo: ${fmtTime(a)} – ${fmtTime(b)}` : "";
+  $("#clear-range").hidden = !state.range;
+  state.page = Math.min(state.page, Math.max(0, Math.ceil(state.view.length / PAGE) - 1));
+  renderTiles();
+  renderChart();
+  renderHistory();
+  renderMethods();
+}
+function sortView() {
+  const { key, dir } = state.sort;
+  if (key === "abs" && dir === 1) return;     // já está na ordem do tempo
+  const v = [...state.view];
+  v.sort((x, y) => {
+    const a = x[key] ?? "", b = y[key] ?? "";
+    return (typeof a === "number" && typeof b === "number" ? a - b : String(a).localeCompare(String(b))) * dir || x.abs - y.abs;
+  });
+  state.view = v;
+}
+
+/* ---------- render: fontes e tiles ---------- */
+function renderSources() {
+  const el = $("#sources");
+  el.innerHTML = '<span class="secondary">Arquivos:</span>' + state.sources.map((s, i) =>
+    `<span class="chip ${s.enabled ? "" : "off"}" data-i="${i}" title="${esc(s.name)} — clique para incluir/excluir">
+      <b>${esc(s.label)}</b><span class="muted">${esc(s.name)}</span><span class="count">${fmtInt(s.count)}</span>
+      ${s.bad ? `<span class="warn" title="Linhas que não puderam ser lidas (ex.: última linha ainda sendo gravada)">⚠ ${s.bad}</span>` : ""}
+    </span>`).join("");
+}
+function renderTiles() {
+  const v = state.view;
+  let out = 0, inn = 0, bytes = 0, bad = 0, tcp = 0, udp = 0, first = Infinity, last = -Infinity;
+  for (const r of v) {
+    if (r.abs < first) first = r.abs;
+    if (r.abs > last) last = r.abs;
+    if (r.dir === "out") out++; else inn++;
+    bytes += r.bytes;
+    if (r.protocol === "TCP") tcp += r.bytes; else udp += r.bytes;
+    if (isBad(r)) bad++;
+  }
+  const span = state.range ? state.range[1] - state.range[0] : v.length ? Math.max(last - first, 0.001) : 0;
+  const tile = (label, value, sub = "") => `<div class="tile"><div class="label">${label}</div><div class="value">${value}</div><div class="sub">${sub}</div></div>`;
+  $("#tiles").innerHTML = [
+    tile("Chamadas", fmtCompact(v.length), `${fmtInt(out)} enviadas · ${fmtInt(inn)} recebidas`),
+    tile("Bytes na rede", fmtBytes(bytes), `TCP ${fmtBytes(tcp)} · UDP ${fmtBytes(udp)}`),
+    tile("Duração", span ? fmtTimeShort(span) : "—", state.range ? "intervalo selecionado" : "do primeiro ao último pacote"),
+    tile("Taxa média", span ? `${fmtBytes(bytes / span)}/s` : "—", span ? `${(v.length / span).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} chamadas/s` : ""),
+    tile("Tamanho médio", v.length ? fmtBytes(bytes / Math.max(1, v.reduce((n, r) => n + r.copies, 0))) : "—", "por pacote no fio"),
+    tile("Problemas", bad ? `⚠ ${fmtInt(bad)}` : "0", "negados, sem alvo, erros…"),
+  ].join("");
+}
+
+/* ---------- render: gráfico ---------- */
+const chart = { bins: [], x0: 0, binW: 0, pad: { l: 56, r: 12, t: 12, b: 26 }, w: 0, h: 240, t0: 0, dt: 1, drag: null };
+function niceStep(max, count) {
+  const raw = max / count, p = 10 ** Math.floor(Math.log10(raw || 1)), n = raw / p;
+  return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10) * p;
+}
+function niceByteStep(max, count) {
+  const unit = max >= 1048576 * 2 ? 1048576 : max >= 2048 ? 1024 : 1;
+  return niceStep(max / unit, count) * unit;
+}
+function renderChart() {
+  const svg = $("#chart");
+  const W = svg.clientWidth || 900, H = chart.h, P = chart.pad;
+  chart.w = W;
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  const t0 = state.tMin, dt = (state.tMax - state.tMin) / BINS || 1;
+  chart.t0 = t0; chart.dt = dt;
+  const bins = Array.from({ length: BINS }, () => ({ TCP: 0, UDP: 0 }));
+  const metric = state.metric;
+  for (const r of state.chartBase) {
+    const i = Math.min(BINS - 1, Math.floor((r.abs - t0) / dt));
+    const k = r.protocol === "UDP" ? "UDP" : "TCP";
+    bins[i][k] += metric === "bytes" ? r.bytes : 1;
+  }
+  chart.bins = bins;
+  const max = Math.max(1, ...bins.map((b) => b.TCP + b.UDP));
+  const step = metric === "bytes" ? niceByteStep(max, 4) : niceStep(max, 4);
+  const top = Math.ceil(max / step) * step;
+  const iw = W - P.l - P.r, ih = H - P.t - P.b;
+  chart.binW = iw / BINS; chart.x0 = P.l;
+  const y = (v) => P.t + ih - (v / top) * ih;
+  let g = "";
+  for (let v = 0; v <= top + 1e-9; v += step) {
+    g += `<line x1="${P.l}" x2="${W - P.r}" y1="${y(v)}" y2="${y(v)}" stroke="var(${v ? "--grid" : "--axis"})" stroke-width="1"/>`;
+    g += `<text x="${P.l - 8}" y="${y(v) + 4}" text-anchor="end">${metric === "bytes" ? fmtBytes(v) : fmtCompact(v)}</text>`;
+  }
+  const tStep = niceStep(state.tMax - t0, 7);
+  for (let t = Math.ceil(t0 / tStep) * tStep; t <= state.tMax + 1e-9; t += tStep) {
+    const x = P.l + ((t - t0) / (state.tMax - t0)) * iw;
+    g += `<text x="${x}" y="${H - 8}" text-anchor="middle">${fmtTimeShort(t)}</text>`;
+  }
+  // colunas empilhadas: TCP na base, UDP em cima, 2px de respiro entre segmentos e colunas
+  const bw = Math.min(24, Math.max(1, chart.binW - 2));
+  let bars = "";
+  bins.forEach((b, i) => {
+    const x = P.l + i * chart.binW + (chart.binW - bw) / 2;
+    const tot = b.TCP + b.UDP;
+    if (!tot) return;
+    const yTcp = y(b.TCP), yTot = y(tot), base = y(0);
+    const topKey = b.UDP ? "UDP" : "TCP";
+    if (b.TCP) {
+      const h = base - yTcp;
+      bars += topKey === "TCP" ? roundedTop(x, yTcp, bw, h, "--series-1") : `<rect x="${x}" y="${yTcp}" width="${bw}" height="${h}" fill="var(--series-1)"/>`;
+    }
+    if (b.UDP) {
+      const gap = b.TCP ? 2 : 0;
+      const h = Math.max(0, yTcp - yTot - gap);
+      if (h > 0) bars += roundedTop(x, yTot, bw, h, "--series-2");
+    }
+  });
+  let sel = "";
+  if (state.range) {
+    const xa = P.l + ((state.range[0] - t0) / (state.tMax - t0)) * iw;
+    const xb = P.l + ((state.range[1] - t0) / (state.tMax - t0)) * iw;
+    sel = `<rect x="${Math.max(P.l, xa)}" y="${P.t}" width="${Math.max(2, Math.min(W - P.r, xb) - Math.max(P.l, xa))}" height="${ih}" fill="var(--select)"/>`;
+  }
+  svg.innerHTML = `${g}${sel}<g>${bars}</g><rect id="hover-band" x="0" y="${P.t}" width="0" height="${ih}" fill="var(--hover)"/>
+    <rect id="brush" x="0" y="${P.t}" width="0" height="${ih}" fill="var(--select)"/>
+    <rect id="hit" x="${P.l}" y="${P.t}" width="${iw}" height="${ih}" fill="transparent" style="cursor:crosshair"/>`;
+  $("#chart-title").textContent = metric === "bytes" ? "Bytes na rede ao longo do tempo" : "Chamadas ao longo do tempo";
+}
+function roundedTop(x, y, w, h, color) {
+  const r = Math.min(4, w / 2, h);
+  return `<path fill="var(${color})" d="M${x},${y + h}V${y + r}Q${x},${y} ${x + r},${y}H${x + w - r}Q${x + w},${y} ${x + w},${y + r}V${y + h}Z"/>`;
+}
+function binAt(evt) {
+  const svg = $("#chart"), rect = svg.getBoundingClientRect();
+  const x = (evt.clientX - rect.left) * (chart.w / rect.width);
+  return Math.max(0, Math.min(BINS - 1, Math.floor((x - chart.x0) / chart.binW)));
+}
+function showTooltip(evt, i) {
+  const b = chart.bins[i], tip = $("#tooltip");
+  if (!b) return;
+  const a = chart.t0 + i * chart.dt, f = (v) => state.metric === "bytes" ? fmtBytes(v) : fmtInt(v);
+  tip.innerHTML = `<div class="muted">${fmtTime(a)} – ${fmtTime(a + chart.dt)}</div>
+    <div class="row"><span><i style="background:var(--series-1)"></i>TCP</span><b>${f(b.TCP)}</b></div>
+    <div class="row"><span><i style="background:var(--series-2)"></i>UDP</span><b>${f(b.UDP)}</b></div>
+    <div class="row"><span>Total</span><b>${f(b.TCP + b.UDP)}</b></div>`;
+  tip.style.display = "block";
+  const wrap = $("#chart-wrap").getBoundingClientRect();
+  let left = evt.clientX - wrap.left + 14;
+  if (left + tip.offsetWidth > wrap.width) left = evt.clientX - wrap.left - tip.offsetWidth - 14;
+  tip.style.left = `${left}px`;
+  tip.style.top = `${Math.max(0, evt.clientY - wrap.top - tip.offsetHeight / 2)}px`;
+  const band = $("#hover-band");
+  band.setAttribute("x", chart.x0 + i * chart.binW);
+  band.setAttribute("width", chart.binW);
+}
+function wireChart() {
+  const svg = $("#chart");
+  svg.addEventListener("mousedown", (e) => { if (e.target.id === "hit") { chart.drag = binAt(e); e.preventDefault(); } });
+  svg.addEventListener("mousemove", (e) => {
+    if (e.target.id !== "hit" && chart.drag === null) return hideHover();
+    const i = binAt(e);
+    showTooltip(e, i);
+    if (chart.drag !== null) {
+      const a = Math.min(chart.drag, i), b = Math.max(chart.drag, i);
+      const brush = $("#brush");
+      brush.setAttribute("x", chart.x0 + a * chart.binW);
+      brush.setAttribute("width", (b - a + 1) * chart.binW);
+    }
+  });
+  svg.addEventListener("mouseleave", hideHover);
+  window.addEventListener("mouseup", (e) => {
+    if (chart.drag === null) return;
+    const i = binAt(e), a = Math.min(chart.drag, i), b = Math.max(chart.drag, i);
+    chart.drag = null;
+    state.range = [chart.t0 + a * chart.dt, chart.t0 + (b + 1) * chart.dt];
+    state.page = 0;
+    update();
+  });
+}
+function hideHover() {
+  $("#tooltip").style.display = "none";
+  const band = $("#hover-band");
+  if (band) band.setAttribute("width", 0);
+}
+
+/* ---------- render: histórico ---------- */
+const H_COLS = [
+  ["seq", "#", "num"], ["abs", "Tempo", "num"], ["src", "Arquivo"], ["dir", "Dir."], ["op", "Tipo"], ["name", "Nome"],
+  ["target", "Alvo", "num"], ["protocol", "Protocolo"], ["send_to", "SendTo"], ["peerText", "Destino / origem"],
+  ["wire", "Tamanho", "num"], ["copies", "Cópias", "num"], ["bytes", "Total", "num"], ["status", "Status"], ["argsText", "Argumentos"],
+];
+function headerHtml(cols, sort) {
+  return "<tr>" + cols.map(([k, label, cls]) =>
+    `<th data-k="${k}" class="${cls ?? ""} ${sort.key === k ? "sorted" + (sort.dir > 0 ? " asc" : "") : ""}">${label}</th>`).join("") + "</tr>";
+}
+function renderHistory() {
+  const t = $("#history");
+  t.tHead.innerHTML = headerHtml(H_COLS, state.sort);
+  const start = state.page * PAGE, rows = state.view.slice(start, start + PAGE);
+  t.tBodies[0].innerHTML = rows.map((r) => `<tr data-key="${r.key}" class="${r.key === state.selected ? "sel" : ""}">
+    <td class="num">${r.seq}</td>
+    <td class="num">${fmtTime(r.abs)}</td>
+    <td>${esc(state.sources[r.src].label)}</td>
+    <td title="${r.dir === "out" ? "Enviado" : "Recebido"}">${r.dir === "out" ? "↑ env." : "↓ rec."}</td>
+    <td>${r.op}</td>
+    <td><b>${esc(r.name ?? "")}</b></td>
+    <td class="num">${r.target}</td>
+    <td><span class="proto ${r.protocol}">${r.protocol}</span></td>
+    <td>${r.send_to ? SEND_TO[r.send_to] ?? r.send_to : '<span class="muted">—</span>'}</td>
+    <td>${esc(r.peerText)}</td>
+    <td class="num">${r.wire >= 0 ? fmtBytes(r.wire) : "?"}</td>
+    <td class="num">${r.dir === "out" ? r.copies : '<span class="muted">—</span>'}</td>
+    <td class="num">${fmtBytes(r.bytes)}</td>
+    <td>${r.status ? `<span class="${isBad(r) ? "status-bad" : ""}">${STATUS[r.status] ?? r.status}</span>` : '<span class="muted">—</span>'}</td>
+    <td class="args" title="${esc(r.argsText.slice(0, 600))}">${esc(r.argsText.slice(0, 160))}</td>
+  </tr>`).join("") || `<tr><td colspan="${H_COLS.length}" class="muted">Nenhuma chamada com esses filtros.</td></tr>`;
+  const pages = Math.max(1, Math.ceil(state.view.length / PAGE));
+  $("#pager").innerHTML = `<span>${fmtInt(state.view.length ? start + 1 : 0)}–${fmtInt(Math.min(start + PAGE, state.view.length))} de ${fmtInt(state.view.length)}</span>
+    <button data-p="0" ${state.page === 0 ? "disabled" : ""}>« Primeira</button>
+    <button data-p="${state.page - 1}" ${state.page === 0 ? "disabled" : ""}>‹ Anterior</button>
+    <span>Página <input type="number" id="page-input" min="1" max="${pages}" value="${state.page + 1}"> de ${pages}</span>
+    <button data-p="${state.page + 1}" ${state.page >= pages - 1 ? "disabled" : ""}>Próxima ›</button>
+    <button data-p="${pages - 1}" ${state.page >= pages - 1 ? "disabled" : ""}>Última »</button>`;
+}
+
+/* ---------- render: por método ---------- */
+const M_COLS = [
+  ["op", "Tipo"], ["name", "Nome"], ["protocols", "Protocolo"], ["sendTo", "SendTo"], ["count", "Chamadas", "num"],
+  ["out", "Enviadas", "num"], ["in", "Recebidas", "num"], ["bytes", "Bytes", "num"], ["share", "% dos bytes"],
+  ["avg", "Tamanho médio", "num"], ["max", "Máx.", "num"], ["rate", "Chamadas/s", "num"], ["bad", "Problemas", "num"],
+];
+function renderMethods() {
+  const groups = new Map();
+  let total = 0;
+  for (const r of state.view) {
+    const k = `${r.op}|${r.name}`;
+    let g = groups.get(k);
+    if (!g) groups.set(k, g = { op: r.op, name: r.name ?? "", protos: new Set(), sendTo: r.send_to ?? "", count: 0, out: 0, in: 0, bytes: 0, copies: 0, max: 0, bad: 0 });
+    g.count++; r.dir === "out" ? g.out++ : g.in++;
+    g.bytes += r.bytes; g.copies += r.copies; total += r.bytes;
+    g.max = Math.max(g.max, r.wire ?? 0);
+    g.protos.add(r.protocol);
+    if (!g.sendTo && r.send_to) g.sendTo = r.send_to;
+    if (isBad(r)) g.bad++;
+  }
+  const span = state.range ? state.range[1] - state.range[0] : Math.max(state.tMax - state.tMin, 0.001);
+  const list = [...groups.values()].map((g) => ({ ...g, protocols: [...g.protos].sort().join(" + "),
+    avg: g.copies ? g.bytes / g.copies : 0, share: total ? g.bytes / total : 0, rate: g.count / span }));
+  const { key, dir } = state.mSort;
+  list.sort((a, b) => (typeof a[key] === "number" ? a[key] - b[key] : String(a[key]).localeCompare(String(b[key]))) * dir);
+  const t = $("#methods");
+  t.tHead.innerHTML = headerHtml(M_COLS, state.mSort);
+  t.tBodies[0].innerHTML = list.map((g) => `<tr data-name="${esc(g.name)}" data-op="${g.op}">
+    <td>${g.op}</td><td><b>${esc(g.name)}</b></td>
+    <td>${g.protocols.split(" + ").map((p) => `<span class="proto ${p}">${p}</span>`).join(" ")}</td>
+    <td>${g.sendTo ? SEND_TO[g.sendTo] ?? g.sendTo : '<span class="muted">—</span>'}</td>
+    <td class="num">${fmtInt(g.count)}</td><td class="num">${fmtInt(g.out)}</td><td class="num">${fmtInt(g.in)}</td>
+    <td class="num">${fmtBytes(g.bytes)}</td>
+    <td><span class="bar-track"><span class="bar" style="width:${(g.share * 100).toFixed(2)}%"></span></span>${(g.share * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%</td>
+    <td class="num">${fmtBytes(g.avg)}</td><td class="num">${fmtBytes(g.max)}</td>
+    <td class="num">${g.rate.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}</td>
+    <td class="num">${g.bad ? `<span class="status-bad">${g.bad}</span>` : "0"}</td>
+  </tr>`).join("") || `<tr><td colspan="${M_COLS.length}" class="muted">Nenhuma chamada com esses filtros.</td></tr>`;
+}
+
+/* ---------- detalhe ---------- */
+function causeIndex() {
+  if (!state.causes) {
+    state.causes = new Map();
+    for (const r of state.records) if (r.cause != null) {
+      const k = `${r.src}:${r.cause}`;
+      if (!state.causes.has(k)) state.causes.set(k, []);
+      state.causes.get(k).push(r);
+    }
+  }
+  return state.causes;
+}
+function showDetail(r, open = true) {
+  const el = $("#detail");
+  if (!r) { el.classList.remove("open"); state.selected = null; return; }
+  state.selected = r.key;
+  const parent = r.cause != null ? state.records.find((x) => x.src === r.src && x.seq === r.cause) : null;
+  const children = causeIndex().get(r.key) ?? [];
+  const link = (x) => `<a data-key="${x.key}">#${x.seq} ${esc(x.name ?? "")}</a>`;
+  const fields = [
+    ["Sequência", `#${r.seq}`], ["Arquivo", `${esc(state.sources[r.src].label)} <span class="muted">${esc(state.sources[r.src].name)}</span>`],
+    ["Tempo", `${fmtTime(r.abs)} <span class="muted">(${fmtTime(r.t)} no arquivo)</span>`],
+    ["Direção", r.dir === "out" ? "↑ Enviado" : "↓ Recebido"], ["Papel", `${r.role === "server" ? "Servidor" : "Cliente"} (peer ${r.peer})`],
+    ["Tipo", r.op === "VAR" ? "Variável de rede" : "RPC"], ["Nome", `<b>${esc(r.name ?? "")}</b>`], ["Alvo (net id)", r.target],
+    ["Protocolo", `<span class="proto ${r.protocol}">${r.protocol}</span>`],
+    ["SendTo", r.send_to ? `${SEND_TO[r.send_to] ?? r.send_to} <span class="muted">(${r.send_to})</span>` : "—"],
+    [r.dir === "out" ? "Destino" : "Origem", esc(r.peerText)],
+    ["Tamanho serializado", `${fmtInt(r.size)} B`], ["Tamanho no fio", `${fmtInt(r.wire)} B${r.protocol === "TCP" ? ' <span class="muted">(+4 B de cabeçalho)</span>' : ""}`],
+    ["Cópias", r.dir === "out" ? r.copies : "—"], ["Total", fmtBytes(r.bytes)],
+    ["Status", r.status ? `<span class="${isBad(r) ? "status-bad" : ""}">${STATUS[r.status] ?? r.status}</span>` : "—"],
+    ["Causado por", parent ? link(parent) : r.cause != null ? `#${r.cause}` : "—"],
+    ["Causou", children.length ? children.slice(0, 30).map(link).join("<br>") + (children.length > 30 ? `<br><span class="muted">+${children.length - 30}</span>` : "") : "—"],
+  ];
+  el.innerHTML = `<div class="detail-head"><h2>${r.op} ${esc(r.name ?? "")}</h2><button id="close-detail">Fechar ✕</button></div>
+    <dl>${fields.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>
+    <h2>Argumentos</h2><pre>${esc(JSON.stringify(r.args, null, 2) ?? "")}</pre>`;
+  if (open) el.classList.add("open");
+  renderHistory();
+}
+
+/* ---------- eventos ---------- */
+$("#open").addEventListener("click", pickFiles);
+$("#file").addEventListener("change", (e) => load([...e.target.files].map((f) => ({ name: f.name, file: f }))));
+$("#reload").addEventListener("click", () => load(state.inputs, true).catch(reloadFailed));
+function reloadFailed(e) {
+  $("#auto").checked = false;
+  alert(`Não foi possível reler os arquivos (${e.message}).\nAbra-os de novo pelo botão “Abrir logs…”.`);
+}
+let autoTimer = null;
+$("#auto").addEventListener("change", (e) => {
+  clearInterval(autoTimer);
+  if (e.target.checked) autoTimer = setInterval(() => load(state.inputs, true).catch((err) => { clearInterval(autoTimer); reloadFailed(err); }), 2000);
+});
+for (const ev of ["dragenter", "dragover"]) document.addEventListener(ev, (e) => { e.preventDefault(); document.body.classList.add("dragging"); });
+document.addEventListener("dragleave", (e) => { if (!e.relatedTarget) document.body.classList.remove("dragging"); });
+document.addEventListener("drop", async (e) => {
+  e.preventDefault();
+  document.body.classList.remove("dragging");
+  const items = [...e.dataTransfer.items].filter((i) => i.kind === "file");
+  const inputs = await Promise.all(items.map(async (item) => {
+    const handle = item.getAsFileSystemHandle ? await item.getAsFileSystemHandle().catch(() => null) : null;
+    if (handle?.kind === "file") return { name: handle.name, handle };
+    const file = item.getAsFile();
+    return file && { name: file.name, file };
+  }));
+  load(inputs.filter(Boolean));
+});
+let qTimer;
+$("#q").addEventListener("input", () => { clearTimeout(qTimer); qTimer = setTimeout(() => { state.page = 0; update(); }, 150); });
+for (const id of ["#f-dir", "#f-op", "#f-proto", "#f-status"]) $(id).addEventListener("change", () => { state.page = 0; update(); });
+$("#clear-range").addEventListener("click", () => { state.range = null; update(); });
+$("#clear-all").addEventListener("click", () => {
+  $("#q").value = ""; for (const id of ["#f-dir", "#f-op", "#f-proto", "#f-status"]) $(id).value = "";
+  state.range = null; state.page = 0; state.sources.forEach((s) => s.enabled = true); renderSources(); update();
+});
+$("#sources").addEventListener("click", (e) => {
+  const chip = e.target.closest(".chip");
+  if (!chip) return;
+  const s = state.sources[+chip.dataset.i];
+  s.enabled = !s.enabled;
+  renderSources(); update();
+});
+$("#metric").addEventListener("click", (e) => {
+  const m = e.target.dataset.m;
+  if (!m) return;
+  state.metric = m;
+  for (const b of $("#metric").children) b.classList.toggle("on", b.dataset.m === m);
+  renderChart();
+});
+document.querySelector(".tabs").addEventListener("click", (e) => {
+  const tab = e.target.dataset.tab;
+  if (!tab) return;
+  state.tab = tab;
+  for (const b of e.currentTarget.children) b.classList.toggle("on", b.dataset.tab === tab);
+  $("#tab-history").hidden = tab !== "history";
+  $("#tab-methods").hidden = tab !== "methods";
+});
+$("#history").tHead.addEventListener("click", (e) => {
+  const k = e.target.dataset.k;
+  if (!k) return;
+  state.sort = state.sort.key === k ? { key: k, dir: -state.sort.dir } : { key: k, dir: k === "abs" || k === "seq" ? 1 : -1 };
+  update();
+});
+$("#methods").tHead.addEventListener("click", (e) => {
+  const k = e.target.dataset.k;
+  if (!k) return;
+  state.mSort = state.mSort.key === k ? { key: k, dir: -state.mSort.dir } : { key: k, dir: ["op", "name", "protocols", "sendTo"].includes(k) ? 1 : -1 };
+  renderMethods();
+});
+$("#history").tBodies[0].addEventListener("click", (e) => {
+  const tr = e.target.closest("tr[data-key]");
+  if (tr) showDetail(state.records.find((r) => r.key === tr.dataset.key));
+});
+$("#methods").tBodies[0].addEventListener("click", (e) => {
+  const tr = e.target.closest("tr[data-name]");
+  if (!tr) return;
+  $("#q").value = tr.dataset.name;
+  $("#f-op").value = tr.dataset.op;
+  state.page = 0;
+  document.querySelector('.tabs [data-tab="history"]').click();
+  update();
+});
+$("#pager").addEventListener("click", (e) => {
+  const p = e.target.dataset.p;
+  if (p === undefined || e.target.disabled) return;
+  state.page = +p; renderHistory();
+  $("#history").parentElement.scrollTop = 0;
+});
+$("#pager").addEventListener("change", (e) => {
+  if (e.target.id !== "page-input") return;
+  const pages = Math.max(1, Math.ceil(state.view.length / PAGE));
+  state.page = Math.max(0, Math.min(pages - 1, (+e.target.value || 1) - 1));
+  renderHistory();
+});
+$("#detail").addEventListener("click", (e) => {
+  if (e.target.id === "close-detail") { showDetail(null); renderHistory(); return; }
+  const key = e.target.closest("a[data-key]")?.dataset.key;
+  if (key) showDetail(state.records.find((r) => r.key === key));
+});
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && state.selected) { showDetail(null); renderHistory(); } });
+window.addEventListener("resize", () => { if (state.records.length) renderChart(); });
+if (!window.showOpenFilePicker) { $("#open").hidden = true; $("#open-fallback").hidden = false; }
+wireChart();
+</script>
+</body>
+</html>

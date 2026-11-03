@@ -182,3 +182,13 @@ cython_debug/
 
 # Local captures and integration reports
 .scratch/
+capturas/
+
+# Blender backups
+*.blend[0-9]*
+
+# Retired map: do not commit old exports or baked atlases again
+/Assets/Maps/BairroDosCanais/
+
+# Logs de rede gerados com --rpc-log
+logs/

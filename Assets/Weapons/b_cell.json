@@ -1,0 +1,107 @@
+{
+ "key": "b_cell",
+ "kind": "rifle",
+ "convention": "glTF/raylib: Y para cima, cano para +Z, esquerda da arma em +X. Espaço \"gun\": origem na mão direita sobre o cabo. Espaço \"view\": câmera do viewmodel na origem olhando +Z. \"fp\" = matriz 3x4 gun->view da pose de repouso. \"anim\": static|bolt|mag|pulse|spin|melee. \"pivot\"/\"axis\" no espaço da parte; \"amount\" em metros (bolt/mag), escala (pulse) ou radianos (spin).",
+ "mesh_count": 5,
+ "triangles": 6720,
+ "fp": [
+  [
+   0.996683,
+   -0.053834,
+   0.061028,
+   -0.14
+  ],
+  [
+   0.052318,
+   0.998287,
+   0.026177,
+   -0.17
+  ],
+  [
+   -0.062332,
+   -0.022897,
+   0.997793,
+   0.4
+  ]
+ ],
+ "muzzle": [
+  0.0,
+  0.092,
+  0.635
+ ],
+ "eject": [
+  -0.03,
+  0.11,
+  0.06
+ ],
+ "parts": [
+  {
+   "name": "body",
+   "mesh": 2,
+   "anim": "static",
+   "space": "gun",
+   "fp_only": false
+  },
+  {
+   "name": "bolt",
+   "mesh": 3,
+   "anim": "bolt",
+   "space": "gun",
+   "fp_only": false,
+   "pivot": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "axis": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "amount": 0.04
+  },
+  {
+   "name": "mag",
+   "mesh": 4,
+   "anim": "mag",
+   "space": "gun",
+   "fp_only": false,
+   "pivot": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "axis": [
+    0.0,
+    -1.0,
+    0.1
+   ],
+   "amount": 0.2
+  },
+  {
+   "name": "arm_r",
+   "mesh": 1,
+   "anim": "static",
+   "space": "gun",
+   "fp_only": true
+  },
+  {
+   "name": "arm_l",
+   "mesh": 0,
+   "anim": "support",
+   "space": "gun",
+   "fp_only": true,
+   "pivot": [
+    0.39747,
+    -0.1996,
+    -0.44077
+   ],
+   "axis": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "amount": 0.0
+  }
+ ]
+}
