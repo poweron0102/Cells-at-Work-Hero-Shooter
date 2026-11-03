@@ -67,7 +67,7 @@ class MenuScreen(Canvas):
         self.text("3v3 EM REDE", 47, 579, 13, TEAL)
         self.text("8 HEROIS", 244, 579, 13, TEAL)
         self.text("1 CORPO VIVO", 437, 579, 13, TEAL)
-        self.text(self.error or "ABRASION  /  Breach > Identification > Colonization", 47, 617, 13, RED if self.error else MUTED)
+        self.text(self.error or "BAIRRO ARTERIAL  /  Escolta, hemacias, colonias e reconhecimento", 47, 617, 13, RED if self.error else MUTED)
 
 
 def leave(game):
@@ -129,10 +129,10 @@ class SelectionScreen(Canvas):
             self.text(f"{hero.health} HP  /  {hero.magazine} MUN.", x+18, y+71, 13)
             self.text(f"SALTO {hero.jump_height:.1f}m", x+18, y+92, 11, MUTED)
             self.portrait(key, x+172, y+44, 99, 118)
-            label = "SELECIONADO" if selected else "BLOQUEADO" if not unlocked(key, 0, False) else "OCUPADO" if not available else "SELECIONAR"
+            label = "SELECIONADO" if selected else "BLOQUEADO" if not unlocked(key, 0) else "OCUPADO" if not available else "SELECIONAR"
             self.button(label, x+16, y+115, 164, lambda h=key: net.choose(h), selected, available or bool(selected), h=35)
         self.button("< VOLTAR A EQUIPE", 46, 610, 280, lambda: self.game.new_game("lobby"), True)
-        self.text("B Cell: 50% antigeno  /  Killer T: tecido infectado", 701, 625, 15, MUTED)
+        self.text("B Cell e Killer T: liberados pelo reconhecimento de antigenos", 640, 625, 15, MUTED)
 
 
 class ResultScreen(Canvas):
@@ -143,8 +143,10 @@ class ResultScreen(Canvas):
         state = data["state"]
         winner = state.get("winner", CELLS)
         self.text("INFECCAO CONTIDA" if winner == CELLS else "INFECCAO ESTABELECIDA", 46, 115, 48, TEAL if winner == CELLS else RED)
-        self.text("O resultado foi determinado pelos objetivos de Abrasion.", 49, 178, 20, MUTED)
-        self.text(f"TEMPO  {int(state.get('elapsed', 0))//60:02}:{int(state.get('elapsed', 0))%60:02}       ANTIGENO  {int(state.get('recognition', 0))}%       STRESS  {int(state.get('stress', 0))}%", 49, 223, 17)
+        self.text("Resultado decidido por escolta, colonias e infeccao.", 49, 178, 20, MUTED)
+        colonies = len(state.get('colonies', []))
+        self.text(f"TEMPO  {int(state.get('elapsed', 0))//60:02}:{int(state.get('elapsed', 0))%60:02}       ANTIGENO  {int(state.get('recognition', 0))}%       "
+                  f"ESCOLTA  {int(100*state.get('escort', 0)/max(1, state.get('escort_total', 1)))}%       COLONIAS  {colonies}", 49, 223, 17)
         for i, (slot, player) in enumerate(sorted(net.roster.value.items())):
             y = 289+i*45
             a = data["actors"].get(slot, {})

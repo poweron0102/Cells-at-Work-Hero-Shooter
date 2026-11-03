@@ -66,7 +66,7 @@ class Session(NetworkComponent):
             roster[slot].update(hero=hero, team=team)
         elif self.status == "playing" and self.arena:
             actor, state = self.arena.actors[slot], self.arena.state
-            if actor.alive or not can_select(hero, actor.team, roster, state.recognition, state.infected, slot):
+            if actor.alive or not can_select(hero, actor.team, roster, state.recognition, slot):
                 return
             roster[slot]["hero"] = hero
         self.roster.value = roster

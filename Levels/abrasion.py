@@ -8,20 +8,24 @@ from UserComponents.cells.actors import load_combatant
 from UserComponents.cells.hud import CombatHUD
 from UserComponents.cells.player import PlayerInput
 from UserComponents.cells.ui_base import load_ui
+from UserComponents.cells.shots import ShotEffects
 from UserComponents.cells.visuals import ArenaEffects
-from UserComponents.cells.world import build_abrasion
+from UserComponents.cells.weapons import ViewModel
+from UserComponents.cells.world import build_district
 
 
 def init(game):
-    game.background_color = rl.Color(199, 220, 214, 255)
+    game.background_color = rl.Color(244, 233, 213, 255)
     game.physics_world = BulletPhysicsWorld()
     camera = game.CreateItem().AddComponent(Camera3D(vfov=75))
     arena = game.CreateItem().AddComponent(Arena())
-    arena.navigator, arena.gate = build_abrasion(game)
+    arena.navigator = build_district(game)
     inputs = game.CreateItem().AddComponent(PlayerInput(arena, camera))
     for slot, player in sorted(game.session.roster.value.items()):
         arena.actors[slot] = load_combatant(game, arena, slot, player)
     game.CreateItem().AddComponent(ArenaEffects(arena))
+    game.CreateItem().AddComponent(ShotEffects(arena))
+    game.CreateItem().AddComponent(ViewModel(arena, camera))
     load_ui(game, CombatHUD(arena, inputs))
     game.CreateItem().AddComponent(AudioFeedback(arena))
 

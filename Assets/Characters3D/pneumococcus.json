@@ -1,0 +1,122 @@
+{
+ "key": "pneumococcus",
+ "height": 2.0,
+ "convention": "glTF/raylib: Y para cima, personagem olha para +Z, pés em y=0 e origem entre os pés. Sufixo _l = lado esquerdo do personagem = +X; _r = lado direito = -X. \"mesh\" = índice em model.meshes do raylib (nós do GLB em ordem, um primitivo por parte). \"pivot\" = articulação no espaço do personagem (metros). \"swing\": static|arm|leg|weapon|tail|tentacle|head. \"phase\" = defasagem (rad) do ciclo; \"action\" = como a parte reage ao ataque.",
+ "mesh_count": 7,
+ "triangles": 9852,
+ "parts": [
+  {
+   "name": "body",
+   "mesh": 2,
+   "pivot": [
+    0.0,
+    0.1094,
+    -0.0
+   ],
+   "parent": "body",
+   "swing": "static"
+  },
+  {
+   "name": "arm_l",
+   "mesh": 0,
+   "pivot": [
+    0.21,
+    1.6294,
+    -0.0
+   ],
+   "parent": "body",
+   "swing": "arm",
+   "phase": 3.1416,
+   "amp": 0.5
+  },
+  {
+   "name": "arm_r",
+   "mesh": 1,
+   "pivot": [
+    -0.21,
+    1.6294,
+    -0.0
+   ],
+   "parent": "body",
+   "swing": "arm",
+   "phase": 0,
+   "amp": 0.5,
+   "action": "recoil"
+  },
+  {
+   "name": "leg_l",
+   "mesh": 3,
+   "pivot": [
+    0.11,
+    1.1094,
+    -0.0
+   ],
+   "parent": "body",
+   "swing": "leg",
+   "phase": 0,
+   "amp": 0.45
+  },
+  {
+   "name": "leg_r",
+   "mesh": 4,
+   "pivot": [
+    -0.11,
+    1.1094,
+    -0.0
+   ],
+   "parent": "body",
+   "swing": "leg",
+   "phase": 3.1416,
+   "amp": 0.45
+  },
+  {
+   "name": "tentacles_a",
+   "mesh": 5,
+   "pivot": [
+    0.05,
+    1.8094,
+    -0.08
+   ],
+   "parent": "body",
+   "swing": "tentacle",
+   "phase": 0,
+   "amp": 0.12
+  },
+  {
+   "name": "tentacles_b",
+   "mesh": 6,
+   "pivot": [
+    -0.05,
+    1.8094,
+    -0.08
+   ],
+   "parent": "body",
+   "swing": "tentacle",
+   "phase": 1.7,
+   "amp": 0.12
+  }
+ ],
+ "mount": {
+  "part": "arm_r",
+  "matrix": [
+   [
+    1.0,
+    0.0,
+    0.0,
+    -0.29
+   ],
+   [
+    0.0,
+    1.0,
+    0.0,
+    1.2794
+   ],
+   [
+    0.0,
+    0.0,
+    1.0,
+    0.2
+   ]
+  ]
+ }
+}
