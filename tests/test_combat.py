@@ -96,19 +96,19 @@ class CombatIntegrationTests(unittest.TestCase):
         self.assertEqual(self.arena.state.recognition, BALANCE['antigen_per_sample'])
         self.assertEqual(sum(self.arena.state.resources.values()), 0)
 
-    def test_macrophage_slam_knocks_back_and_b_cell_marks(self):
+    def test_macrophage_axe_knocks_back_and_b_cell_shots_mark(self):
         self.shooter.hero = 'macrophage'
         self.target.body.teleport(Vec3(0, 1, 57.5))
         step(self.game)
-        self.shooter.ability()
+        self.shooter.ability2()
         for _ in range(10):
             step(self.game)
         self.assertGreater(abs(self.target.transform.z-57.5), .5)
         self.shooter.hero = 'b_cell'
-        self.shooter.ability_cd = 0
         self.target.body.teleport(Vec3(0, 1, 54))
         step(self.game)
-        self.shooter.ability()
+        self.shooter.weapon.timer = 0
+        self.shooter.weapon.fire()
         self.assertGreater(self.target.marked, 0)
 
     def test_b_cell_zoom_follows_the_mouse_and_resets_on_death(self):

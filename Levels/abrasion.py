@@ -9,7 +9,9 @@ from UserComponents.cells.hud import CombatHUD
 from UserComponents.cells.player import PlayerInput
 from UserComponents.cells.ui_base import load_ui
 from UserComponents.cells.shots import ShotEffects
+from UserComponents.cells.ability_fx import AbilityEffects
 from UserComponents.cells.visuals import ArenaEffects
+from UserComponents.cells.outline import SilhouettePass
 from UserComponents.cells.weapons import ViewModel
 from UserComponents.cells.world import build_district
 
@@ -24,6 +26,8 @@ def init(game):
     for slot, player in sorted(game.session.roster.value.items()):
         arena.actors[slot] = load_combatant(game, arena, slot, player)
     game.CreateItem().AddComponent(ArenaEffects(arena))
+    game.CreateItem().AddComponent(SilhouettePass(arena))
+    game.CreateItem().AddComponent(AbilityEffects(arena))
     game.CreateItem().AddComponent(ShotEffects(arena))
     game.CreateItem().AddComponent(ViewModel(arena, camera))
     load_ui(game, CombatHUD(arena, inputs))

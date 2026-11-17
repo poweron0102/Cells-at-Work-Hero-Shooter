@@ -7,7 +7,8 @@ gastos, coletas ou recompensas duplicadas entre host e clientes.
 import math
 from EasyCells3D.NetworkComponents import NetworkComponent, Rpc, SendTo, Protocol
 from EasyCells3D.Geometry import Vec3
-from EasyCells3D.PhysicsComponents3D import PhysicsBody3D, BodyType, SphereShape
+from EasyCells3D.Geometry import Quaternion
+from EasyCells3D.PhysicsComponents3D import PhysicsBody3D, BodyType, SphereShape, BoxShape
 from .rules import MatchState, EscortPath, escort_blockers
 from .catalog import CELLS, BACTERIA, HEROES, BALANCE
 from .bots import BotBrain
@@ -22,6 +23,9 @@ class Arena(NetworkComponent):
         self.state = MatchState(escort_total=self.path.total)
         self.actors = {}
         self.zones, self.tracers, self.effects = [], [], []
+        self.minions = {}      # id -> dict(kind, slot, pos, yaw, hp, max, life): torretas e clones
+        self.walls = {}        # id -> dict(pos, yaw, life, item): Coagulase
+        self.projectiles = []  # granadas (simuladas em todos; so o dono aplica o efeito)
         self.drops = []
         self.next_drop = 1
         self.builds = {}  # slot -> position of a construction in progress (visual)
@@ -228,13 +232,119 @@ class Arena(NetworkComponent):
                 self.add_drop('resource', (feet[0]+.6, feet[1], feet[2]), carried)
 
     # -- efeitos visuais ------------------------------------------------------
-    def add_zone(self, kind, position, radius, life, owner):
-        self.zones.append(dict(kind=kind, pos=tuple(position), radius=radius, life=life, owner=owner))
-        self.remote_zone(kind, tuple(position), radius, life, owner)
+    def add_zone(self, kind, position, radius, life, owner, follow=False):
+        self.zones.append(dict(kind=kind, pos=tuple(position), radius=radius, life=life, owner=owner, follow=follow,
+                               age=0.0, max=life))
+        self.remote_zone(kind, tuple(position), radius, life, owner, follow)
 
     @Rpc(send_to=SendTo.NOT_ME, require_owner=False)
-    def remote_zone(self, kind, position, radius, life, owner):
-        self.zones.append(dict(kind=kind, pos=tuple(position), radius=radius, life=life, owner=owner))
+    def remote_zone(self, kind, position, radius, life, owner, follow=False):
+        self.zones.append(dict(kind=kind, pos=tuple(position), radius=radius, life=life, owner=owner, follow=follow,
+                               age=0.0, max=life))
+
+    # -- objetos de habilidade --------------------------------------------------
+    @Rpc(send_to=SendTo.ALL, require_owner=False)
+    def spawn_minion(self, ident, kind, slot, position, yaw, health, life):
+        self.minions[ident] = dict(kind=kind, slot=slot, pos=tuple(position), yaw=yaw, hp=health, max=health,
+                                   life=life, recoil=0.0, age=0.0)
+        self.effects.append(dict(kind='spawn', pos=tuple(position), radius=1.2, life=.6, extra=kind))
+
+    @Rpc(send_to=SendTo.ALL, require_owner=False)
+    def damage_minion(self, ident, amount, source):
+        m = self.minions.get(ident)
+        if m is None:
+            return
+        m['hp'] -= amount
+        m['hurt'] = .2
+        attacker = self.actors.get(source)
+        if attacker is not None and attacker.local:
+            attacker.hit_marker = .15
+        if m['hp'] <= 0:
+            self.minions.pop(ident, None)
+            x, y, z = m['pos']
+            self.effects.append(dict(kind='pop', pos=(x, y+.8, z), radius=1.4, life=.6, extra=m['kind']))
+
+    @Rpc(send_to=SendTo.ALL, require_owner=False)
+    def remove_minion(self, ident):
+        self.minions.pop(ident, None)
+
+    @Rpc(send_to=SendTo.NOT_ME, require_owner=False, protocol=Protocol.UDP)
+    def sync_minion(self, ident, position, yaw, recoil=0.0):
+        m = self.minions.get(ident)
+        if m is not None:
+            m['pos'], m['yaw'] = tuple(position), yaw
+            m['recoil'] = max(m.get('recoil', 0), recoil)
+
+    @Rpc(send_to=SendTo.ALL, require_owner=False)
+    def add_wall(self, ident, position, yaw, life):
+        x, y, z = position
+        width = BALANCE['wall_width']
+        item = self.game.CreateItem()
+        item.name = f"Coagulase {ident}"
+        item.transform.position = Vec3(x, y+1.3, z)
+        item.transform.rotation = Quaternion.from_euler_angles(Vec3(0, yaw, 0))
+        body = item.AddComponent(PhysicsBody3D(BoxShape(Vec3(width/2, 1.3, .3)), body_type=BodyType.STATIC))
+        self.walls[ident] = dict(pos=tuple(position), yaw=yaw, life=life, max=life, item=item, body=body)
+
+    def remove_wall(self, ident):
+        wall = self.walls.pop(ident, None)
+        if wall:
+            wall['item'].Destroy()
+            self.effects.append(dict(kind='crumble', pos=wall['pos'], radius=3, life=.6, extra=wall['yaw']))
+
+    def throw(self, kind, start, velocity, slot):
+        self.add_projectile(kind, start, velocity, slot)
+        self.remote_throw(kind, tuple(start), tuple(velocity), slot)
+
+    @Rpc(send_to=SendTo.NOT_ME, require_owner=False)
+    def remote_throw(self, kind, start, velocity, slot):
+        self.add_projectile(kind, start, velocity, slot)
+
+    def add_projectile(self, kind, start, velocity, slot):
+        self.projectiles.append(dict(kind=kind, pos=tuple(start), vel=list(velocity), slot=slot, life=2.5,
+                                     trail=[tuple(start)]))
+
+    def step_projectiles(self, dt):
+        from .kits import GRAVITY
+        world = self.game.physics_world
+        for p in list(self.projectiles):
+            owner = self.actors.get(p['slot'])
+            x, y, z = p['pos']
+            vx, vy, vz = p['vel']
+            nvy = vy-GRAVITY*dt
+            nx, ny, nz = x+vx*dt, y+(vy+nvy)*.5*dt, z+vz*dt
+            p['vel'][1] = nvy
+            p['life'] -= dt
+            delta = Vec3(nx-x, ny-y, nz-z)
+            dist = delta.magnitude()
+            point = None
+            if dist > 1e-6:
+                hit = world.raycast(Vec3(x, y, z), delta, dist, 1 | 8)
+                if hit is not None:
+                    point = hit.point.to_tuple
+            shield = None
+            for other in self.actors.values():
+                if owner is None or other.team == owner.team or not other.alive:
+                    continue
+                center = other.front_center()
+                if other.front and math.dist(center, (nx, ny, nz)) < other.front_radius <= math.dist(center, (x, y, z)):
+                    shield = other
+                    break
+                if point is None and math.dist(other.transform.position.to_tuple, (nx, ny, nz)) < .75:
+                    point = (nx, ny, nz)
+            p['pos'] = (nx, ny, nz)
+            p['trail'] = (p['trail']+[p['pos']])[-10:]
+            if shield is not None:
+                self.projectiles.remove(p)
+                if owner is not None and owner.local:
+                    shield.absorb_hit(40, owner)
+                continue
+            if point is None and p['life'] <= 0:
+                point = p['pos']
+            if point is not None:
+                self.projectiles.remove(p)
+                if owner is not None and owner.local:
+                    owner.detonate(p['kind'], point)
 
     def tracer(self, start, end, kind='shot', slot=None, impact=None):
         """Disparo visual de ``slot`` (hitscan já resolvido): ``start`` é o olho, ``end`` o ponto
@@ -253,7 +363,7 @@ class Arena(NetworkComponent):
         hero = actor.hero if actor is not None else None
         self.tracers.append(dict(a=start, b=end, life=tracer_life(kind, hero, start, end), kind=kind, slot=slot,
                                  impact=impact))
-        if actor is not None:
+        if actor is not None and kind not in ('turret', 'clone'):
             actor.fired(kind)
 
     def effect(self, kind, position, radius, extra=None):
@@ -275,6 +385,11 @@ class Arena(NetworkComponent):
         candidates = [(a.slot, a.transform.position.to_tuple,
                        self.clear_line(eye, a.transform.position.to_tuple)) for a in bacteria]
         blockers = escort_blockers(self.path, state.escort, candidates)
+        for zone in self.zones:
+            # Pneumonia: a nuvem sobre as plaquetas tambem as para.
+            if zone['kind'] == 'cloud' and zone['owner'] in self.actors and zone['owner'] not in blockers \
+                    and math.dist(zone['pos'], head) < zone['radius']+1:
+                blockers.append(zone['owner'])
         state.tick(dt, blockers, len(bacteria))
         if self.hemacias:
             self.hemacias.tick(dt, bacteria)
@@ -336,6 +451,21 @@ class Arena(NetworkComponent):
                 value["life"] -= dt
                 if value["life"] <= 0:
                     collection.remove(value)
+        for zone in self.zones:
+            zone['age'] = zone.get('age', 0.0)+dt
+            if zone.get('follow'):
+                owner = self.actors.get(zone['owner'])
+                if owner is not None and owner.alive:
+                    zone['pos'] = owner.feet
+        for ident, wall in list(self.walls.items()):
+            wall['life'] -= dt
+            if wall['life'] <= 0:
+                self.remove_wall(ident)
+        for m in self.minions.values():
+            m['age'] = m.get('age', 0.0)+dt
+            m['recoil'] = max(0.0, m.get('recoil', 0)-dt*5)
+            m['hurt'] = max(0.0, m.get('hurt', 0)-dt)
+        self.step_projectiles(dt)
         self.rbc_view.update(dt)
         self.sync_bodies()
         if session.status != "playing" or not self.server:
@@ -356,6 +486,7 @@ class Arena(NetworkComponent):
                     slot: dict(kills=a.kills.value, deaths=a.deaths.value) for slot, a in self.actors.items()}))
 
     def on_destroy(self):
+        self.walls.clear()  # os itens das paredes sao destruidos junto com a cena
         if getattr(self.game, "session", None):
             self.game.session.arena = None
         super().on_destroy()

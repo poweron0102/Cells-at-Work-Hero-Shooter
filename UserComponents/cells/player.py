@@ -1,4 +1,4 @@
-"""Entrada local, camera em primeira pessoa, zoom do B Cell e modo espectador.
+"""Entrada local, camera em 1a/3a pessoa (especiais), zoom do B Cell e modo espectador.
 
 Os controles nunca viajam pela rede: cada jogador simula o proprio heroi.
 """
@@ -23,6 +23,8 @@ class PlayerInput(Component):
         self.spectate_reason = ""
         self.camera_target = None
         self.was_alive = True
+        self.tp = 0.0  # mistura 1a -> 3a pessoa (especiais)
+        self.kit_card = False
 
     def spectate_target(self, actor):
         """Killer during the countdown; a living ally while waiting for a colony."""
@@ -74,6 +76,7 @@ class PlayerInput(Component):
             self.spectating = None
         self.was_alive = actor.alive
         if not actor.alive:
+            self.tp = actor.third_person = 0.0
             self.camera.vfov = BASE_FOV
             target = self.spectate_target(actor)
             self.camera_target = target
@@ -87,17 +90,56 @@ class PlayerInput(Component):
             self.yaw = (self.yaw + delta.x*sens) % math.tau
             self.pitch = max(-1.45, min(1.45, self.pitch-delta.y*sens))
         self.camera.vfov = ZOOM_FOV if actor.zoom else BASE_FOV
-        self.camera.transform.position = actor.transform.position+Vec3(0, .56, 0)
-        self.camera.transform.rotation = (Quaternion.from_axis_angle(Vec3(0, 1, 0), -self.yaw)
-                                          * Quaternion.from_axis_angle(Vec3(1, 0, 0), self.pitch))
+        self.place_camera(actor)
         down = lambda key: captured and rl.is_key_down(key)
         k = rl.KeyboardKey
+        self.kit_card = rl.is_key_down(k.KEY_F1)
         actor.controls = dict(x=float(down(k.KEY_D))-float(down(k.KEY_A)), z=float(down(k.KEY_W))-float(down(k.KEY_S)),
                               yaw=self.yaw, pitch=self.pitch, jump=captured and rl.is_key_pressed(k.KEY_SPACE),
                               fire=captured and rl.is_mouse_button_down(rl.MouseButton.MOUSE_BUTTON_LEFT),
                               secondary=captured and rl.is_mouse_button_down(rl.MouseButton.MOUSE_BUTTON_RIGHT),
-                              ability=bool(down(k.KEY_Q)), ultimate=bool(down(k.KEY_F)), interact=bool(down(k.KEY_E)),
-                              build=bool(down(k.KEY_G)), reload=bool(down(k.KEY_R)), sprint=bool(down(k.KEY_LEFT_SHIFT)))
+                              ability=bool(down(k.KEY_Q)), ability2=bool(down(k.KEY_E)), ultimate=bool(down(k.KEY_F)),
+                              melee=bool(down(k.KEY_V)), build=bool(down(k.KEY_G)), reload=bool(down(k.KEY_R)),
+                              sprint=bool(down(k.KEY_LEFT_SHIFT)))
+
+    def place_camera(self, actor):
+        """1a pessoa; durante especiais com camera (``ult_cam``) recua para tras do ombro
+        (ou sobe para a vista aerea da Chuva de anticorpos) com transicao suave."""
+        dt = min(.05, rl.get_frame_time() or 1/60)
+        want = 1.0 if actor.ult_cam > 0 else 0.0
+        self.tp += (want-self.tp)*min(1.0, dt*(5 if want else 7))
+        if abs(self.tp-want) < .01:
+            self.tp = want
+        actor.third_person = self.tp
+        eye = actor.transform.position+Vec3(0, .56, 0)
+        rotation = (Quaternion.from_axis_angle(Vec3(0, 1, 0), -self.yaw)
+                    * Quaternion.from_axis_angle(Vec3(1, 0, 0), self.pitch))
+        if self.tp > 0:
+            k = self.tp*self.tp*(3-2*self.tp)
+            if actor.ult_focus is not None:
+                fx, fy, fz = actor.ult_focus
+                back = Vec3(-math.sin(self.yaw), 0, math.cos(self.yaw))
+                target = Vec3(fx, fy+15, fz)+back*9
+                look = Vec3(fx, fy, fz)-target
+                yaw = math.atan2(look.x, -look.z)
+                pitch = math.atan2(look.y, math.hypot(look.x, look.z))
+                aerial = (Quaternion.from_axis_angle(Vec3(0, 1, 0), -yaw)
+                          * Quaternion.from_axis_angle(Vec3(1, 0, 0), pitch))
+                self.camera.transform.position = eye+(target-eye)*k
+                self.camera.transform.rotation = rotation.lerp(aerial, k)
+                return
+            back = Vec3(-math.sin(self.yaw)*math.cos(self.pitch), -math.sin(self.pitch)*.6,
+                        math.cos(self.yaw)*math.cos(self.pitch))
+            right = Vec3(math.cos(self.yaw), 0, math.sin(self.yaw))
+            pivot = actor.transform.position+Vec3(0, 1.05, 0)+right*.55
+            want_eye = pivot+back*3.2
+            delta = want_eye-pivot
+            hit = self.game.physics_world.raycast(pivot, delta, delta.magnitude(), 1)
+            if hit is not None:
+                want_eye = hit.point-delta.normalize()*.3
+            eye = eye+(want_eye-eye)*k
+        self.camera.transform.position = eye
+        self.camera.transform.rotation = rotation
 
     def on_destroy(self):
         set_cursor_captured(False)

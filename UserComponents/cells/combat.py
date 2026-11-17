@@ -23,15 +23,32 @@ def ray_sphere(origin, aim, center, radius, max_dist):
     return t if 0 <= t <= max_dist else None
 
 
-def cast(actor, aim, max_dist, through=False):
+def _front_hit(origin, aim, other, limit):
+    """Membrana/barreira de ``other`` (inimigo do atirador): so bloqueia quem esta a frente."""
+    if not other.front or other.front_radius <= 0:
+        return None
+    p = other.transform.position
+    f = direction(other.yaw)
+    if (origin.x-p.x)*f.x+(origin.z-p.z)*f.z <= .2:
+        return None
+    center = other.front_center()
+    oc = Vec3(origin.x-center[0], origin.y-center[1], origin.z-center[2])
+    if oc.magnitude() <= other.front_radius:
+        return None
+    return ray_sphere(origin, aim, center, other.front_radius, limit)
+
+
+def cast(actor, aim, max_dist, through=False, origin=None):
     """Resolve a hitscan ray for ``actor``. Returns list of hits sorted by distance.
 
-    Each hit: dict(kind='actor'|'colony'|'rbc'|'world', target, point, dist).
-    With ``through`` the ray passes enemies (antibody beam) and stops at walls.
+    Each hit: dict(kind='actor'|'front'|'minion'|'colony'|'rbc'|'world', target, point, dist).
+    'front' = membrana do Engolir / barreira do Pneumococcus (o tiro para nela). Domos inimigos
+    (Abscesso) param tiros vindos de fora. With ``through`` the ray passes enemies (antibody
+    beam) and stops at walls.
     """
     arena = actor.arena
     world = actor.game.physics_world
-    origin = actor.transform.position+Vec3(0, EYE, 0)
+    origin = origin or actor.transform.position+Vec3(0, EYE, 0)
     hits = []
     wall = world.raycast(origin, aim, max_dist, 1 | 8)
     limit = max_dist
@@ -40,14 +57,26 @@ def cast(actor, aim, max_dist, through=False):
         colony = arena.colony_for_body(wall.body)
         if colony is not None and actor.team == CELLS:
             hits.append(dict(kind='colony', target=colony, point=wall.point, dist=limit))
-        elif colony is None:
-            hits.append(dict(kind='world', target=None, point=wall.point, dist=limit))
         else:
             hits.append(dict(kind='world', target=None, point=wall.point, dist=limit))
-    enemy_group = 4 if actor.team == CELLS else 2
+    for zone in arena.zones:
+        if zone['kind'] != 'dome':
+            continue
+        owner = arena.actors.get(zone['owner'])
+        if owner is None or owner.team == actor.team:
+            continue
+        if math.dist(zone['pos'], origin.to_tuple) <= zone['radius']:
+            continue
+        t = ray_sphere(origin, aim, zone['pos'], zone['radius'], limit)
+        if t is not None:
+            limit = t
+            hits.append(dict(kind='world', target=None, point=origin+aim*t, dist=t))
     for other in arena.actors.values():
         if other.team == actor.team or not other.alive or not other.body.enable:
             continue
+        t = _front_hit(origin, aim, other, limit)
+        if t is not None:
+            hits.append(dict(kind='front', target=other, point=origin+aim*t, dist=t))
         p = other.transform.position
         # Capsule approximated by two spheres (body + head) to allow headshots.
         for center, radius, head in (((p.x, p.y-.15, p.z), .5, False), ((p.x, p.y+.62, p.z), .32, True)):
@@ -55,6 +84,14 @@ def cast(actor, aim, max_dist, through=False):
             if t is not None:
                 hits.append(dict(kind='actor', target=other, point=origin+aim*t, dist=t, head=head))
                 break
+    for ident, m in arena.minions.items():
+        owner = arena.actors.get(m['slot'])
+        if owner is None or owner.team == actor.team:
+            continue
+        x, y, z = m['pos']
+        t = ray_sphere(origin, aim, (x, y+.85, z), .55, limit)
+        if t is not None:
+            hits.append(dict(kind='minion', target=ident, point=origin+aim*t, dist=t))
     if actor.team != CELLS:
         for ident, cell in arena.rbc_view.cells.items():
             if cell['state'] in ('dead', 'inside'):
@@ -69,16 +106,20 @@ def cast(actor, aim, max_dist, through=False):
     out = []
     for h in hits:
         out.append(h)
-        if h['kind'] in ('world', 'colony'):
+        if h['kind'] in ('world', 'colony', 'front'):
             break
     return out
 
 
 def impact_kind(hits):
-    """Tipo de impacto visual do primeiro acerto: 'actor' (corpo), 'world' (superfície) ou None."""
+    """Tipo de impacto visual do primeiro acerto: 'actor' (corpo), 'absorb' (membrana/barreira),
+    'world' (superfície) ou None."""
     if not hits:
         return None
-    return 'actor' if hits[0]['kind'] in ('actor', 'rbc') else 'world'
+    kind = hits[0]['kind']
+    if kind == 'front':
+        return 'absorb'
+    return 'actor' if kind in ('actor', 'rbc', 'minion') else 'world'
 
 
 class Weapon(Component):
@@ -113,7 +154,7 @@ class Weapon(Component):
             self.reload()
             return
         kit = HEROES[a.hero]
-        self.timer = kit.interval*(.6 if a.hero == 'streptococcus' and a.boost > 0 else 1)
+        self.timer = kit.interval*(.75 if a.hero == 'streptococcus' and a.ult > 0 else 1)
         if a.hero == "killer_t":
             self.burst = (self.burst+1) % 3
             self.timer = .09 if self.burst else .4
@@ -132,11 +173,7 @@ class Weapon(Component):
                 a.zone("acid", 1.4, 2, endpoint.to_tuple)
             if not hits:
                 continue
-            damage = kit.damage*(1.4 if a.boost > 0 and a.team == CELLS else 1)*(1.15 if zoomed else 1)
-            if a.hero == "pseudomonas" and hits[0]['kind'] == 'actor':
-                target = hits[0]['target']
-                if target.health.value < HEROES[target.hero].health*.5:
-                    damage *= 1.3
+            damage = kit.damage*(1.15 if zoomed else 1)
             a.apply_hit(hits[0], damage)
 
 

@@ -74,6 +74,41 @@ class BotBrain:
             return _v(min(rbcs, key=lambda c: math.dist(c['pos'], feet))['pos']), 'cacar'
         return _v(COLONY_HINTS[actor.slot % len(COLONY_HINTS)]), 'patrulha'
 
+    # -- habilidades ------------------------------------------------------
+    @staticmethod
+    def secondary(actor, dist, elapsed):
+        """RMB dos bots: segurar/soltar conforme o kit."""
+        h = actor.hero
+        pulse = int(elapsed*2.5+actor.slot) % 2 == 0
+        if h in ('neutrophil', 'streptococcus'):
+            return dist < 2.5
+        if h == 'killer_t':
+            return dist < 3 and pulse
+        if h in ('macrophage', 'pneumococcus'):
+            return actor.since_hit < .8 and 3 < dist < 22
+        if h == 'staphylococcus':
+            return 5 < dist < 30
+        if h == 'pseudomonas':
+            return 6 < dist < 22 and pulse
+        if h == 'b_cell':
+            return dist > 15
+        return False
+
+    def minion_target(self, actor):
+        """Torreta/clone inimigo visivel por perto (quando nao ha heroi a vista)."""
+        arena = self.arena
+        eye = actor.transform.position.to_tuple
+        best = None
+        for m in arena.minions.values():
+            owner = arena.actors.get(m['slot'])
+            if owner is None or owner.team == actor.team:
+                continue
+            target = (m['pos'][0], m['pos'][1]+.85, m['pos'][2])
+            d = math.dist(eye, target)
+            if d < 20 and arena.clear_line(eye, target) and (best is None or d < best[0]):
+                best = (d, m)
+        return best[1] if best else None
+
     # -- comando ----------------------------------------------------------
     def command(self, actor):
         arena = self.arena
@@ -98,7 +133,11 @@ class BotBrain:
         if enemy:
             aim = enemy.transform.position-position
             fire = True
-            secondary = aim.magnitude() < 2.5 and actor.hero in ('neutrophil', 'macrophage', 'killer_t', 'streptococcus')
+            secondary = self.secondary(actor, aim.magnitude(), state.elapsed)
+        elif self.minion_target(actor) is not None:
+            m = self.minion_target(actor)
+            aim = Vec3(m['pos'][0], m['pos'][1]+.85, m['pos'][2])-position-Vec3(0, .56, 0)
+            fire = True
         elif actor.team != CELLS and intent == 'cacar':
             near = [c for c in arena.rbc_view.cells.values() if c['state'] not in ('dead', 'inside')
                     and math.dist(c['pos'], actor.feet) < 20]
@@ -138,5 +177,7 @@ class BotBrain:
                     build=building,
                     ability=bool(enemy) and actor.ability_cd <= 0 and (enemy.transform.position-position).magnitude() < 12
                     and not actor.previous.get('ability'),
+                    ability2=bool(enemy) and actor.ability2_cd <= 0 and (enemy.transform.position-position).magnitude() < 14
+                    and actor.hero != 'pseudomonas' and not actor.previous.get('ability2'),
                     ultimate=actor.charge >= 100 and bool(enemy) and not actor.previous.get('ultimate'),
                     jump=actor.controller.is_grounded and ((bool(path) and waypoint.y > position.y+.7) or stuck > 25))

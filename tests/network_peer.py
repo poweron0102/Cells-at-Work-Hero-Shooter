@@ -133,7 +133,7 @@ def run(role, port, output):
         assert transform.owner == net.manager.id and transform.cont > 0
         if not disconnected:
             assert saw_closed
-            assert net.status == "results", "Match never finished"
+            assert net.status == "results", ("Match never finished", net.status, arena.state.winner, round(arena.state.elapsed, 1), round(time.monotonic()-started, 1))
             result = net.result["state"]
             assert result["winner"] == "cells"
             for key in ("winner", "wound_closed", "colonies", "recognition"):

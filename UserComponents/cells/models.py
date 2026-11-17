@@ -200,9 +200,10 @@ class CharacterModel:
         return rig
 
     def draw(self, position, yaw=0, phase=0, moving=False, reveal=0, shield=0, action=0.0, tint=None, kick=0.0,
-             weapon=True):
+             weapon=True, cull=None):
         """Desenha o personagem; ``kick`` (0..1) é o recuo do último disparo. Se o herói tem arma
-        montada (e ``weapon``), desenha a arma na mão e devolve a posição do cano no mundo."""
+        montada (e ``weapon``), desenha a arma na mão e devolve a posição do cano no mundo.
+        ``cull`` ('front'/'back') liga o descarte de faces, usado pelos passes de contorno/silhueta."""
         self.phase, self.moving, self.reveal, self.shield = phase, moving, reveal, shield
         rig = self.rig
         if rig is None:
@@ -226,7 +227,12 @@ class CharacterModel:
         rl.rl_push_matrix()
         rl.rl_translatef(position.x, position.y + bob, position.z)
         rl.rl_rotatef(180 - math.degrees(yaw), 0, 1, 0)
-        rl.rl_disable_backface_culling()
+        if cull:
+            rl.rl_draw_render_batch_active()
+            rl.rl_enable_backface_culling()
+            rl.rl_set_cull_face(rl.RL_CULL_FACE_FRONT if cull == 'front' else rl.RL_CULL_FACE_BACK)
+        else:
+            rl.rl_disable_backface_culling()
         mats = {}
         for part in rig.parts:
             m = self._part_transform(part, phase, walk, t, action, kick if part.name == rig.mount_part else 0.0)
@@ -242,6 +248,8 @@ class CharacterModel:
         muzzle = None
         if weapon and rig.mount is not None:
             muzzle = self._draw_weapon(rig, mats, kick, position, bob, yaw)
+        if cull:
+            rl.rl_set_cull_face(rl.RL_CULL_FACE_BACK)
         rl.rl_enable_backface_culling()
         rl.rl_pop_matrix()
         return muzzle

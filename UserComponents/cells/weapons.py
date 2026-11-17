@@ -298,6 +298,7 @@ class ViewModel(Renderable3D):
         self.serial = 0
         self.prev_yaw = self.prev_pitch = None
         self.prev_sec = self.prev_ability = 0.0
+        self.prev_swing = 0
         self.prev_grounded, self.prev_vy = True, 0.0
         self.bob_phase = 0.0
         self.sprint = 0.0
@@ -350,6 +351,7 @@ class ViewModel(Renderable3D):
             self.serial = actor.fire_serial
             self.prev_yaw, self.prev_pitch = actor.yaw, actor.pitch
             self.prev_sec, self.prev_ability = actor.secondary_cd, actor.ability_cd
+            self.prev_swing = actor.swing
             self.shells.clear()
             self.flash = None
         self.alive = True
@@ -359,7 +361,8 @@ class ViewModel(Renderable3D):
         if actor.fire_serial != self.serial:
             self.serial = actor.fire_serial
             self.on_fire(actor, a, actor.fire_kind)
-        if actor.secondary_cd > self.prev_sec + .05 and actor.hero in MELEE_HEROES:
+        if actor.swing != self.prev_swing:
+            self.prev_swing = actor.swing
             self.melee_t = 0.0
         elif actor.secondary_cd > self.prev_sec + .05 and actor.hero == 'pneumococcus':
             self.pos.kick(2, .06)
@@ -524,7 +527,7 @@ class ViewModel(Renderable3D):
                 actor.vm_muzzle = None
             return
         a = asset(actor.hero)
-        if a is None or actor.zoom:
+        if a is None or actor.zoom or actor.third_person > .02:
             actor.vm_muzzle = None
             self.alive = actor.zoom and self.alive
             return

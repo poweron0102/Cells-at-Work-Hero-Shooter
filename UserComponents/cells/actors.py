@@ -1,4 +1,4 @@
-"""Combatentes: ciclo de vida, kits dos herois, construcao e respawn.
+"""Combatentes: ciclo de vida, dano, construcao e respawn (kits em kits.py).
 
 Cada jogador simula o proprio heroi (movimento, armas, habilidades). Acoes
 sobre objetos compartilhados (colonias, hemacias, recursos) viram pedidos ao
@@ -10,14 +10,14 @@ from EasyCells3D.NetworkComponents import NetworkComponent, NetworkTransform, Ne
 from EasyCells3D.Geometry import Vec3, Quaternion
 from EasyCells3D.PhysicsComponents3D import PhysicsBody3D, CharacterController3D, CapsuleShape, BodyType
 from .catalog import HEROES, CELLS, BALANCE
-from .combat import Weapon, direction, cast, melee_targets, impact_kind, EYE
+from .combat import Weapon, direction, EYE
+from .kits import KitMixin
 from .visuals import CombatantVisual
-from .layout import in_cells_base
 
 SHIELD_BASE = {"pneumococcus": 70}
 
 
-class Combatant(NetworkComponent):
+class Combatant(NetworkComponent, KitMixin):
     def __init__(self, arena, slot, hero, team, owner):
         super().__init__(identifier=1000+slot, owner=owner)
         self.arena, self.slot, self.hero, self.team = arena, slot, hero, team
@@ -41,19 +41,12 @@ class Combatant(NetworkComponent):
         self.previous = {}
         self.build = None  # dict(pos, progress) while holding the build action
         self.build_problem = ""
+        self.deliver_hold = False
         self.action = 0.0
+        self.third_person = 0.0  # 0..1, camera em 3a pessoa (player.py)
         self.fire_serial, self.fire_time, self.fire_kind = 0, -1.0, 'shot'
         self.vm_muzzle = None   # cano no espaço do viewmodel (jogador local em 1ª pessoa)
         self.tp_muzzle = None   # cano da arma na mão do personagem (mundo)
-
-    def reset_kit(self):
-        self.ability_cd = self.secondary_cd = 0
-        self.charge = 0.0
-        self.boost = self.capsule = self.dash = self.reveal = self.marked = 0
-        self.slow = self.slow_factor = self.haste = self.guard = self.leap = self.stagger = 0
-        self.zoom = False
-        self.dash_dir = None
-        self.preview = None
 
     def init(self):
         super().init()
@@ -77,6 +70,8 @@ class Combatant(NetworkComponent):
     # -- dano ---------------------------------------------------------------
     def damage(self, amount, source, effect=None):
         """Called by the attacker (any peer); routed to the owner of the target."""
+        if amount > 0:
+            amount = source.outgoing(amount, self)
         if source.local and source.team != self.team:
             source.gain(amount*BALANCE['charge_per_damage'])
             source.hit_marker = .15
@@ -98,16 +93,19 @@ class Combatant(NetworkComponent):
         if self.guard > 0:
             amount *= .5
         if self.marked > 0:
-            amount *= 1.2
+            amount *= 1+BALANCE['mark_bonus']
+        if self.in_own_dome():
+            amount *= .7
         absorbed = min(self.shield.value, amount)
         if absorbed:
             self.absorbed = .4
         self.shield.value -= absorbed
         self.health.value = max(0, self.health.value - amount + absorbed)
-        self.since_hit, self.hurt = 0, .25
+        if amount > 0:
+            self.since_hit, self.hurt = 0, .25
         if origin:
             self.hurt_from = (self.hurt_from+[(origin[0], origin[1], self.arena.state.elapsed)])[-4:]
-        if self.build:
+        if self.build and amount > 0:
             self.arena.building(self.slot, self.build['pos'], False)
             self.build = None
             self.build_problem = "Construcao interrompida por dano"
@@ -118,32 +116,78 @@ class Combatant(NetworkComponent):
             kx, ky, kz = effect['knock']
             self.body.velocity = Vec3(kx, ky, kz)
             self.dash = 0
+            self.grapple = 0
             self.stagger = .45
         if effect.get('mark'):
-            self.marked = effect['mark']
+            self.marked = max(self.marked, effect['mark'])
             self.arena.mark_actor(self.slot, effect['mark'])
+        for kind in ('root', 'antiheal'):
+            if effect.get(kind):
+                setattr(self, kind, max(getattr(self, kind), effect[kind]))
+                self.status_fx(kind, effect[kind])
+        if kind := effect.get('perforin'):
+            self.perforin.append([kind[1], kind[0], source.slot])
+            self.status_fx('perforin', kind[1])
         if not self.alive:
             self.die(source)
+
+    @Rpc(send_to=SendTo.OWNER, require_owner=False)
+    def absorb(self, amount, source=None):
+        if self.local:
+            self.take_absorb(amount, source)
+
+    def absorb_hit(self, amount, source):
+        if self.local:
+            self.take_absorb(amount, source.slot)
+        else:
+            self.absorb(amount, source.slot)
+
+    @Rpc(send_to=SendTo.ALL, require_owner=False)
+    def grant_shield(self, amount, seconds, cap):
+        if self.local and self.alive:
+            base = SHIELD_BASE.get(self.hero, 0)
+            self.shield.value = min(base+cap, self.shield.value+amount)
+            self.shield_hold = max(self.shield_hold, seconds)
+
+    @Rpc(send_to=SendTo.ALL, require_owner=False)
+    def status_fx(self, kind, seconds):
+        if seconds > 0:
+            self.fx[kind] = max(self.fx.get(kind, 0), seconds)
+        else:
+            self.fx.pop(kind, None)
+
+    @Rpc(send_to=SendTo.NOT_ME, require_owner=False)
+    def sync_front(self, kind, radius):
+        self.front, self.front_radius = kind, radius
 
     def die(self, source):
         self.respawn = BALANCE['respawn_seconds']
         self.waiting = False
         self.deaths.value += 1
         self.build = None
-        source.credit_kill()
+        self.placing = self.place = None
+        if self.front:
+            self.set_front_state(None)
+        source.credit_kill(self.transform.position.to_tuple)
         self.body.enable = False
         self.arena.eliminated(self.slot, source.slot, self.deaths.value, self.transform.position.to_tuple)
 
     @Rpc(send_to=SendTo.ALL, require_owner=False)
-    def credit_kill(self):
+    def credit_kill(self, position=None):
         if self.local:
             self.kills.value += 1
             self.kill_marker = .6
             self.gain(12)
+            if self.hero == 'neutrophil' and self.dash_kill > 0:
+                self.ability_cd = 0
+            if self.hero == 'macrophage' and position is not None and \
+                    math.dist(position, self.transform.position.to_tuple) < 6:
+                self.heal(HEROES['macrophage'].health*.25)
+                self.arena.effect('heal', self.feet, 1.5)
 
     def gain(self, amount):
         """Special charge from combat and objectives (never from time alone)."""
-        if self.alive and self.boost <= 0:
+        if self.alive and not self.ult_on:
             self.charge = min(100.0, self.charge+amount)
 
     def apply_hit(self, hit, damage, effect=None):
@@ -153,13 +197,21 @@ class Combatant(NetworkComponent):
             target = hit['target']
             if hit.get('head'):
                 damage *= 1.5
+            if self.hero == 'b_cell':
+                effect = dict(effect or {}, mark=max(3, (effect or {}).get('mark', 0)))
             target.damage(damage, self, effect)
+        elif kind == 'front':
+            hit['target'].absorb_hit(damage, self)
+            self.hit_marker = .1
+        elif kind == 'minion':
+            self.arena.damage_minion(hit['target'], damage, self.slot)
+            self.hit_marker = .15
         elif kind == 'colony':
             self.arena.hit_colony(self.slot, hit['target'], damage*(2.0 if self.hero == 'b_cell' else 1))
             self.gain(damage*BALANCE['charge_per_damage']*.5)
             self.hit_marker = .15
         elif kind == 'rbc':
-            self.arena.hit_rbc(self.slot, hit['target'], damage)
+            self.arena.hit_rbc(self.slot, hit['target'], damage*(2 if self.hero == 'streptococcus' else 1))
             self.gain(damage*BALANCE['charge_per_damage']*.5)
             self.hit_marker = .15
 
@@ -203,6 +255,8 @@ class Combatant(NetworkComponent):
     @Rpc(send_to=SendTo.NOT_ME)
     def spawned(self, hero):
         self.hero = hero
+        self.front, self.front_radius = None, 0.0
+        self.fx = {}
 
     @Rpc(send_to=SendTo.ALL, require_owner=False)
     def reveal_enemies(self, seconds):
@@ -212,6 +266,7 @@ class Combatant(NetworkComponent):
     def buff(self, kind, seconds):
         if self.local:
             setattr(self, kind, max(getattr(self, kind), seconds))
+        self.fx[kind] = max(self.fx.get(kind, 0), seconds)
 
     @Rpc(send_to=SendTo.ALL, require_owner=False)
     def show_action(self, value):
@@ -241,12 +296,13 @@ class Combatant(NetworkComponent):
         if self.game.session.status != "playing":
             return
         dt = min(.05, self.game.delta_time)
-        for key in ("ability_cd", "secondary_cd", "boost", "capsule", "dash", "reveal", "marked", "slow", "haste", "stagger",
-                    "guard", "hit_marker", "hurt", "kill_marker", "absorbed"):
+        for key in self.TIMERS:
             setattr(self, key, max(0, getattr(self, key)-dt))
+        self.tick_fx(dt)
         self.action = max(0.0, self.action-dt*2.5)
         if not self.alive:
             self.zoom = False
+            self.placing = self.place = None
             if self.local:
                 self.respawn -= dt
                 if self.respawn <= 0 and not self.arena.state.winner:
@@ -258,15 +314,19 @@ class Combatant(NetworkComponent):
             return
         self.since_hit += dt
         kit = HEROES[self.hero]
-        in_cloud = self.in_zone('cloud', enemy=True)
-        if self.since_hit > 5:
-            if self.health.value < kit.health:
-                self.health.value = min(kit.health, self.health.value+dt*6)
-            base_shield = SHIELD_BASE.get(self.hero, 0)
-            if base_shield and self.marked <= 0 and self.shield.value < base_shield:
-                self.shield.value = min(base_shield, self.shield.value+dt*12)
-        if self.capsule <= 0 and self.shield.value > SHIELD_BASE.get(self.hero, 0) and self.hero != 'staphylococcus':
-            self.shield.value = max(SHIELD_BASE.get(self.hero, 0), self.shield.value-dt*40)
+        base_shield = SHIELD_BASE.get(self.hero, 0)
+        # vida/escudo sao variaveis de rede (cada escrita vira um SET TCP): regenera em pulsos de 0,25 s
+        self.regen_clock = getattr(self, 'regen_clock', 0.0)+dt
+        self.pulse = 0.0
+        if self.regen_clock >= .25:
+            self.pulse, self.regen_clock = self.regen_clock, 0.0
+        if self.pulse:
+            if self.since_hit > 5 and self.antiheal <= 0 and self.health.value < kit.health:
+                self.health.value = min(kit.health, self.health.value+self.pulse*6)
+            if base_shield and self.since_hit > 3 and self.antiheal <= 0 and self.shield.value < base_shield:
+                self.shield.value = min(base_shield, self.shield.value+self.pulse*15)
+            if self.shield_hold <= 0 and self.shield.value > base_shield:
+                self.shield.value = max(base_shield, self.shield.value-self.pulse*25)
         player = self.game.session.roster.value[self.slot]
         cmd = self.arena.brain.command(self) if player["bot"] else self.controls
         self.yaw, self.pitch = cmd.get("yaw", self.yaw), cmd.get("pitch", self.pitch)
@@ -274,28 +334,22 @@ class Combatant(NetworkComponent):
         forward = direction(self.yaw)
         right = Vec3(math.cos(self.yaw), 0, math.sin(self.yaw))
         move = forward*cmd.get("z", 0)+right*cmd.get("x", 0)
-        speed = kit.speed*(1.3 if cmd.get("sprint") and not self.zoom else 1)
+        speed = kit.speed*(1.3 if cmd.get("sprint") and not self.zoom and not self.front else 1)
         if self.slow > 0:
             speed *= 1-self.slow_factor
         if self.haste > 0:
             speed *= 1.3
-        if self.boost > 0 and self.hero in ('streptococcus', 'killer_t'):
-            speed *= 1.3 if self.hero == 'streptococcus' else 1.15
         if self.zoom:
             speed *= .6
+        speed *= self.kit_speed()
+        self.zone_effects(dt)
         for zone in self.arena.zones:
-            if (self.transform.position-Vec3(*zone["pos"])).magnitude() >= zone["radius"]:
-                continue
-            source = self.arena.actors.get(zone["owner"])
-            friendly = source is not None and source.team == self.team
-            if zone["kind"] in ("biofilm", "mature"):
-                speed *= 1.25 if friendly else .65
-                if zone["kind"] == "mature" and not friendly:
-                    self.damage(dt*14, source)
-            elif zone["kind"] == "acid" and not friendly:
-                self.damage(dt*10, source)
-            elif zone["kind"] == "cloud" and not friendly:
-                self.damage(dt*12, source)
+            if zone["kind"] in ("biofilm", "mature") and math.dist(self.feet, zone["pos"]) < zone["radius"]+.4:
+                source = self.arena.actors.get(zone["owner"])
+                friendly = source is not None and source.team == self.team
+                speed *= 1.25 if friendly else .6
+        if self.root > 0:
+            self.dash = self.grapple = 0
         if self.dash > 0 and self.dash_dir is not None:
             self.body.velocity = self.dash_dir
             self.dash_hits()
@@ -304,29 +358,22 @@ class Combatant(NetworkComponent):
         else:
             self.controller.move_speed = speed
             self.controller.jump_height = kit.jump_height
-            self.controller.move(move)
+            self.controller.move(move if speed > 0 else Vec3(0, 0, 0))
         if self.leap:
             self.leap += dt
         if self.leap > .3 and self.controller.is_grounded:
             self.leap = 0
             self.area_damage(4, 50, knock=6)
             self.arena.effect('slam', self.feet, 4)
-        if cmd.get("jump") and not self.previous.get("jump"):
+        if cmd.get("jump") and not self.previous.get("jump") and self.root <= 0:
             self.controller.jump()
         if cmd.get("reload"):
             self.weapon.reload()
-        self.zoom = bool(cmd.get("secondary")) and self.hero == 'b_cell'
-        if cmd.get("fire") and (self.hero != "b_cell" or not self.previous.get("fire")):
-            self.weapon.fire()
-        if cmd.get("secondary") and self.hero != 'b_cell':
-            self.secondary()
-        if cmd.get("ability") and not self.previous.get("ability"):
-            self.ability()
-        if cmd.get("ultimate") and not self.previous.get("ultimate"):
-            self.ultimate()
+        self.handle_input(cmd, dt)
         if cmd.get("interact") and not self.previous.get("interact"):
             self.interact()
         self.update_build(cmd.get("build", False), dt)
+        self.kit_update(dt)
         # Charge for escorting: cells near the platelets while the wound is open.
         if self.team == CELLS and not self.arena.state.wound_closed:
             head = self.arena.path.at(self.arena.state.escort)
@@ -336,6 +383,32 @@ class Combatant(NetworkComponent):
         if self.transform.y < -10:
             self.body.teleport(self.arena.spawn_position(self.slot, self.spawn_options()[0] if self.spawn_options() else ('entrance', None)) or Vec3(0, 2, 60))
 
+    def zone_effects(self, dt):
+        """Dano/efeitos de zonas inimigas sobre este heroi (roda no dono), em pulsos de 0,25 s
+        para nao regravar a vida (variavel de rede) a cada quadro."""
+        self.zone_tick = getattr(self, 'zone_tick', 0.0)+dt
+        if self.zone_tick < .25:
+            return
+        dt, self.zone_tick = self.zone_tick, 0.0
+        for zone in self.arena.zones:
+            if math.dist(self.feet, zone["pos"]) >= zone["radius"]:
+                continue
+            source = self.arena.actors.get(zone["owner"])
+            if source is None or source.team == self.team:
+                continue
+            kind = zone["kind"]
+            if kind == "mature":
+                self.damage(dt*14, source)
+            elif kind == "acid":
+                self.damage(dt*10, source)
+            elif kind == "cloud":
+                self.damage(dt*12, source)
+            elif kind == "rain":
+                self.damage(dt*22, source)
+                if self.marked < .5:
+                    self.marked = 1.5
+                    self.arena.mark_actor(self.slot, 1.5)
+
     def in_zone(self, kind, enemy=False):
         for zone in self.arena.zones:
             if zone["kind"] != kind:
@@ -343,11 +416,11 @@ class Combatant(NetworkComponent):
             source = self.arena.actors.get(zone["owner"])
             if enemy and source is not None and source.team == self.team:
                 continue
-            if (self.transform.position-Vec3(*zone["pos"])).magnitude() < zone["radius"]:
+            if math.dist(self.feet, zone["pos"]) < zone["radius"]:
                 return True
         return False
 
-    # -- construcao (todas as bacterias) ------------------------------------
+    # -- construcao e entrega (bacterias, tecla G) ----------------------------
     def build_target(self):
         """Ground point in front of the bacterium, with validity reason."""
         state = self.arena.state
@@ -365,7 +438,24 @@ class Combatant(NetworkComponent):
             problem = self.arena.placement_problem((point.x, point.y, point.z), hit.normal, self.slot)
         return (point.x, point.y, point.z), problem
 
+    def deliverable(self):
+        """Colonia proxima que pode receber recursos agora (para o toque em G)."""
+        if self.team == CELLS or self.arena.state.resources.get(self.slot, 0) <= 0:
+            return None
+        colony = self.arena.nearest_colony(self.feet, 3.5)
+        if colony and colony['dev'] < BALANCE['colony_dev_cap']:
+            return colony
+        return None
+
     def update_build(self, held, dt):
+        if held and not self.previous.get("build") and self.deliverable():
+            # Toque em G perto de uma colonia: entrega em vez de construir.
+            self.interact()
+            self.deliver_hold = True
+        if self.deliver_hold:
+            if not held:
+                self.deliver_hold = False
+            held = False
         if self.team == CELLS or not held:
             if self.build and not held:
                 self.build_problem = "Construcao cancelada"
@@ -394,196 +484,43 @@ class Combatant(NetworkComponent):
             self.build_problem = ""
 
     def interact(self):
-        """E: entregar recursos numa colonia (bacterias)."""
+        """Entregar recursos numa colonia (bacterias): toque em G ou comando dos bots."""
         if self.team == CELLS:
             return
         colony = self.arena.nearest_colony(self.feet, 3.5)
         if colony:
             self.arena.request_develop(self.slot, colony['id'])
 
-    # -- kits ---------------------------------------------------------------
+    # -- area -------------------------------------------------------------------
     def area_damage(self, radius, amount, knock=0.0, effect=None, center=None):
+        origin = center is not None
         center = center or self.transform.position
         for other in list(self.arena.actors.values()):
             if other.team == self.team or not other.alive:
                 continue
             d = other.transform.position-center
-            if d.magnitude() <= radius and self.arena.visible(self, other):
+            visible = (self.arena.clear_line(center.to_tuple, (other.transform.position+Vec3(0, .3, 0)).to_tuple)
+                       if origin else self.arena.visible(self, other))
+            if d.magnitude() <= radius and visible:
                 fx = dict(effect or {})
                 if knock:
                     flat = Vec3(d.x, 0, d.z)
                     flat = flat.normalize() if flat.magnitude() > .01 else direction(self.yaw)
                     fx['knock'] = (flat.x*knock, 4.5, flat.z*knock)
                 other.damage(amount, self, fx)
+        for ident, m in list(self.arena.minions.items()):
+            owner = self.arena.actors.get(m['slot'])
+            if owner is not None and owner.team != self.team and \
+                    math.dist(m['pos'], (center.x, center.y-.5, center.z)) <= radius+.5:
+                self.arena.damage_minion(ident, amount, self.slot)
         if self.team == CELLS:
             for colony in list(self.arena.state.colonies):
                 if math.dist(colony['pos'], (center.x, center.y-.95, center.z)) <= radius+1:
                     self.arena.hit_colony(self.slot, colony['id'], amount)
 
-    def melee(self, reach, amount, arc=.3, rbc_factor=1.0, execute=None, cooldown=.8, knock=0.0):
-        if self.secondary_cd > 0:
-            return
-        self.secondary_cd = cooldown
-        self.action = 1.0
-        self.show_action(1.0)
-        for kind, target in melee_targets(self, reach, arc, include_rbc=rbc_factor > 1):
-            dmg = amount
-            if kind == 'actor':
-                if execute and target.health.value < HEROES[target.hero].health*execute[0]:
-                    dmg = execute[1]
-                fx = None
-                if knock:
-                    d = target.transform.position-self.transform.position
-                    flat = Vec3(d.x, 0, d.z).normalize()
-                    fx = dict(knock=(flat.x*knock, 3, flat.z*knock))
-                target.damage(dmg, self, fx)
-            elif kind == 'colony':
-                self.arena.hit_colony(self.slot, target, dmg)
-                self.hit_marker = .15
-            else:
-                self.arena.hit_rbc(self.slot, target, dmg*rbc_factor)
-                self.hit_marker = .15
-
-    def dash_hits(self):
-        if self.hero not in ('neutrophil', 'pneumococcus'):
-            return
-        hit = getattr(self, 'dash_hit', set())
-        for other in self.arena.actors.values():
-            if other.team != self.team and other.alive and other.slot not in hit \
-                    and (other.transform.position-self.transform.position).magnitude() < 1.8:
-                hit.add(other.slot)
-                if self.hero == 'neutrophil':
-                    other.damage(35, self)
-                else:
-                    flat = Vec3(self.dash_dir.x, 0, self.dash_dir.z).normalize()
-                    other.damage(30, self, dict(knock=(flat.x*10, 4, flat.z*10)))
-        self.dash_hit = hit
-
-    def start_dash(self, seconds, speed, vertical=False):
-        aim = direction(self.yaw, self.pitch if vertical else 0)
-        self.dash_dir = aim*speed
-        self.dash = seconds
-        self.dash_hit = set()
-
-    def secondary(self):
-        h = self.hero
-        cd = HEROES[h].secondary_cd
-        boosted = self.boost > 0 and h == 'killer_t'
-        if h == 'neutrophil':
-            self.melee(1.8, 55, cooldown=cd)
-        elif h == 'macrophage':
-            self.melee(3.0, 80, arc=-.1, cooldown=cd)
-        elif h == 'killer_t':
-            self.melee(2.2, 95*(1.5 if boosted else 1), execute=(.4, 140*(1.5 if boosted else 1)),
-                       cooldown=.35 if boosted else cd, knock=4 if boosted else 0)
-        elif h == 'streptococcus':
-            self.melee(2.0, 30, arc=.4, rbc_factor=4.0, cooldown=cd*(.6 if self.boost > 0 else 1))
-        elif self.secondary_cd <= 0:
-            self.secondary_cd = cd
-            self.action = 1.0
-            self.show_action(1.0)
-            if h == 'pneumococcus':
-                self.start_dash(.35, 18)
-            elif h == 'staphylococcus':
-                hits = cast(self, direction(self.yaw, self.pitch), 40)
-                if hits:
-                    self.arena.tracer((self.transform.position+Vec3(0, EYE, 0)).to_tuple, hits[0]['point'].to_tuple, 'sticky',
-                                      self.slot, impact_kind(hits))
-                    self.apply_hit(hits[0], 35, dict(slow=(.4, 2.5)))
-            elif h == 'pseudomonas':
-                hits = cast(self, direction(self.yaw, self.pitch), 35)
-                end = hits[0]['point'] if hits else self.transform.position+direction(self.yaw, self.pitch)*35
-                self.arena.tracer((self.transform.position+Vec3(0, EYE, 0)).to_tuple, end.to_tuple, 'acid', self.slot,
-                                  impact_kind(hits) or 'world')
-                self.arena.effect('burst', end.to_tuple, 3.5)
-                self.area_damage(3.5, 45, center=end)
-                for ident, cell in self.arena.rbc_view.cells.items():
-                    if cell['state'] not in ('dead', 'inside') and math.dist(cell['pos'], end.to_tuple) < 3.5:
-                        self.arena.hit_rbc(self.slot, ident, 45)
-
-    def ability(self):
-        h = self.hero
-        if self.ability_cd > 0:
-            return
-        kit = HEROES[h]
-        cd = kit.ability_cd*(.5 if h == 'streptococcus' and self.boost > 0 else 1)
-        if h == 'neutrophil':
-            self.start_dash(.26, 22)
-        elif h == 'macrophage':
-            self.area_damage(5, 40, knock=9)
-            self.arena.effect('slam', self.feet, 5)
-        elif h == 'b_cell':
-            hits = cast(self, direction(self.yaw, self.pitch), 60)
-            if hits:
-                self.arena.tracer((self.transform.position+Vec3(0, EYE, 0)).to_tuple, hits[0]['point'].to_tuple, 'mark',
-                                  self.slot, impact_kind(hits))
-                if hits[0]['kind'] == 'colony':
-                    self.arena.mark_colony(hits[0]['target'], 8)
-                self.apply_hit(hits[0], 20, dict(mark=6))
-        elif h == 'killer_t':
-            aim = direction(self.yaw)
-            self.body.velocity = Vec3(aim.x*12, 8.5, aim.z*12)
-            self.leap = .01
-        elif h == 'pneumococcus':
-            self.capsule = 5
-            self.shield.value = min(SHIELD_BASE['pneumococcus']+120, self.shield.value+120)
-        elif h == 'staphylococcus':
-            colony = self.arena.nearest_colony(self.feet, 6)
-            if not colony:
-                return
-            self.arena.repair_colony(self.slot, colony['id'], 120)
-        elif h == 'pseudomonas':
-            self.zone("biofilm", 5, 12)
-        elif h == 'streptococcus':
-            self.start_dash(.22, 24, vertical=True)
-        self.ability_cd = cd
-        self.action = .6
-
-    def ultimate(self):
-        if self.charge < 100 or self.arena.state.winner:
-            return
-        self.charge = 0
-        h = self.hero
-        self.arena.effect('ult', self.feet, 3, h)
-        if h == 'neutrophil':
-            for other in self.arena.actors.values():
-                if other.team != self.team and other.alive and (other.transform.position-self.transform.position).magnitude() < 22:
-                    other.damage(0, self, dict(mark=8))
-                elif other.team == self.team and (other.transform.position-self.transform.position).magnitude() < 15:
-                    other.buff('haste', 6)
-            for other in self.arena.actors.values():
-                if other.team == self.team:
-                    other.reveal_enemies(8)
-        elif h == 'macrophage':
-            for other in self.arena.actors.values():
-                if other.team == self.team and other.alive and (other.transform.position-self.transform.position).magnitude() < 10:
-                    other.buff('guard', 6)
-        elif h == 'b_cell':
-            hits = cast(self, direction(self.yaw, self.pitch), 70, through=True)
-            origin = self.transform.position+Vec3(0, EYE, 0)
-            end = hits[-1]['point'] if hits else origin+direction(self.yaw, self.pitch)*70
-            self.arena.tracer(origin.to_tuple, end.to_tuple, 'beam', self.slot, 'world' if hits else None)
-            for hit in hits:
-                if hit['kind'] == 'colony':
-                    self.arena.hit_colony(self.slot, hit['target'], 260)
-                elif hit['kind'] == 'actor':
-                    hit['target'].damage(110, self)
-        elif h in ('killer_t', 'streptococcus'):
-            self.boost = 8
-            if h == 'streptococcus':
-                self.ability_cd = 0
-        elif h == 'pneumococcus':
-            self.zone("cloud", 7, 10)
-        elif h == 'pseudomonas':
-            self.zone("mature", 9, 14)
-        elif h == 'staphylococcus':
-            self.arena.fortify(self.slot, self.feet, 15, 10)
-            self.shield.value = min(160, self.shield.value+80)
-            self.boost = 6
-
-    def zone(self, kind, radius, life, position=None):
-        position = position or self.transform.position.to_tuple
-        self.arena.add_zone(kind, position, radius, life, self.slot)
+    def zone(self, kind, radius, life, position=None, follow=False):
+        position = position or self.feet
+        self.arena.add_zone(kind, position, radius, life, self.slot, follow)
 
 
 def load_combatant(game, arena, slot, player):

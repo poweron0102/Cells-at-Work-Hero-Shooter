@@ -72,11 +72,14 @@ _highlight_loc = -1
 _highlight = None
 _light_loc = -1
 _light = None
+override = None  # shader de um passe especial (contorno/silhueta); None = toon
 
 
 def shader():
     """Shader toon (carregado na primeira chamada; requer contexto OpenGL)."""
     global _shader, _highlight_loc, _highlight, _light_loc, _light
+    if override is not None:
+        return override
     if _shader is None:
         _shader = rl.load_shader_from_memory(VERTEX, FRAGMENT)
         _highlight_loc = rl.get_shader_location(_shader, 'highlight')

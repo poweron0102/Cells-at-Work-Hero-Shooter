@@ -1337,6 +1337,57 @@ def build_streptococcus():
     return dict(height=2.0, parts=[body, *arms, *legs, tail, *tents], mount=mount)
 
 
+# ---------------------------------------------------------------------------------------
+# Objetos de habilidade
+# ---------------------------------------------------------------------------------------
+
+def build_plasma_turret():
+    """Torreta do B-Cell (habilidade Q): um plasmócito sobre um tripé, com um lançador em
+    forma de anticorpo (Y) à frente. Partes: ``base`` (estática) e ``head`` (respira e recua
+    a cada disparo pela ação 'lunge'). O jogo gira o conjunto inteiro para mirar."""
+    BLU, BLU2, BLU3 = '#7cccf6', '#4fa6dc', '#2c6e9c'
+    WHT, MET, DARK, GOLD = '#f4f8fb', '#a7b3be', '#28323d', '#fac737'
+    base = Part('base')
+    head = Part('head', swing='head', pivot=(0, 0, 0.7), action='lunge')
+    # Tripé: sapata central, três pernas com pés de borracha e um poste com anel azul.
+    base.add(lathe([(0, 0.0), (0.24, 0.0), (0.26, 0.03), (0.2, 0.07), (0.08, 0.09), (0, 0.09)], 24), DARK)
+    for i in range(3):
+        a = i * TAU / 3 + TAU / 12
+        foot = V(math.cos(a) * 0.46, math.sin(a) * 0.46, 0.035)
+        knee = V(math.cos(a) * 0.3, math.sin(a) * 0.3, 0.26)
+        top = V(math.cos(a) * 0.1, math.sin(a) * 0.1, 0.46)
+        base.tube([foot, knee, top], [0.032, 0.03, 0.026], MET, 8)
+        base.ell(foot, (0.075, 0.075, 0.035), DARK, 10, 5)
+        base.ell(knee, (0.04, 0.04, 0.04), BLU3, 8, 6)
+    base.tube([V(0, 0, 0.06), V(0, 0, 0.64)], [0.065, 0.055], MET, 12)
+    base.ring(V(0, 0, 0.44), 0.07, 0.035, BLU3, h=0.07, seg=18)
+    base.add(lathe([(0, 0.6), (0.17, 0.6), (0.18, 0.645), (0.13, 0.69), (0, 0.69)], 22), DARK)
+    # Corpo: plasmócito (oval azul) com núcleo excêntrico atrás e faixa branca no equador.
+    head.ell(V(0, 0.03, 0.93), (0.28, 0.31, 0.25), BLU, 20, 13)
+    head.ell(V(0, 0.2, 0.97), (0.17, 0.13, 0.15), BLU2, 14, 9)
+    head.ring(V(0, 0.03, 0.93), 0.272, 0.022, WHT, h=0.055, seg=24, sx=1.0, sy=1.1)
+    # Boné do B-Cell (copa azul-escura e aba para a frente).
+    head.add(dome(0.2, 0.11, 18, 5), BLU3, xform((0, 0.05, 1.12)))
+    head.box(V(0, -0.17, 1.13), (0.26, 0.14, 0.018), BLU3, rot=(-8, 0, 0), bevel=0.006)
+    head.ell(V(0, 0.05, 1.24), (0.028, 0.028, 0.02), WHT, 8, 5)
+    # Lente/olho frontal e antena sensora.
+    head.ell(V(0, -0.27, 0.98), (0.1, 0.06, 0.1), WHT, 14, 8)
+    head.ell(V(0, -0.315, 0.98), (0.055, 0.025, 0.055), DARK, 12, 6)
+    head.ell(V(0.02, -0.335, 1.0), (0.016, 0.008, 0.016), WHT, 6, 4)
+    head.tube([V(0.17, 0.12, 1.05), V(0.24, 0.16, 1.28)], [0.012, 0.008], MET, 6)
+    head.ell(V(0.24, 0.16, 1.29), (0.03, 0.03, 0.03), GOLD, 8, 6)
+    # Lançador de anticorpos: cano branco com braçadeiras e boca em Y dourada.
+    head.tube([V(0, -0.2, 0.84), V(0, -0.64, 0.84)], [0.055, 0.048], WHT, 12)
+    for y in (-0.36, -0.52):
+        head.ring(V(0, y, 0.84), 0.05, 0.016, BLU3, rot=(90, 0, 0), h=0.03, seg=14)
+    for side in (1, -1):
+        head.tube([V(0, -0.62, 0.84), V(side * 0.1, -0.74, 0.93), V(side * 0.13, -0.8, 0.97)],
+                  [0.036, 0.032, 0.028], WHT, 8)
+        head.ell(V(side * 0.135, -0.81, 0.975), (0.04, 0.04, 0.04), GOLD, 8, 6)
+    head.ell(V(0, -0.66, 0.84), (0.05, 0.04, 0.05), GOLD, 10, 6)
+    return dict(height=1.3, parts=[base, head])
+
+
 BUILDERS = {
     'neutrophil': build_neutrophil,
     'macrophage': build_macrophage,
@@ -1348,6 +1399,7 @@ BUILDERS = {
     'streptococcus': build_streptococcus,
     'red_blood_cell': build_red_blood_cell,
     'platelet': build_platelet,
+    'plasma_turret': build_plasma_turret,
 }
 
 

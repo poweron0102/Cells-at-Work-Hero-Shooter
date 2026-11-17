@@ -61,11 +61,36 @@ STYLES = {
     'beam': dict(core=(240, 250, 255), glow=(90, 170, 255), speed=0, length=0, width=.12, glow_w=.9,
                  trail=(140, 200, 255), trail_a=255, trail_life=.6, flash='ring', flash_size=.9,
                  impact='spark_blue'),
+    'net': dict(core=(250, 250, 240), glow=(220, 230, 255), speed=70, length=1.0, width=.08, glow_w=.5,
+                trail=(230, 235, 255), trail_a=90, trail_life=.4, blob=.22, arc=.03, flash='ring', flash_size=.4,
+                impact='spark'),
+    'hook': dict(core=(255, 220, 230), glow=(255, 120, 170), speed=90, length=30, width=.09, glow_w=.3,
+                 trail=(255, 150, 190), trail_a=200, trail_life=.45, blob=.16, flash='spit', flash_size=.4,
+                 impact='splat'),
+    'chain': dict(core=(255, 220, 240), glow=(255, 80, 156), speed=110, length=30, width=.06, glow_w=.22,
+                  trail=(255, 140, 200), trail_a=200, trail_life=.4, blob=.1, flash='spit', impact='splat_small'),
+    'flagellum': dict(core=(232, 255, 196), glow=(110, 230, 120), speed=120, length=30, width=.05, glow_w=.2,
+                      trail=(160, 250, 130), trail_a=200, trail_life=.5, blob=.08, flash='spit', impact='splat_small'),
+    'perforin': dict(core=(255, 230, 230), glow=(255, 50, 60), speed=160, length=2.0, width=.05, glow_w=.3,
+                     trail=(255, 90, 90), trail_a=140, trail_life=.4, blob=.1, flash='star', flash_size=.4,
+                     impact='splat_small'),
+    'toxin': dict(core=(240, 220, 255), glow=(170, 70, 230), speed=80, length=1.2, width=.08, glow_w=.4,
+                  trail=(190, 110, 240), trail_a=110, trail_life=.5, blob=.14, arc=.04, flash='spit',
+                  flash_size=.45, impact='splat_big'),
+    'capsule': dict(core=(240, 230, 255), glow=(170, 130, 255), speed=60, length=2.0, width=.06, glow_w=.35,
+                    trail=(200, 170, 255), trail_a=160, trail_life=.5, blob=.2, arc=.08, flash='ring'),
+    'turret': dict(core=(236, 248, 255), glow=(80, 170, 255), speed=200, length=3.0, width=.035, glow_w=.18,
+                   trail=(150, 205, 255), trail_a=90, trail_life=.25, flash='ring', flash_size=.3,
+                   impact='spark_blue'),
+    'clone': dict(core=(255, 226, 240), glow=(255, 80, 156), speed=180, length=1.6, width=.024, glow_w=.1,
+                  trail=(255, 150, 200), trail_a=40, trail_life=.18, flash='spit', flash_size=.18,
+                  impact='splat_small'),
 }
 for _k, _v in STYLES.items():
     STYLES[_k] = {**_BASE, **_v}
 
-SPECIAL_KINDS = ('mark', 'sticky', 'acid', 'beam')
+SPECIAL_KINDS = ('mark', 'sticky', 'acid', 'beam', 'net', 'hook', 'chain', 'flagellum', 'perforin', 'toxin',
+                 'capsule', 'turret', 'clone')
 
 
 def style_for(kind, hero):
@@ -297,7 +322,9 @@ class ShotEffects(Renderable3D):
             return a
         session = self.game.session
         cam = self.camera.transform if self.camera else None
-        if actor.slot == session.local_slot and cam is not None:
+        if shot.get('kind') in ('turret', 'clone'):
+            return a
+        if actor.slot == session.local_slot and cam is not None and actor.third_person < .5:
             from .weapons import view_to_world
             # Viewmodel visível: sai do cano; com zoom (sem viewmodel), logo abaixo da mira.
             return view_to_world(actor.vm_muzzle or (-.04, -.09, .6), self.camera)
@@ -337,6 +364,15 @@ class ShotEffects(Renderable3D):
         n = d.magnitude() or 1
         d = d * (1 / n)
         normal = Vec3(-d.x, -d.y, -d.z)
+        if kind == 'absorb':
+            # Engolido pela membrana / parado na barreira: lampejo rosa que some para dentro.
+            pink = (255, 130, 190)
+            self.particles.append(dict(kind='flash', pos=b, vel=(0, 0, 0), age=0, life=.12, size=.55, color=pink, g=0))
+            for _ in range(6):
+                v = self._spray(Vec3(d.x, d.y, d.z), self.rng, .8, 2.2)
+                self.particles.append(dict(kind='drop', pos=b, vel=v, age=0, life=self.rng.uniform(.2, .4),
+                                           size=self.rng.uniform(.03, .05), color=pink, core=(255, 230, 240), g=0))
+            return
         if kind == 'world':
             hit = self.game.physics_world.raycast(Vec3(*b) - d * .25, d, .6, 1 | 8)
             if hit is not None and hit.normal is not None:

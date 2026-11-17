@@ -7,9 +7,6 @@ from EasyCells3D.Components.Camera3D import Renderable3D
 from EasyCells3D.Geometry import Vec3
 from .catalog import CELLS, BALANCE
 
-TEAM_RING = {True: (80, 224, 189), False: (236, 155, 99)}
-
-
 def color(rgb, alpha=255):
     return rl.Color(int(rgb[0]), int(rgb[1]), int(rgb[2]), int(alpha))
 
@@ -33,43 +30,57 @@ class Block(Renderable3D):
 
 
 class CombatantVisual(Renderable3D):
+    render_order = 10  # depois do SilhouettePass (5), que precisa so do cenario no buffer de profundidade
+
     def __init__(self, actor):
         self.actor = actor
         self.last_position = None
         self.phase = 0
+        self.args = None  # pose deste quadro (calculada uma vez, usada tambem pela silhueta)
 
     def on_destroy(self):
         from .model_lighting import release
         super().on_destroy()
         release()
 
-    def render(self):
+    def camera_inside(self):
+        """Espectador na visao deste ator: a camera fica dentro do modelo, entao nao desenha."""
+        cam = self.camera.transform.position if self.camera else None
+        return cam is not None and (cam-self.actor.transform.position-Vec3(0, .6, 0)).magnitude() < 1.0
+
+    def prepare(self):
+        """Pose do quadro para ``CharacterModel.draw`` (idempotente ate o render deste quadro)."""
+        if self.args is not None:
+            return self.args
         a = self.actor
-        session = self.game.session
-        local = a.slot == session.local_slot
-        if not a.alive or local:
-            return
         p = a.transform.position
         distance = (p-self.last_position).magnitude() if self.last_position else 0
         self.last_position = Vec3(p.x, p.y, p.z)
         self.phase += min(distance, .5)*5
-        me = a.arena.actors.get(session.local_slot)
         revealed = a.reveal > 0 or a.marked > 0
         tint = None
         if a.hurt > 0:
             tint = rl.Color(255, 170, 170, 255)
         since = time.perf_counter() - a.fire_time
         kick = max(0.0, 1 - since / .14) ** 2 if since >= 0 else 0.0
-        a.tp_muzzle = model(a.hero).draw(p-Vec3(0, .95, 0), a.yaw, self.phase, distance > .002, 1 if revealed else 0,
-                                         a.shield.value, a.action, tint, kick)
-        friendly = me is not None and me.team == a.team
-        rl.draw_cylinder_wires((p-Vec3(0, .92, 0)).to_raylib(), .57, .57, .02, 20, color(TEAM_RING[friendly]))
-        if a.guard > 0:
-            rl.draw_sphere_wires(p.to_raylib(), 1.05, 8, 10, color((250, 210, 120)))
-        if a.capsule > 0:
-            rl.draw_sphere_wires(p.to_raylib(), 1.1, 8, 10, color((202, 152, 218)))
-        if a.boost > 0:
-            rl.draw_cylinder_wires((p-Vec3(0, .9, 0)).to_raylib(), .8, .2, 2.2, 8, color((255, 120, 90), 160))
+        self.args = (p-Vec3(0, .95, 0), a.yaw, self.phase, distance > .002, 1 if revealed else 0,
+                     a.shield.value, a.action, tint, kick)
+        return self.args
+
+    def render(self):
+        a = self.actor
+        session = self.game.session
+        local = a.slot == session.local_slot
+        if not a.alive or (local and a.third_person < .3) or self.camera_inside():
+            self.args = None
+            return
+        args = self.prepare()
+        self.args = None
+        a.tp_muzzle = model(a.hero).draw(*args)
+        me = a.arena.actors.get(session.local_slot)
+        if me is not None and me.team != a.team:
+            from .outline import ENEMY, draw_outline
+            draw_outline(model(a.hero), args, ENEMY)
 
 
 class ArenaEffects(Renderable3D):
@@ -103,8 +114,6 @@ class ArenaEffects(Renderable3D):
             px = cx+dx*f+right[0]*r
             pz = cz+dz*f+right[1]*r
             model('platelet').draw(Vec3(px, cy, pz), yaw, phase+i*1.7, moving)
-        ring = (232, 84, 76) if s.blocked_by else (110, 228, 196)
-        rl.draw_cylinder_wires(rl.Vector3(cx, cy+.05, cz), BALANCE['escort_block_distance'], BALANCE['escort_block_distance'], .05, 32, color(ring, 180))
         # Dotted route ahead of the escort.
         for k in range(1, 16):
             p = a.path.at(s.escort+k*1.6)
@@ -160,17 +169,9 @@ class ArenaEffects(Renderable3D):
                 ang = k*math.tau/6+self.time*.4
                 rl.draw_line_3d(rl.Vector3(x, y+.05, z), rl.Vector3(x+math.cos(ang)*2.4*growth, y+.05, z+math.sin(ang)*2.4*growth),
                                 color((120, 70, 140)))
-            if colony.get('fortified', 0) > 0:
-                rl.draw_sphere_wires(rl.Vector3(x, y+1.1, z), 1.9*growth, 8, 10, color((250, 200, 90)))
-            if colony.get('marked', 0) > 0:
-                rl.draw_cylinder_wires(rl.Vector3(x, y+.05, z), 2.2*growth, 2.2*growth, .05, 24, color((111, 197, 244)))
             # Health band on a post (visible up close).
             rl.draw_cube(rl.Vector3(x, y+2.9*growth, z), 1.6, .12, .12, color((40, 40, 50)))
             rl.draw_cube(rl.Vector3(x-.8+.8*hp, y+2.9*growth, z), 1.6*hp, .14, .14, color((230, 90, 90)))
-        for slot, (x, y, z) in a.builds.items():
-            progress = .5+.5*math.sin(self.time*6)
-            rl.draw_sphere_wires(rl.Vector3(x, y+.8, z), .9, 6, 8, color((200, 150, 220), 200))
-            rl.draw_cylinder(rl.Vector3(x, y+.02, z), 1.2, 1.2, .04+progress*.05, 16, color((160, 100, 190), 150))
 
     def draw_drops(self):
         for drop in self.arena.drops:
@@ -182,34 +183,6 @@ class ArenaEffects(Renderable3D):
             else:
                 rl.draw_cube(rl.Vector3(x, y+.5+bob, z), .3, .3, .3, rl.Color(138, 241, 211, 255))
                 rl.draw_cube_wires(rl.Vector3(x, y+.5+bob, z), .44, .44, .44, rl.Color(240, 255, 250, 255))
-
-    def draw_zones(self):
-        for zone in self.arena.zones:
-            x, y, z = zone["pos"]
-            r = zone["radius"]
-            kind = zone["kind"]
-            tint = {"biofilm": (93, 180, 133), "mature": (60, 140, 90), "acid": (170, 220, 80),
-                    "cloud": (157, 121, 189)}.get(kind, (200, 200, 200))
-            rl.draw_cylinder(rl.Vector3(x, y-.9, z), r, r, .05, 32, color(tint, 150))
-            if kind == "cloud":
-                for i in range(6):
-                    ang = i*math.tau/6+self.time*.3
-                    rl.draw_sphere(rl.Vector3(x+math.cos(ang)*r*.55, y+.4+.2*math.sin(self.time+i), z+math.sin(ang)*r*.55),
-                                   r*.45, color(tint, 70))
-            if kind == "mature":
-                for i in range(5):
-                    ang = i*1.7+self.time
-                    rl.draw_sphere(rl.Vector3(x+math.cos(ang)*r*.6, y-.7+(self.time*.6+i*.2) % 1.2, z+math.sin(ang)*r*.6), .18, color((150, 220, 150)))
-
-    def draw_effects(self):
-        for fx in self.arena.effects:
-            x, y, z = fx['pos']
-            t = 1-fx['life']/.6
-            r = fx['radius']*(.3+.7*t)
-            tint = {'slam': (240, 220, 200), 'burst': (170, 230, 90), 'ult': (255, 230, 140), 'repair': (250, 200, 90)}.get(fx['kind'], (255, 255, 255))
-            rl.draw_cylinder_wires(rl.Vector3(x, y+.1, z), r, r, .1, 28, color(tint, 255*(1-t)))
-            if fx['kind'] in ('burst', 'ult'):
-                rl.draw_sphere_wires(rl.Vector3(x, y+1, z), r*.7, 6, 8, color(tint, 255*(1-t)))
 
     def draw_recon(self):
         from .layout import RECON
@@ -247,16 +220,5 @@ class ArenaEffects(Renderable3D):
         self.draw_rbcs()
         self.draw_colonies()
         self.draw_drops()
-        self.draw_zones()
-        self.draw_effects()
         self.draw_recon()
         self.draw_crowd()
-        me = self.arena.actors.get(self.game.session.local_slot)
-        if me and me.alive and me.team != CELLS and getattr(me, 'preview', None):
-            x, y, z = me.preview
-            ok = not me.build_problem
-            tint = (120, 230, 150) if ok else (240, 90, 80)
-            rl.draw_cylinder_wires(rl.Vector3(x, y+.05, z), 1.3, 1.3, .05, 24, color(tint))
-            if me.build:
-                k = me.build['progress']/BALANCE['colony_build_time']
-                rl.draw_cylinder(rl.Vector3(x, y+.03, z), 1.3*k, 1.3*k, .04, 24, color(tint, 150))

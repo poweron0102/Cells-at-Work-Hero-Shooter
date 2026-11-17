@@ -1,15 +1,26 @@
 """Gera 'Como Jogar.html' com as regras atuais e capturas reais do jogo.
 
+    (capturas da HUD/habilidades em .scratch/hudshots, geradas numa partida de treino)
     .venv\\Scripts\\python.exe scripts\\check_match_views.py
     .venv\\Scripts\\python.exe scripts\\check_art.py
     .venv\\Scripts\\python.exe scripts\\build_player_guide.py
 """
 import base64
 import html
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+from UserComponents.cells.catalog import HEROES, KIT  # noqa: E402
+
 SHOTS = [
+    ('.scratch/hudshots/h1_neutrofilo.png', 'HUD: placar e objetivo no topo, vida, especial (F) e habilidades.'),
+    ('.scratch/hudshots/h2_kit_f1.png', 'Segure F1 para ver o kit do herói.'),
+    ('.scratch/hudshots/h4_mac_banquete_3p.png', 'Macrófago: Banquete em 3ª pessoa, engolindo tiros.'),
+    ('.scratch/hudshots/h7_bcell_torreta.png', 'B Cell: torreta Plasmócito marcando inimigos.'),
+    ('.scratch/hudshots/h9_bcell_chuva.png', 'B Cell: Chuva de anticorpos, vista aérea.'),
+    ('.scratch/hudshots/h11_staph_parede.png', 'Staphylococcus: parede de Coagulase.'),
     ('.scratch/match/avenida.png', 'Avenida arterial: a escolta parte da estação das células.'),
     ('.scratch/match/escolta.png', 'Praça da ponte: plaquetas contornam o chafariz-coração.'),
     ('.scratch/match/canal.png', 'Canal raso: rota inferior com passagem sob as pontes.'),
@@ -31,18 +42,31 @@ SECTIONS = [
         'Bloquear a escolta ficando à frente das plaquetas.',
         'Caçar hemácias: ao morrer, deixam recursos que você recolhe passando por cima.',
         'Segurar G para construir colônias (até 3 por jogador). O custo só é cobrado no fim; levar dano interrompe.',
-        'Apertar E perto de uma colônia para entregar recursos e desenvolvê-la.',
+        'Tocar G perto de uma colônia para entregar recursos e desenvolvê-la.',
         'Colônias são pontos de renascimento e protegem umas às outras.',
         'Vitória: a infecção coletiva atinge a meta.',
     ]),
     ('Controles', [
         'WASD / mouse: mover e mirar · Shift: correr · Espaço: pular',
-        'Botão esquerdo: arma · Botão direito: ação secundária (B Cell: zoom)',
-        'Q: habilidade · F: especial (carrega lutando e cumprindo objetivos)',
-        'G: construir (bactérias) · E: entregar recursos · R: recarregar',
+        'Botão esquerdo: arma · Botão direito: habilidade secundária (segurar em Engolir/Barreira/Soco/Granada ácida)',
+        'Q e E: habilidades · F: especial (carrega lutando e cumprindo objetivos; alguns usam câmera em 3ª pessoa)',
+        'V: golpe rápido · R: recarregar · F1 (segurar): cartão do kit',
+        'G: segurar para construir colônia, tocar perto de uma colônia para entregar recursos (bactérias)',
+        'Torreta e parede: Q mostra a prévia, botão esquerdo fixa, direito ou Q cancela',
         'Tab: alternar aliado no modo espectador · Esc: menu',
     ]),
+    ('Mecânicas em comum', [
+        'Marca (B Cell): o alvo marcado recebe +15% de dano. Killer T causa +20% em marcados.',
+        'Cores fixas: sua equipe é sempre turquesa e a inimiga sempre vermelha; dourado é o especial.',
+        'Ícones sobre as cabeças: marcado, preso, perforina, sem cura e especial ativo.',
+    ]),
 ]
+for _key, _info in KIT.items():
+    _hero = HEROES[_key]
+    SECTIONS.append((f"{_hero.name.title()} — {_hero.role.lower()}", [
+        f"{slot.upper()} · {name}: {desc}" for slot, (name, desc) in
+        ((k, _info[k]) for k in ('passive', 'lmb', 'rmb', 'q', 'e', 'f'))
+    ] + [f"Dica: {_info['tip']}"]))
 
 
 def main():
@@ -54,6 +78,12 @@ def main():
         data = base64.b64encode(file.read_bytes()).decode()
         figures.append(f'<figure><img src="data:image/png;base64,{data}" alt="{html.escape(caption)}">'
                        f'<figcaption>{html.escape(caption)}</figcaption></figure>')
+    names = {'PASSIVE': 'PASSIVA'}
+    for _title, items in SECTIONS:
+        for i, item in enumerate(items):
+            for a, b in names.items():
+                if item.startswith(a):
+                    items[i] = b+item[len(a):]
     sections = ''.join(f'<section><h2>{html.escape(t)}</h2><ul>' + ''.join(f'<li>{html.escape(i)}</li>' for i in items)
                        + '</ul></section>' for t, items in SECTIONS)
     page = f'''<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
