@@ -26,6 +26,7 @@ class Arena(NetworkComponent):
         self.minions = {}      # id -> dict(kind, slot, pos, yaw, hp, max, life): torretas e clones
         self.walls = {}        # id -> dict(pos, yaw, life, item): Coagulase
         self.projectiles = []  # granadas (simuladas em todos; so o dono aplica o efeito)
+        self.spits = []        # disparos da Pseudomonas (idem: todos simulam, so o dono aplica o dano)
         self.drops = []
         self.next_drop = 1
         self.builds = {}  # slot -> position of a construction in progress (visual)
@@ -83,6 +84,25 @@ class Arena(NetworkComponent):
         start = actor.transform.position + Vec3(0, .5, 0)
         delta = target.transform.position+Vec3(0, .3, 0)-start
         return self.game.physics_world.raycast(start, delta, delta.magnitude(), 1) is None
+
+    @staticmethod
+    def _surface(hit):
+        if hit is None:
+            return None
+        n = hit.normal.normalize() if hit.normal is not None and hit.normal.magnitude() > 1e-6 else Vec3(0, 1, 0)
+        return hit.point.to_tuple, n.to_tuple
+
+    def floor_at(self, point, drop=4.0):
+        """Chao logo abaixo de ``point`` (ate ``drop`` metros): (ponto, normal), seguindo rampas;
+        None se nao houver (abismo, alto demais)."""
+        x, y, z = point
+        return self._surface(self.game.physics_world.raycast(Vec3(x, y+.3, z), Vec3(0, -1, 0), drop+.3, 1))
+
+    def surface_at(self, point, aim):
+        """Superficie do mapa que um projetil vindo na direcao ``aim`` atingiu em ``point``:
+        (ponto, normal) ou None."""
+        p = Vec3(*point)
+        return self._surface(self.game.physics_world.raycast(p-aim*.3, aim, .6, 1 | 8))
 
     def clear_line(self, a, b):
         start = Vec3(*a)
@@ -232,15 +252,22 @@ class Arena(NetworkComponent):
                 self.add_drop('resource', (feet[0]+.6, feet[1], feet[2]), carried)
 
     # -- efeitos visuais ------------------------------------------------------
-    def add_zone(self, kind, position, radius, life, owner, follow=False):
-        self.zones.append(dict(kind=kind, pos=tuple(position), radius=radius, life=life, owner=owner, follow=follow,
-                               age=0.0, max=life))
-        self.remote_zone(kind, tuple(position), radius, life, owner, follow)
+    def add_zone(self, kind, position, radius, life, owner, follow=False, normal=None):
+        """``normal``: zona colada numa superficie (rampa, parede, teto) - disco orientado por ela."""
+        normal = tuple(normal) if normal is not None else None
+        self.push_zone(kind, position, radius, life, owner, follow, normal)
+        self.remote_zone(kind, tuple(position), radius, life, owner, follow, normal)
 
     @Rpc(send_to=SendTo.NOT_ME, require_owner=False)
-    def remote_zone(self, kind, position, radius, life, owner, follow=False):
-        self.zones.append(dict(kind=kind, pos=tuple(position), radius=radius, life=life, owner=owner, follow=follow,
-                               age=0.0, max=life))
+    def remote_zone(self, kind, position, radius, life, owner, follow=False, normal=None):
+        self.push_zone(kind, position, radius, life, owner, follow, normal)
+
+    def push_zone(self, kind, position, radius, life, owner, follow, normal):
+        zone = dict(kind=kind, pos=tuple(position), radius=radius, life=life, owner=owner, follow=follow,
+                    age=0.0, max=life)
+        if normal is not None:
+            zone['normal'] = tuple(normal)
+        self.zones.append(zone)
 
     # -- objetos de habilidade --------------------------------------------------
     @Rpc(send_to=SendTo.ALL, require_owner=False)
@@ -366,13 +393,73 @@ class Arena(NetworkComponent):
         if actor is not None and kind not in ('turret', 'clone'):
             actor.fired(kind)
 
-    def effect(self, kind, position, radius, extra=None):
-        self.effects.append(dict(kind=kind, pos=tuple(position), radius=radius, life=.6, extra=extra))
-        self.remote_effect(kind, tuple(position), radius, extra)
+    # -- disparos da Pseudomonas (projetil com gravidade) -------------------
+    def spit(self, start, velocity, slot):
+        self.add_spit(start, velocity, slot)
+        self.remote_spit(tuple(start), tuple(velocity), slot)
+
+    @Rpc(send_to=SendTo.NOT_ME, require_owner=False, protocol=Protocol.UDP)
+    def remote_spit(self, start, velocity, slot):
+        self.add_spit(start, velocity, slot)
+
+    def add_spit(self, start, velocity, slot):
+        start = tuple(start)
+        self.spits.append(dict(origin=start, pos=start, vel=tuple(velocity), slot=slot, age=0.0,
+                               trail=[(start, 0.0)], end=None, end_age=0.0, impact=None))
+        actor = self.actors.get(slot)
+        if actor is not None:
+            actor.fired('shot')
+
+    def step_spits(self, dt):
+        """Avanca cada glob em linha reta por quadro (com gravidade) e testa o trecho percorrido
+        contra o mesmo ``cast`` do hitscan. O dono aplica dano/respingo/poca no impacto, mesmo
+        que ja tenha morrido; os demais pares so mostram o efeito."""
+        from .combat import SPIT, cast, impact_kind
+        for s in list(self.spits):
+            s['age'] += dt
+            if s['end'] is not None:
+                if s['age']-s['end_age'] > SPIT['linger']:
+                    self.spits.remove(s)
+                continue
+            owner = self.actors.get(s['slot'])
+            if owner is None:
+                self.spits.remove(s)
+                continue
+            x, y, z = s['pos']
+            vx, vy, vz = s['vel']
+            nvy = vy-SPIT['gravity']*dt
+            nxt = (x+vx*dt, y+(vy+nvy)*.5*dt, z+vz*dt)
+            s['vel'] = (vx, nvy, vz)
+            delta = Vec3(nxt[0]-x, nxt[1]-y, nxt[2]-z)
+            dist = delta.magnitude()
+            if dist > 1e-6:
+                aim = delta*(1/dist)
+                hits = cast(owner, aim, dist, origin=Vec3(x, y, z))
+                if hits:
+                    point = hits[0]['point'].to_tuple
+                    self.finish_spit(s, point, impact_kind(hits))
+                    if owner.local:
+                        owner.spit_impact(hits[0], point, aim)
+                    continue
+            s['pos'] = nxt
+            s['trail'].append((nxt, s['age']))
+            if s['age'] >= SPIT['life']:
+                self.finish_spit(s, nxt, None)  # perdeu forca no ar: some sem poca
+
+    @staticmethod
+    def finish_spit(s, point, impact):
+        s['end'], s['end_age'], s['impact'] = point, s['age'], impact
+        s['pos'] = point
+        s['trail'].append((point, s['age']))
+
+    def effect(self, kind, position, radius, extra=None, normal=None):
+        normal = tuple(normal) if normal is not None else None
+        self.effects.append(dict(kind=kind, pos=tuple(position), radius=radius, life=.6, extra=extra, normal=normal))
+        self.remote_effect(kind, tuple(position), radius, extra, normal)
 
     @Rpc(send_to=SendTo.NOT_ME, require_owner=False)
-    def remote_effect(self, kind, position, radius, extra=None):
-        self.effects.append(dict(kind=kind, pos=tuple(position), radius=radius, life=.6, extra=extra))
+    def remote_effect(self, kind, position, radius, extra=None, normal=None):
+        self.effects.append(dict(kind=kind, pos=tuple(position), radius=radius, life=.6, extra=extra, normal=normal))
 
     # -- servidor -----------------------------------------------------------
     def server_tick(self, dt):
@@ -466,6 +553,7 @@ class Arena(NetworkComponent):
             m['recoil'] = max(0.0, m.get('recoil', 0)-dt*5)
             m['hurt'] = max(0.0, m.get('hurt', 0)-dt)
         self.step_projectiles(dt)
+        self.step_spits(dt)
         self.rbc_view.update(dt)
         self.sync_bodies()
         if session.status != "playing" or not self.server:

@@ -255,6 +255,73 @@ class KitTests(unittest.TestCase):
         self.settle(1.2)
         self.assertLess(self.total(self.cell), health)
 
+    def test_pseudomonas_spit_damages_on_arrival_and_leaves_floor_puddle(self):
+        self.hero(self.bact, 'pseudomonas')
+        health = self.total(self.cell)
+        self.shoot(self.bact)
+        self.assertTrue(self.arena.spits)
+        self.assertEqual(self.total(self.cell), health)  # nada no clique
+        self.assertFalse([z for z in self.arena.zones if z['kind'] == 'acid'])
+        self.settle(.3)
+        self.assertLess(self.total(self.cell), health)
+        acid = [z for z in self.arena.zones if z['kind'] == 'acid']
+        self.assertTrue(acid)
+        self.assertAlmostEqual(acid[0]['pos'][1], self.cell.feet[1], delta=.3)  # no chao, nao no tronco
+
+    def test_pseudomonas_spit_falls_with_gravity(self):
+        from UserComponents.cells.combat import SPIT
+        self.hero(self.bact, 'pseudomonas')
+        self.bact.yaw = 0  # de costas para a celula: tiro livre
+        self.settle()
+        start_y = self.bact.eye.y
+        self.shoot(self.bact)
+        self.settle(.3)
+        spit = self.arena.spits[0]
+        self.assertLess(spit['pos'][1], start_y-.1)
+        self.assertLess(spit['vel'][1], 0)
+        self.assertGreater(SPIT['gravity'], 0)
+
+    def test_pseudomonas_spit_in_flight_still_hurts_after_shooter_dies(self):
+        self.hero(self.bact, 'pseudomonas')
+        health = self.total(self.cell)
+        self.shoot(self.bact)
+        self.bact.take_hit(9999, self.cell.slot)
+        self.assertFalse(self.bact.alive)
+        self.settle(.3)
+        self.assertLess(self.total(self.cell), health)
+
+    def test_pseudomonas_splash_hits_neighbors_of_the_target(self):
+        from UserComponents.cells.combat import SPIT
+        self.hero(self.bact, 'pseudomonas')
+        other = self.arena.actors[1]
+        other.body.teleport(Vec3(1.0, 1, 59.8))
+        self.settle()
+        health = self.total(other)
+        self.shoot(self.bact)
+        self.settle(.3)
+        self.assertLess(self.total(other), health)
+        self.assertGreaterEqual(self.total(other), health-SPIT['splash_damage']*1.5-.01)
+
+    def test_pseudomonas_puddle_sticks_to_wall_and_hurts_who_leans_on_it(self):
+        from UserComponents.cells.world import block
+        self.hero(self.bact, 'pseudomonas')
+        block(self.game, "Test wall", (0, 2, 57), (6, 4, 1), (100, 100, 100))  # face em z=56.5
+        self.cell.body.teleport(Vec3(1.0, 1, 56.0))  # encostado na parede, fora da linha de tiro
+        self.settle()
+        self.shoot(self.bact)
+        self.settle(.15)
+        acid = [z for z in self.arena.zones if z['kind'] == 'acid']
+        self.assertTrue(acid)
+        self.assertAlmostEqual(acid[0]['pos'][2], 56.5, delta=.05)
+        self.assertAlmostEqual(acid[0]['normal'][2], -1, delta=.05)  # colada na parede, virada ao atirador
+        self.assertTrue(self.cell.touches_zone(acid[0]))
+        health = self.total(self.cell)
+        self.settle(.6)
+        self.assertLess(self.total(self.cell), health)  # dano continuo da poca na parede
+        self.cell.body.teleport(Vec3(1.0, 1, 54.5))
+        self.settle()
+        self.assertFalse(self.cell.touches_zone(acid[0]))  # longe da parede: nao encosta
+
     def test_streptococcus_dash_has_two_charges(self):
         self.hero(self.bact, 'streptococcus')
         self.tap(self.bact, 'ability')

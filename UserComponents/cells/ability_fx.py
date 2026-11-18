@@ -121,9 +121,25 @@ def team_color(owner, me):
     return ALLY if owner.team == me.team else ENEMY
 
 
-def ground(batch, pos, radius, tint, alpha, tex='ring', blend=ADD, angle=0.0, lift=.06):
+def surface_basis(normal):
+    """Eixos (direita, cima) de um quad deitado na superficie de ``normal`` (None = chao plano)."""
+    if normal is None:
+        return FLAT_R, FLAT_U
+    nx, ny, nz = normal
+    hx, hy, hz = (0.0, 1.0, 0.0) if abs(ny) < .9 else (1.0, 0.0, 0.0)
+    ax, ay, az = hy*nz-hz*ny, hz*nx-hx*nz, hx*ny-hy*nx
+    k = math.sqrt(ax*ax+ay*ay+az*az) or 1.0
+    ax, ay, az = ax/k, ay/k, az/k
+    return (ax, ay, az), (ny*az-nz*ay, nz*ax-nx*az, nx*ay-ny*ax)
+
+
+def ground(batch, pos, radius, tint, alpha, tex='ring', blend=ADD, angle=0.0, lift=.06, normal=None):
+    """Quad deitado no chao (ou colado na superficie de ``normal``: rampa, parede, teto)."""
     x, y, z = pos
-    batch.add((blend, tex), billboard, (x, y+lift, z), radius, FLAT_R, FLAT_U, tint, int(max(0, min(255, alpha))), angle)
+    r, u = surface_basis(normal)
+    n = normal or (0.0, 1.0, 0.0)
+    batch.add((blend, tex), billboard, (x+n[0]*lift, y+n[1]*lift, z+n[2]*lift), radius, r, u, tint,
+              int(max(0, min(255, alpha))), angle)
 
 
 def vertical(batch, center, right, half_w, half_h, tint, alpha, tex, blend=ADD):
@@ -285,17 +301,23 @@ class AbilityEffects(Renderable3D):
             fade = min(1.0, zone['life']/.6)
             k = grow*fade
             floor = (x, y, z)
-            ground(batch, floor, r*grow, edge, 200*k, 'ring', angle=self.time*.3)
+            normal = zone.get('normal')
+            ground(batch, floor, r*grow, edge, 200*k, 'ring', angle=self.time*.3, normal=normal)
             if kind in ('biofilm', 'mature', 'acid'):
-                ground(batch, floor, r*.98*grow, tint, 150*k, 'splat', ALPHA, angle=zone['radius']*7+x)
-                ground(batch, floor, r*grow, tint, 60*k, 'glow')
+                ground(batch, floor, r*.98*grow, tint, 150*k, 'splat', ALPHA, angle=zone['radius']*7+x, normal=normal)
+                ground(batch, floor, r*grow, tint, 60*k, 'glow', normal=normal)
+                # Bolhas sobem da poca (para fora da superficie, se estiver numa parede/rampa).
+                sa, sb = surface_basis(normal)
+                nx, ny, nz = normal or (0.0, 1.0, 0.0)
                 rng = random.Random(int(x*13+z*7))
                 for i in range(5 if kind != 'mature' else 9):
                     ang, rad = rng.uniform(0, math.tau), rng.uniform(0, r*.8)
                     ph = (self.time*.7+rng.random()) % 1.0
-                    bx, bz = x+math.cos(ang)*rad, z+math.sin(ang)*rad
-                    batch.add((ADD, 'core'), billboard, (bx, y+.1+ph*(1.2 if kind == 'mature' else .5), bz),
-                              .08+.06*rng.random(), R, U, tint, int(200*(1-ph)*k))
+                    ca, sn = math.cos(ang)*rad, math.sin(ang)*rad
+                    h = .1+ph*(1.2 if kind == 'mature' else .5)
+                    bubble = (x+sa[0]*ca+sb[0]*sn+nx*h, y+sa[1]*ca+sb[1]*sn+ny*h, z+sa[2]*ca+sb[2]*sn+nz*h)
+                    batch.add((ADD, 'core'), billboard, bubble, .08+.06*rng.random(), R, U, tint,
+                              int(200*(1-ph)*k))
             elif kind == 'cloud':
                 ground(batch, floor, r*grow, tint, 70*k, 'disc', ALPHA)
                 for i in range(16):
@@ -360,8 +382,8 @@ class AbilityEffects(Renderable3D):
                               R, U, tint, int(230*a))
                 continue
             # Onda no chao (todas as outras).
-            ground(batch, (x, y, z), r*(.25+.75*t), tint, 255*a, 'ring')
-            ground(batch, (x, y, z), r*(.2+.8*t), tint, 90*a, 'disc', ALPHA)
+            ground(batch, (x, y, z), r*(.25+.75*t), tint, 255*a, 'ring', normal=fx.get('normal'))
+            ground(batch, (x, y, z), r*(.2+.8*t), tint, 90*a, 'disc', ALPHA, normal=fx.get('normal'))
             if kind in ('slam', 'burst', 'antibody'):
                 rng = random.Random(int(x*31+z*17))
                 for i in range(10):

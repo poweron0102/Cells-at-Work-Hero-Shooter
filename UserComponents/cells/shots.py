@@ -448,6 +448,8 @@ class ShotEffects(Renderable3D):
             else:
                 shot['age'] += dt
             self.draw_shot(shot, batch, eye, R, U)
+        for spit in list(getattr(self.arena, 'spits', ())):
+            self.draw_spit(spit, batch, eye, R, U)
         self.update_flashes(dt, batch, R, U)
         self.update_particles(dt, batch, eye, R, U)
         self.update_decals(dt, batch)
@@ -503,6 +505,63 @@ class ShotEffects(Renderable3D):
             batch.add((ADD, 'core'), billboard, h, st['blob'], R, U, st['core'], 255)
         elif head_d < dist:
             batch.add((ADD, 'glow'), billboard, h, st['glow_w'] * .9, R, U, st['glow'], 120)
+
+    SPIT_CONVERGE = .12  # s até o glob visual (saído do cano) encostar na trajetória simulada (do olho)
+
+    def draw_spit(self, spit, batch, eye, R, U):
+        """Glob da Pseudomonas: desenhado na posição simulada pela Arena (o dano acontece onde ele
+        está), com o rastro pelos pontos já percorridos. Sai do cano e converge para a simulação."""
+        st = STYLES['pseudomonas']
+        fx = spit.get('vfx')
+        if fx is None:
+            o = spit['origin']
+            start = self.visual_start(dict(a=o, slot=spit['slot'], kind='shot'))
+            fx = spit['vfx'] = dict(off=(start[0] - o[0], start[1] - o[1], start[2] - o[2]), impact=False)
+            actor = self.arena.actors.get(spit['slot'])
+            if actor is not None and actor.slot != self.game.session.local_slot:
+                v = spit['vel']
+                n = math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]) or 1
+                self.flashes.append(dict(pos=start, dir=(v[0] / n, v[1] / n, v[2] / n), st=st, age=0.0, life=.09,
+                                         angle=self.rng.uniform(0, math.tau), size=st['flash_size']))
+        off = fx['off']
+        conv = self.SPIT_CONVERGE
+
+        def vis(p, t):
+            k = max(0.0, 1 - t / conv)
+            k = k * k * (3 - 2 * k)
+            return (p[0] + off[0] * k, p[1] + off[1] * k, p[2] + off[2] * k)
+
+        age, life = spit['age'], st['trail_life']
+        trail = spit['trail']
+        # Rastro tênue: cada trecho apaga pela idade em que foi percorrido.
+        prev = None
+        for p, t in trail:
+            q = vis(p, t)
+            if prev is not None:
+                r = (age - t) / life
+                if r < 1:
+                    alpha = int(st['trail_a'] * (1 - r) ** 1.5)
+                    if alpha > 2:
+                        batch.add((ADD, 'beam'), ribbon, prev, q, st['width'] * (1.4 + 2.5 * r), eye, st['trail'],
+                                  alpha, MIN_ANGLE * .8)
+            prev = q
+        if spit['end'] is not None:
+            if not fx['impact']:
+                fx['impact'] = True
+                before = vis(*trail[-2]) if len(trail) > 1 else vis(spit['origin'], 0.0)
+                self.impact(dict(style=st, impact=spit['impact'], b=spit['end'], va=before))
+            return
+        # Cabeça: glob + estria curta para trás, na direção da velocidade atual.
+        h = vis(spit['pos'], age)
+        v = spit['vel']
+        n = math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]) or 1
+        back = min(st['length'], n * age)
+        tl = (h[0] - v[0] / n * back, h[1] - v[1] / n * back, h[2] - v[2] / n * back)
+        if back > .02:
+            batch.add((ADD, 'streak'), ribbon, tl, h, st['glow_w'], eye, st['glow'], 170, MIN_ANGLE * 4)
+            batch.add((ADD, 'streak'), ribbon, tl, h, st['width'], eye, st['core'], 255, MIN_ANGLE)
+        batch.add((ADD, 'glow'), billboard, h, st['blob'] * 2.6, R, U, st['glow'], 200)
+        batch.add((ADD, 'core'), billboard, h, st['blob'], R, U, st['core'], 255)
 
     def draw_beam(self, shot, batch, eye, R, U):
         st, age = shot['style'], shot['age']

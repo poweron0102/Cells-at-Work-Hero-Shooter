@@ -7,6 +7,22 @@ from .catalog import HEROES, CELLS
 
 EYE = .56
 
+# Disparo da Pseudomonas: glóbulo de ácido simulado de verdade (cai com a gravidade). O dano,
+# o respingo e a poça acontecem quando ele bate em algo, não no clique (``Arena.step_spits``).
+SPIT = dict(speed=75.0, gravity=9.0, life=.8, splash_radius=1.6, splash_damage=8.0,
+            zone_radius=1.4, zone_life=2.0, linger=.4)
+
+
+def ballistic_pitch(horizontal, height, speed, gravity):
+    """Menor ângulo de elevação que leva um projétil a (``horizontal``, ``height``); None se não alcança."""
+    if horizontal < 1e-3:
+        return None
+    v2 = speed*speed
+    disc = v2*v2-gravity*(gravity*horizontal*horizontal+2*height*v2)
+    if disc < 0:
+        return None
+    return math.atan((v2-math.sqrt(disc))/(gravity*horizontal))
+
 
 def direction(yaw, pitch=0):
     return Vec3(math.sin(yaw)*math.cos(pitch), math.sin(pitch), -math.cos(yaw)*math.cos(pitch))
@@ -165,12 +181,14 @@ class Weapon(Component):
         for _ in range(pellets):
             spread = .09 if pellets > 1 else (0 if zoomed else .008)
             aim = direction(a.yaw + self.rng.uniform(-spread, spread), a.pitch + self.rng.uniform(-spread, spread))
-            hits = cast(a, aim, 55 if pellets == 1 else 18)
             origin = a.transform.position+Vec3(0, EYE, 0)
+            if a.hero == "pseudomonas":
+                # Projétil real: dano e poça só quando ele acerta (Arena.step_spits).
+                a.arena.spit(origin.to_tuple, (aim*SPIT['speed']).to_tuple, a.slot)
+                continue
+            hits = cast(a, aim, 55 if pellets == 1 else 18)
             endpoint = hits[0]['point'] if hits else origin+aim*45
             a.arena.tracer(origin.to_tuple, endpoint.to_tuple, 'shot', a.slot, impact_kind(hits))
-            if hits and a.hero == "pseudomonas":
-                a.zone("acid", 1.4, 2, endpoint.to_tuple)
             if not hits:
                 continue
             damage = kit.damage*(1.15 if zoomed else 1)

@@ -391,7 +391,7 @@ class Combatant(NetworkComponent, KitMixin):
             return
         dt, self.zone_tick = self.zone_tick, 0.0
         for zone in self.arena.zones:
-            if math.dist(self.feet, zone["pos"]) >= zone["radius"]:
+            if not self.touches_zone(zone):
                 continue
             source = self.arena.actors.get(zone["owner"])
             if source is None or source.team == self.team:
@@ -416,9 +416,31 @@ class Combatant(NetworkComponent, KitMixin):
             source = self.arena.actors.get(zone["owner"])
             if enemy and source is not None and source.team == self.team:
                 continue
-            if math.dist(self.feet, zone["pos"]) < zone["radius"]:
+            if self.touches_zone(zone):
                 return True
         return False
+
+    BODY_RADIUS, BODY_HALF = .45, .5  # capsula do heroi: raio e meia-altura do segmento central
+
+    def touches_zone(self, zone):
+        """Zona no chao: pes dentro do raio. Zona colada numa superficie (``normal``): a capsula
+        do heroi encosta no disco - vale para rampas, paredes e tetos."""
+        normal = zone.get("normal")
+        if normal is None:
+            return math.dist(self.feet, zone["pos"]) < zone["radius"]
+        p = self.transform.position
+        cx, cy, cz = zone["pos"]
+        nx, ny, nz = normal
+        best = None
+        for i in range(7):
+            y = p.y-self.BODY_HALF+2*self.BODY_HALF*i/6
+            dx, dy, dz = p.x-cx, y-cy, p.z-cz
+            dn = dx*nx+dy*ny+dz*nz
+            px, py, pz = dx-nx*dn, dy-ny*dn, dz-nz*dn
+            out = max(0.0, math.sqrt(px*px+py*py+pz*pz)-zone["radius"])
+            d = math.hypot(dn, out)
+            best = d if best is None else min(best, d)
+        return best <= self.BODY_RADIUS+.1
 
     # -- construcao e entrega (bacterias, tecla G) ----------------------------
     def build_target(self):
@@ -492,11 +514,12 @@ class Combatant(NetworkComponent, KitMixin):
             self.arena.request_develop(self.slot, colony['id'])
 
     # -- area -------------------------------------------------------------------
-    def area_damage(self, radius, amount, knock=0.0, effect=None, center=None):
+    def area_damage(self, radius, amount, knock=0.0, effect=None, center=None, exclude=()):
+        """``exclude``: atores/ids de lacaio que ja levaram o acerto direto."""
         origin = center is not None
         center = center or self.transform.position
         for other in list(self.arena.actors.values()):
-            if other.team == self.team or not other.alive:
+            if other.team == self.team or not other.alive or any(other is e for e in exclude):
                 continue
             d = other.transform.position-center
             visible = (self.arena.clear_line(center.to_tuple, (other.transform.position+Vec3(0, .3, 0)).to_tuple)
@@ -510,7 +533,7 @@ class Combatant(NetworkComponent, KitMixin):
                 other.damage(amount, self, fx)
         for ident, m in list(self.arena.minions.items()):
             owner = self.arena.actors.get(m['slot'])
-            if owner is not None and owner.team != self.team and \
+            if owner is not None and owner.team != self.team and ident not in exclude and \
                     math.dist(m['pos'], (center.x, center.y-.5, center.z)) <= radius+.5:
                 self.arena.damage_minion(ident, amount, self.slot)
         if self.team == CELLS:
@@ -518,9 +541,9 @@ class Combatant(NetworkComponent, KitMixin):
                 if math.dist(colony['pos'], (center.x, center.y-.95, center.z)) <= radius+1:
                     self.arena.hit_colony(self.slot, colony['id'], amount)
 
-    def zone(self, kind, radius, life, position=None, follow=False):
+    def zone(self, kind, radius, life, position=None, follow=False, normal=None):
         position = position or self.feet
-        self.arena.add_zone(kind, position, radius, life, self.slot, follow)
+        self.arena.add_zone(kind, position, radius, life, self.slot, follow, normal)
 
 
 def load_combatant(game, arena, slot, player):

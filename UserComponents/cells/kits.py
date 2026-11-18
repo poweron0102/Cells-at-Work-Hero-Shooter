@@ -538,12 +538,35 @@ class KitMixin:
             self.arena.effect('antibody', point, 4)
             self.area_damage(4.0, 35, effect=dict(mark=4), center=center+Vec3(0, .5, 0))
         elif kind == 'acid':
-            self.arena.effect('burst', point, 3.5)
+            # Onda e poca no chao abaixo da explosao (que pode ser no tronco de alguem ou no ar).
+            floor = self.arena.floor_at(point)
+            if floor is not None:
+                self.arena.effect('burst', floor[0], 3.5, normal=floor[1])
+            else:
+                self.arena.effect('burst', point, 3.5)
             self.area_damage(3.5, 45, center=center+Vec3(0, .5, 0))
-            self.zone('acid', 2.6, 4, point)
+            if floor is not None:
+                self.zone('acid', 2.6, 4, floor[0], normal=floor[1])
             for ident, cell in self.arena.rbc_view.cells.items():
                 if cell['state'] not in ('dead', 'inside') and math.dist(cell['pos'], point) < 3.5:
                     self.arena.hit_rbc(self.slot, ident, 45)
+
+    def spit_impact(self, hit, point, aim):
+        """Glob da Pseudomonas acertou (roda no dono, mesmo morto): dano direto, respingo e poca
+        de acido. No mapa, a poca gruda na superficie atingida (chao, rampa, parede, teto); num
+        alvo, cai no chao abaixo dele. Membranas/barreiras engolem o glob inteiro."""
+        from .combat import SPIT
+        self.apply_hit(hit, HEROES['pseudomonas'].damage)
+        if hit['kind'] == 'front':
+            return
+        # Recua um pouco do ponto atingido para o respingo/chao nao partirem de dentro da parede.
+        back = Vec3(*point)-aim*.2
+        direct = (hit['target'],) if hit['kind'] in ('actor', 'minion') else ()
+        self.area_damage(SPIT['splash_radius'], SPIT['splash_damage'], center=back, exclude=direct)
+        surface = self.arena.surface_at(point, aim) if hit['kind'] in ('world', 'colony') else None
+        surface = surface or self.arena.floor_at(back.to_tuple)
+        if surface is not None:
+            self.zone('acid', SPIT['zone_radius'], SPIT['zone_life'], surface[0], normal=surface[1])
 
     # ------------------------------------------------------------------ F
     def ultimate(self):

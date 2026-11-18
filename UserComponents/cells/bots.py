@@ -21,6 +21,40 @@ class BotBrain:
         self.next_path = {}
         self.goal = {}
         self.stuck = {}
+        self.track = {}  # slot -> (posicao, instante, velocidade estimada) dos inimigos
+
+    def velocity_of(self, other):
+        """Velocidade estimada pelo deslocamento (corpos remotos sao cinematicos, sem velocidade)."""
+        now = self.arena.state.elapsed
+        p = other.transform.position
+        rec = self.track.get(other.slot)
+        if rec is None or now-rec[1] > .6:
+            self.track[other.slot] = (Vec3(p.x, p.y, p.z), now, Vec3(0, 0, 0))
+            return Vec3(0, 0, 0)
+        if now-rec[1] < .1:
+            return rec[2]
+        v = (p-rec[0])*(1/(now-rec[1]))
+        if v.magnitude() > 12:  # teleporte/renascimento
+            v = Vec3(0, 0, 0)
+        self.track[other.slot] = (Vec3(p.x, p.y, p.z), now, v)
+        return v
+
+    def lead_aim(self, actor, enemy):
+        """Pseudomonas: mira a frente do alvo (tempo de voo) e acima dele (queda do glob)."""
+        from .combat import SPIT, EYE, ballistic_pitch
+        eye = actor.transform.position+Vec3(0, EYE, 0)
+        target = enemy.transform.position
+        vel = self.velocity_of(enemy)
+        point = target
+        for _ in range(2):
+            t = (point-eye).magnitude()/SPIT['speed']
+            point = target+vel*t
+        d = point-eye
+        yaw = math.atan2(d.x, -d.z)
+        pitch = ballistic_pitch(math.hypot(d.x, d.z), d.y, SPIT['speed'], SPIT['gravity'])
+        if pitch is None:
+            pitch = math.atan2(d.y, max(.01, math.hypot(d.x, d.z)))
+        return yaw, pitch
 
     # -- objetivos --------------------------------------------------------
     def cell_goal(self, actor):
@@ -157,6 +191,8 @@ class BotBrain:
             aim = Vec3(target.x-position.x, -1.4, target.z-position.z)
         yaw = math.atan2(aim.x, -aim.z) if abs(aim.x)+abs(aim.z) > .01 else actor.yaw
         pitch = math.atan2(aim.y, max(.01, math.hypot(aim.x, aim.z)))
+        if enemy and actor.hero == 'pseudomonas' and not building:
+            yaw, pitch = self.lead_aim(actor, enemy)
         if enemy:
             yaw += math.sin(state.elapsed*2+actor.slot)*.035
         forward_x, forward_z = math.sin(yaw), -math.cos(yaw)
