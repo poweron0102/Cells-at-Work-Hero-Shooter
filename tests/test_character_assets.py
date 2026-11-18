@@ -21,6 +21,30 @@ class CharacterAssetTests(unittest.TestCase):
             self.assertTrue((ASSET_DIR / f'{key}.glb').is_file(), key)
             self.assertTrue((ASSET_DIR / f'{key}.json').is_file(), key)
 
+    def test_platelet_skin_and_looping_gameplay_clips(self):
+        gltf, binary, meta = self.load('platelet')
+        for node in gltf['nodes']:
+            if 'mesh' in node:
+                self.assertIn('skin', node)
+                for prim in gltf['meshes'][node['mesh']]['primitives']:
+                    self.assertTrue({'JOINTS_0', 'WEIGHTS_0'} <= prim['attributes'].keys())
+
+        clips = {a['name']: a for a in gltf['animations']}
+        self.assertEqual(set(meta['clips']), set(clips))
+        for name, bone in [('Idle', 'head'), ('Walk', 'thigh.L'), ('Repair', 'forearm.R')]:
+            with self.subTest(name=name):
+                clip = clips[name]
+                channel = next(c for c in clip['channels'] if c['target']['path'] == 'rotation'
+                               and gltf['nodes'][c['target']['node']]['name'] == bone)
+                acc = gltf['accessors'][clip['samplers'][channel['sampler']]['output']]
+                view = gltf['bufferViews'][acc['bufferView']]
+                offset = view.get('byteOffset', 0) + acc.get('byteOffset', 0)
+                rotations = [struct.unpack_from('<4f', binary, offset + i * view.get('byteStride', 16))
+                             for i in range(acc['count'])]
+                self.assertNotEqual(rotations[0], rotations[len(rotations) // 4])
+                for first, last in zip(rotations[0], rotations[-1]):
+                    self.assertAlmostEqual(first, last, places=5)
+
     def test_mesh_indices_match_raylib_order(self):
         for key in CHARACTER_KEYS:
             with self.subTest(key=key):

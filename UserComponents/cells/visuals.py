@@ -97,13 +97,13 @@ class ArenaEffects(Renderable3D):
         dx, dz = a.path.direction(s.escort)
         yaw = math.atan2(dx, -dz)
         moving = not s.blocked_by and not s.wound_closed
-        phase = s.escort*3.2
+        phase = s.escort * math.tau / .65  # Distância de um ciclo completo das duas botas.
         right = (-dz, dx)
         if s.wound_closed:
             # Repair crew spread along the closed wound.
             for i in range(6):
                 x = -8+i*3.2
-                model('platelet').draw(Vec3(x, 0, -65.2), 0, self.time*2+i, False, 0, 0, .5+.5*math.sin(self.time*3+i))
+                model('platelet').draw(Vec3(x, 0, -65.2), 0, self.time+i*.31, animation='Repair')
             return
         # A big crate of repair materials carried by the crew (references: platelets carrying loads).
         cx, cy, cz = head

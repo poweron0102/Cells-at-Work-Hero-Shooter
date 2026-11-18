@@ -147,10 +147,10 @@ gravado no UV de cada face. Para editar e reexportar, veja
 
 ## Personagens
 
-Os oito heróis, as hemácias e as plaquetas são modelos novos feitos no Blender a
-partir das imagens de `Assets/characters/` (`scripts/build_characters.py`),
-exportados em partes animadas proceduralmente pelo jogo. Veja
-`Assets/characters/SOURCES.md` para regenerar.
+Os personagens foram modelados no Blender a partir das imagens de `Assets/characters/`.
+A plaqueta é editável em `Assets/Characters3D/platelet.blend`. As ações `Idle`, `Walk`
+e `Repair` acompanham o esqueleto no GLB. Os oito heróis e a hemácia usam animação
+procedural por partes. Para reexportar, veja `scripts/build_characters.py`.
 
 ## Armas e tiros
 

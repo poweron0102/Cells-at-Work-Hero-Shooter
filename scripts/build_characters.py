@@ -5,7 +5,8 @@ Uso (a partir da raiz do repositório):
     & 'C:\\Program Files\\Blender Foundation\\Blender 5.2\\blender.exe' --background --factory-startup `
         --python scripts\\build_characters.py -- [--only neutrophil,b_cell] [--no-preview]
 
-Todo personagem é modelado do zero com primitivas procedurais (lathe, tubos varridos,
+A plaqueta usa a cena de autoria platelet.blend, com esqueleto e ações. Os demais
+personagens são modelados com primitivas procedurais (lathe, tubos varridos,
 elipsoides, placas extrudadas) e algumas passagens de modificadores do Blender
 (Subdivision/Bevel), aplicados antes da exportação. As cores ficam num atributo de cor
 por canto (byte color, sRGB) e cada parte é exportada como um objeto de malha separado,
@@ -1479,7 +1480,55 @@ def to_gltf(v):
     return [round(v.x, 4), round(v.z, 4), round(-v.y, 4)]
 
 
+def build_platelet_from_blend():
+    """Exporta a malha deformável e as ações da cena de autoria."""
+    with bpy.data.libraries.load(str(OUT / 'platelet.blend')) as (source, loaded):
+        loaded.collections = ['Plaqueta']
+        loaded.actions = list(source.actions)
+    collection = loaded.collections[0]
+    bpy.context.scene.collection.children.link(collection)
+    bpy.ops.object.select_all(action='DESELECT')
+    for obj in collection.all_objects:
+        obj.select_set(True)
+    rig = next(obj for obj in collection.all_objects if obj.type == 'ARMATURE')
+    meshes = [obj for obj in collection.all_objects if obj.type == 'MESH']
+    bpy.context.view_layer.objects.active = rig
+    path = OUT / 'platelet.glb'
+    bpy.ops.export_scene.gltf(filepath=str(path), export_format='GLB', use_selection=True,
+                              export_animation_mode='ACTIONS', export_anim_single_armature=True,
+                              export_anim_slide_to_zero=True, export_frame_range=False,
+                              export_vertex_color='ACTIVE')
+    gltf, _ = read_glb(path)
+    mapping, count = raylib_mesh_indices(gltf)
+    clips = [a['name'] for a in gltf['animations']]
+    if set(clips) != {'Idle', 'Walk', 'Repair'}:
+        raise ValueError(f'Clipes da plaqueta: {clips}')
+    primitives = [p for m in gltf['meshes'] for p in m['primitives']]
+    height = max(gltf['accessors'][p['attributes']['POSITION']]['max'][1] for p in primitives)
+    meta = {'key': 'platelet', 'height': height, 'convention': CONVENTION, 'mesh_count': count,
+            'triangles': sum(gltf['accessors'][p['indices']]['count'] // 3 for p in primitives),
+            'clips': clips, 'parts': []}
+    for obj in meshes:
+        name = obj.name.split('.', 1)[1]
+        kind, _, side = name.partition('_')
+        bone = {'arm': 'upper_arm', 'leg': 'thigh'}.get(kind, kind)
+        if side:
+            bone += '.' + side.upper()
+        joint = rig.data.bones.get(bone)
+        pivot = to_gltf(joint.head_local) if joint else [0, 0, 0]
+        meta['parts'].append({'name': name, 'mesh': mapping[obj.name][0], 'pivot': pivot,
+                              'parent': 'body', 'swing': kind if kind in ('leg', 'arm', 'head') else 'static'})
+    (OUT / 'platelet.json').write_text(json.dumps(meta, indent=1, ensure_ascii=False), encoding='utf-8')
+    # As prévias em grupo reposicionam as malhas individualmente depois da exportação.
+    for obj in meshes:
+        obj.modifiers.clear()
+        obj.parent = None
+    return meshes
+
+
 def build(key):
+    if key == 'platelet':
+        return build_platelet_from_blend()
     spec = BUILDERS[key]()
     parts = spec['parts']
     # Pés exatamente em z=0 (o menor vértice de qualquer parte).

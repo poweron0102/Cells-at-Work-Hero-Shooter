@@ -1,4 +1,4 @@
-"""Personagens 3D: GLBs gerados no Blender (scripts/build_characters.py) + animação procedural.
+"""Personagens 3D do Blender com clipes esqueléticos ou animação por partes.
 
 Cada personagem é um GLB com uma malha por parte (body, arm_l, arm_r, leg_l, leg_r, weapon,
 tail, tentacles_*, ...) e um JSON com o índice da malha no raylib, o pivô da articulação e a
@@ -144,6 +144,20 @@ class _Rig:
         if self.model.meshCount != meta.get('mesh_count', self.model.meshCount):
             raise RuntimeError(f'{key}: GLB tem {self.model.meshCount} malhas, JSON espera {meta["mesh_count"]}')
         self.material = rl.load_material_default()
+        self.animations = None
+        self.clips = {}
+        self.animation_count = 0
+        if meta.get('clips'):
+            count = _ffi.new('int *')
+            self.animations = rl.load_model_animations(str(ASSET_DIR / f'{key}.glb'), count)
+            self.animation_count = count[0]
+            for i in range(self.animation_count):
+                clip = self.animations[i]
+                if rl.is_model_animation_valid(self.model, clip):
+                    self.clips[_ffi.string(clip.name).decode()] = clip
+            if set(self.clips) != set(meta['clips']):
+                self.unload()
+                raise ValueError(f'{key}: clipes incompatíveis com o esqueleto')
         parts = [_Part(e, self.model.meshes[e['mesh']]) for e in meta['parts']]
         # Pais antes dos filhos (a arma usa a matriz do braço direito).
         order = {p.name: i for i, p in enumerate(parts)}
@@ -157,6 +171,8 @@ class _Rig:
         self.mount = (tuple(tuple(r[:3]) for r in mount['matrix']), tuple(r[3] for r in mount['matrix']))             if mount else None
 
     def unload(self):
+        if self.animations:
+            rl.unload_model_animations(self.animations, self.animation_count)
         # O shader do material é o toon compartilhado: não deixa UnloadMaterial descarregá-lo.
         self.material.shader = rl.Shader(rl.rl_get_shader_id_default(), rl.rl_get_shader_locs_default())
         rl.unload_material(self.material)
@@ -200,7 +216,7 @@ class CharacterModel:
         return rig
 
     def draw(self, position, yaw=0, phase=0, moving=False, reveal=0, shield=0, action=0.0, tint=None, kick=0.0,
-             weapon=True, cull=None):
+             weapon=True, cull=None, animation=None):
         """Desenha o personagem; ``kick`` (0..1) é o recuo do último disparo. Se o herói tem arma
         montada (e ``weapon``), desenha a arma na mão e devolve a posição do cano no mundo.
         ``cull`` ('front'/'back') liga o descarte de faces, usado pelos passes de contorno/silhueta."""
@@ -224,6 +240,22 @@ class CharacterModel:
         else:
             model_lighting.set_highlight(0.0, 0.0, 0.0, 0.0)
         bob = abs(math.sin(phase)) * 0.035 * walk + math.sin(t * 2.1) * 0.006 * (1 - walk)
+        if rig.clips:
+            name = animation or ('Walk' if moving else 'Idle')
+            clip = rig.clips[name]
+            # Raylib reamostra o glTF a 60 Hz. A passada acompanha a distância da escolta.
+            period = max(1, clip.keyframeCount - 1)
+            if name == 'Walk':
+                frame = (phase % math.tau) / math.tau * period
+            else:
+                frame = ((t if name == 'Idle' else phase) * 60) % period
+            if action > 0 and animation is None:
+                work = rig.clips['Repair']
+                work_frame = (t * 60) % max(1, work.keyframeCount - 1)
+                rl.update_model_animation_ex(rig.model, clip, frame, work, work_frame, min(1, action))
+            else:
+                rl.update_model_animation(rig.model, clip, frame)
+            bob = 0.0
         rl.rl_push_matrix()
         rl.rl_translatef(position.x, position.y + bob, position.z)
         rl.rl_rotatef(180 - math.degrees(yaw), 0, 1, 0)
@@ -235,6 +267,9 @@ class CharacterModel:
             rl.rl_disable_backface_culling()
         mats = {}
         for part in rig.parts:
+            if rig.clips:
+                _DrawMesh(part.mesh, material, rig.identity[0])
+                continue
             m = self._part_transform(part, phase, walk, t, action, kick if part.name == rig.mount_part else 0.0)
             parent = mats.get(part.parent) if part.parent != 'body' else None
             if parent is not None:
