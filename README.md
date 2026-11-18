@@ -148,7 +148,8 @@ O jogo carrega `Assets/Maps/BairroArterial/BairroArterial.glb`, `runtime.json`
 Blender. Os padrões (tijolo, pedras irregulares, ladrilhos, madeira, água) são
 desenhados por um shader em `UserComponents/cells/scenery.py` a partir do id
 gravado no UV de cada face. A iluminação em estilo anime (sombra do sol em faixas,
-túneis e vãos cobertos mais escuros, postes acesos onde falta céu) é calculada ao
+túneis e vãos cobertos mais escuros, postes acesos onde falta céu, contorno de
+nanquim nas quinas e silhuetas) é calculada ao
 carregar o mapa por `UserComponents/cells/lighting.py` e vale também para os
 personagens. Para editar e reexportar, veja
 [docs/MAPA_BAIRRO_ARTERIAL.md](docs/MAPA_BAIRRO_ARTERIAL.md).

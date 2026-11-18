@@ -83,10 +83,14 @@ carregar o mapa (≈0,5 s, só com GPU), a partir da própria geometria do GLB:
   Objetos com menos de ~1 m de largura (fios, corrimãos, postes) são ignorados aqui.
 - **Postes**: as cabeças com padrão 13 viram luzes quentes, visíveis só onde falta céu.
 - Água (5) e lanternas (13) não fazem sombra; redes (12) fazem sombra quadriculada.
+- **Contorno de nanquim** (`scenery.py`): a cada quadro um passe grava normal e
+  distância do mapa numa textura do tamanho da tela; o shader traça onde a superfície
+  termina (silhueta) ou dobra (quina). O traço tem 1 px a cada 1080 linhas e fica mais
+  leve ao longe. A água não recebe traço. `draw_district(..., ink=False)` desliga.
 
 Personagens e a arma em primeira pessoa usam as mesmas texturas
 (`model_lighting.py`), então escurecem junto com o cenário. O minimapa é desenhado
-sem essa luz. Para mudar o horário, altere `SUN` (personagens acompanham) e a paleta
+sem essa luz e sem contorno. Para mudar o horário, altere `SUN` (personagens acompanham) e a paleta
 `SUN_COLOR`/`SHADE_COLOR`/`DEEP_COLOR` no mesmo arquivo; não é preciso reexportar.
 
 ## Regras que a geometria precisa manter

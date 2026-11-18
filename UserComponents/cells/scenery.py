@@ -3,8 +3,13 @@
 O GLB guarda cor por vertice e, em UV.x, o id do padrao (tijolo, pedra,
 ladrilho, madeira, agua animada...). O shader desenha os padroes no espaco do
 mundo e aplica a iluminacao de ``lighting.py`` (sol com sombra projetada em
-faixas, ceu ocluido em tuneis/sob pontes, postes), ceu em degrade e neblina
-quente que brilha na direcao do sol.
+faixas, ceu ocluido em tuneis/sob pontes, postes), contorno de nanquim, ceu em
+degrade e neblina quente que brilha na direcao do sol.
+
+Contorno: um passe desenha so normal + distancia do mapa numa textura RGBA8 do
+tamanho da tela. O shader principal le os
+vizinhos de cada pixel e escurece onde a superficie termina (silhueta, do lado de
+quem esta na frente) ou dobra (quina), como o traco dos cenarios do anime.
 Carregado sob demanda: servidores e testes sem GPU nunca abrem o modelo.
 """
 import pyray as rl
@@ -46,8 +51,51 @@ uniform vec3 viewPos;
 uniform float time;
 uniform vec3 fogColor;
 uniform float fogDensity;
+uniform sampler2D inkBuf;   // passe de contorno: normal + distancia (ver INK_PACK)
+uniform vec4 inkView;       // x, y = origem do viewport; z = ligado; w = raio em pixels
 out vec4 finalColor;
 ''' + lighting.GLSL + '''
+
+// Buffer de contorno em RGBA8: rg = normal octaédrica, ba = distância em log (16 bits).
+const float INK_NEAR = 0.05;
+const float INK_LOG = 11.2898;  // log(4000 / 0.05)
+vec3 inkNormal(vec2 e) {
+    e = e * 2.0 - 1.0;
+    vec3 n = vec3(e, 1.0 - abs(e.x) - abs(e.y));
+    float t = max(-n.z, 0.0);
+    n.x += n.x >= 0.0 ? -t : t;
+    n.y += n.y >= 0.0 ? -t : t;
+    return normalize(n);
+}
+// Devolve (normal, 1/distancia); ceu = distancia maxima.
+vec4 inkAt(ivec2 p) {
+    ivec2 last = textureSize(inkBuf, 0) - 1;
+    vec4 raw = texelFetch(inkBuf, clamp(p, ivec2(0), last), 0);
+    float t = floor(raw.b * 255.0 + 0.5) * 256.0 + floor(raw.a * 255.0 + 0.5);
+    float dist = INK_NEAR * exp(t / 65535.0 * INK_LOG);
+    return vec4(inkNormal(raw.rg), 1.0 / dist);
+}
+// Silhueta: o vizinho esta mais longe do que o plano deste pixel preve (a superficie
+// acaba aqui). 1/distancia e afim na tela para planos, entao a previsao e exata no
+// chao em angulo rasante e nao gera traco falso. Ceu = 0 (infinitamente longe).
+float inkSilhouette(float i0, vec4 a, vec4 b) {
+    float pa = max(2.0 * i0 - b.a, 1e-4);
+    float pb = max(2.0 * i0 - a.a, 1e-4);
+    // Relativo: quanto o vizinho real está atrás do previsto, em fração da distância.
+    return max(pa / max(a.a, 1e-4), pb / max(b.a, 1e-4)) - 1.0;
+}
+float inkEdge(ivec2 px, out float d0) {
+    int r = int(inkView.w);
+    vec4 me = inkAt(px);
+    vec4 l = inkAt(px - ivec2(r, 0)), rr = inkAt(px + ivec2(r, 0));
+    vec4 dn = inkAt(px - ivec2(0, r)), up = inkAt(px + ivec2(0, r));
+    d0 = 1.0 / max(me.a, 1e-4);
+    float sil = max(inkSilhouette(me.a, l, rr), inkSilhouette(me.a, dn, up));
+    float edge = smoothstep(0.035, 0.08, sil);
+    // Quina: a normal muda em relacao ao vizinho da direita/de cima (um lado so: traco de 1 px).
+    float bend = 1.0 - min(dot(me.rgb, rr.rgb), dot(me.rgb, up.rgb));
+    return max(edge, smoothstep(0.18, 0.4, bend));
+}
 
 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 vec2 hash2(vec2 p) { return fract(sin(vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)))) * 43758.5453); }
@@ -92,6 +140,7 @@ vec3 bricks(vec2 uv, vec3 col, vec2 size, float mortar, float vary) {
 }
 
 void main() {
+    ivec2 inkPx = ivec2(gl_FragCoord.xy - inkView.xy);
     vec3 n = normalize(wNor);
     vec3 col = vCol.rgb * colDiffuse.rgb;
     int pat = int(floor(vPat));
@@ -183,6 +232,13 @@ void main() {
         // Lanternas acesas: mais vivas onde esta escuro.
         col *= mix(1.35, 1.0, smoothstep(0.2, 0.7, sky));
     }
+    if (inkView.z > 0.5 && pat != 5) {
+        float d0;
+        float ink = inkEdge(inkPx, d0);
+        // Traco forte de perto, mais leve ao longe (a neblina termina de apagar).
+        ink *= mix(0.9, 0.35, smoothstep(20.0, 110.0, d0));
+        col = mix(col, col * vec3(0.30, 0.25, 0.30), ink);
+    }
     vec3 V = wPos - viewPos;
     float dist = length(V);
     float fog = 1.0 - exp(-pow(dist * fogDensity, 1.6));
@@ -204,6 +260,40 @@ void main() { gl_Position = mvp * vec4(vertexPosition, 1.0); }
 PREPASS_FRAGMENT = '''#version 330
 out vec4 finalColor;
 void main() { finalColor = vec4(1.0); }
+'''
+
+INK_VERTEX = '''#version 330
+in vec3 vertexPosition;
+in vec3 vertexNormal;
+uniform mat4 mvp;
+uniform mat4 matModel;
+invariant gl_Position;
+out vec3 wNor;
+out float invDist;
+void main() {
+    wNor = normalize(mat3(matModel) * vertexNormal);
+    gl_Position = mvp * vec4(vertexPosition, 1.0);
+    invDist = 1.0 / max(gl_Position.w, 1e-3);
+}
+'''
+INK_FRAGMENT = '''#version 330
+in vec3 wNor;
+in float invDist;
+out vec4 finalColor;
+const float INK_NEAR = 0.05;
+const float INK_LOG = 11.2898;
+vec2 oct(vec3 n) {
+    n /= abs(n.x) + abs(n.y) + abs(n.z);
+    vec2 e = n.xy;
+    if (n.z < 0.0) e = (1.0 - abs(n.yx)) * vec2(n.x >= 0.0 ? 1.0 : -1.0, n.y >= 0.0 ? 1.0 : -1.0);
+    return e * 0.5 + 0.5;
+}
+void main() {
+    float t = clamp(log(1.0 / (invDist * INK_NEAR)) / INK_LOG, 0.0, 1.0);
+    float v = floor(t * 65535.0 + 0.5);
+    float hi = floor(v / 256.0);
+    finalColor = vec4(oct(normalize(wNor)), hi / 255.0, (v - hi * 256.0) / 255.0);
+}
 '''
 
 SKY_VERTEX = '''#version 330
@@ -229,10 +319,18 @@ void main() {
 ''' % ', '.join(f'{c:.4f}' for c in lighting.SUN)
 
 
+INK_SLOT = 12  # unidade de textura do contorno (10 e 11 sao da iluminacao)
+_GL = {}
+
+
 class _Shared:
     model = None
     shader = None
     prepass = None
+    ink_shader = None
+    ink_target = None
+    ink_size = None
+    ink_locs = {}
     sky_shader = None
     sky = None
     users = 0
@@ -251,6 +349,9 @@ def _load():
     _Shared.model, _Shared.shader = model, shader
     _Shared.locs = {name: rl.get_shader_location(shader, name) for name in ('viewPos', 'time', 'fogColor', 'fogDensity')}
     _Shared.prepass = rl.load_shader_from_memory(PREPASS_VERTEX, PREPASS_FRAGMENT)
+    _Shared.ink_shader = rl.load_shader_from_memory(INK_VERTEX, INK_FRAGMENT)
+    _Shared.ink_locs = {name: rl.get_shader_location(shader, name) for name in ('inkBuf', 'inkView')}
+    _set(shader, _Shared.ink_locs['inkView'], (0.0, 0.0, 0.0, 1.0), 'vec4')
     lighting.register(shader)
     try:
         lighting.bake(model, (X0, Z0, X1, Z1))
@@ -267,6 +368,12 @@ def _set(shader, loc, values, kind):
         return
     if kind == 'vec3':
         rl.set_shader_value(shader, loc, rl.ffi.new('float[3]', values), rl.SHADER_UNIFORM_VEC3)
+    elif kind == 'vec4':
+        rl.set_shader_value(shader, loc, rl.ffi.new('float[4]', values), rl.SHADER_UNIFORM_VEC4)
+    elif kind == 'vec2':
+        rl.set_shader_value(shader, loc, rl.ffi.new('float[2]', values), rl.SHADER_UNIFORM_VEC2)
+    elif kind == 'int':
+        rl.set_shader_value(shader, loc, rl.ffi.new('int *', values), rl.SHADER_UNIFORM_INT)
     else:
         rl.set_shader_value(shader, loc, rl.ffi.new('float *', values), rl.SHADER_UNIFORM_FLOAT)
 
@@ -281,9 +388,12 @@ def configure_depth():
     rl.rl_set_clip_planes(.08, 2000)
 
 
-def draw_district(camera_position, time, fog_density=.0062, lit=True):
+def draw_district(camera_position, time, fog_density=.0062, lit=True, ink=None):
     """Draw sky + district; ``camera_position`` is a raylib Vector3. ``lit=False`` skips the
-    baked shadows/sky occlusion (flat colours, used by the minimap)."""
+    baked shadows/sky occlusion (flat colours, used by the minimap); ``ink`` (default: same
+    as ``lit``) draws the ink outline."""
+    if ink is None:
+        ink = lit
     _load()
     shader, locs = _Shared.shader, _Shared.locs
     _set(shader, locs['viewPos'], (camera_position.x, camera_position.y, camera_position.z), 'vec3')
@@ -300,19 +410,95 @@ def draw_district(camera_position, time, fog_density=.0062, lit=True):
     rl.rl_enable_depth_mask()
     rl.rl_enable_backface_culling()
     model = _Shared.model
+    if not (ink and _ink_pass(model, shader)):
+        _set(shader, _Shared.ink_locs['inkView'], (0.0, 0.0, 0.0, 1.0), 'vec4')
+    # Pre-passe de profundidade: o shader caro roda uma vez por pixel visivel.
     rl.rl_draw_render_batch_active()
     rl.rl_color_mask(False, False, False, False)
-    for i in range(model.materialCount):
-        model.materials[i].shader = _Shared.prepass
-    rl.draw_model(model, rl.Vector3(0, 0, 0), 1, rl.WHITE)
-    for i in range(model.materialCount):
-        model.materials[i].shader = shader
+    _draw_model_with(model, _Shared.prepass, shader)
     rl.rl_color_mask(True, True, True, True)
     if not lit:
         lighting.enable(shader, False)
     rl.draw_model(model, rl.Vector3(0, 0, 0), 1, rl.WHITE)
     if not lit:
         lighting.enable(shader, True)
+
+
+def _draw_model_with(model, temporary, shader):
+    for i in range(model.materialCount):
+        model.materials[i].shader = temporary
+    rl.draw_model(model, rl.Vector3(0, 0, 0), 1, rl.WHITE)
+    for i in range(model.materialCount):
+        model.materials[i].shader = shader
+
+
+def _viewport():
+    """(x, y, w, h) do viewport atual via glGetIntegerv (GL 1.1); None se indisponivel."""
+    if 'fn' not in _GL:
+        fn = None
+        try:
+            import ctypes
+            import sys
+            if sys.platform == 'win32':
+                lib = ctypes.WinDLL('opengl32')
+            elif sys.platform == 'darwin':
+                lib = ctypes.CDLL('/System/Library/Frameworks/OpenGL.framework/OpenGL')
+            else:
+                lib = ctypes.CDLL('libGL.so.1')
+            fn = lib.glGetIntegerv
+            fn.argtypes, fn.restype = [ctypes.c_uint, ctypes.POINTER(ctypes.c_int)], None
+        except (OSError, AttributeError):
+            fn = None
+        _GL['fn'] = fn
+    fn = _GL['fn']
+    if fn is None:
+        return None
+    import ctypes
+    out = (ctypes.c_int * 4)()
+    fn(0x0BA2, out)  # GL_VIEWPORT
+    return tuple(out)
+
+
+def _ink_pass(model, shader):
+    """Desenha normal + profundidade do mapa na textura de contorno, com as matrizes da
+    camera atual. Devolve False (e o chamador usa o pre-passe comum) se nao der."""
+    view = _viewport()
+    if view is None or view[2] < 8 or view[3] < 8:
+        return False
+    x, y, w, h = view
+    if _Shared.ink_size != (w, h):
+        if _Shared.ink_target is not None:
+            rl.unload_render_texture(_Shared.ink_target)
+            _Shared.ink_target = None
+        try:
+            _Shared.ink_target = lighting._target(w, h, rl.PixelFormat.PIXELFORMAT_UNCOMPRESSED_R8G8B8A8, True)
+        except RuntimeError:
+            _Shared.ink_size = None
+            return False
+        rl.set_texture_filter(_Shared.ink_target.texture, rl.TextureFilter.TEXTURE_FILTER_POINT)
+        _Shared.ink_size = (w, h)
+    previous = rl.rl_get_active_framebuffer()
+    rl.rl_draw_render_batch_active()
+    rl.rl_enable_framebuffer(_Shared.ink_target.id)
+    rl.rl_viewport(0, 0, w, h)
+    rl.rl_clear_color(128, 128, 255, 255)  # ceu: distancia maxima
+    rl.rl_clear_screen_buffers()
+    rl.rl_disable_color_blend()  # o alfa guarda dados, nao transparencia
+    _draw_model_with(model, _Shared.ink_shader, shader)
+    rl.rl_draw_render_batch_active()
+    rl.rl_enable_color_blend()
+    if previous:
+        rl.rl_enable_framebuffer(previous)
+    else:
+        rl.rl_disable_framebuffer()
+    rl.rl_viewport(x, y, w, h)
+    rl.rl_active_texture_slot(INK_SLOT)
+    rl.rl_enable_texture(_Shared.ink_target.texture.id)
+    rl.rl_active_texture_slot(0)
+    locs = _Shared.ink_locs
+    _set(shader, locs['inkBuf'], INK_SLOT, 'int')
+    _set(shader, locs['inkView'], (float(x), float(y), 1.0, float(max(1, round(h / 1080)))), 'vec4')
+    return True
 
 
 def release():
@@ -323,10 +509,15 @@ def release():
     rl.unload_model(_Shared.model)
     rl.unload_shader(_Shared.shader)
     rl.unload_shader(_Shared.prepass)
+    rl.unload_shader(_Shared.ink_shader)
+    if _Shared.ink_target is not None:
+        rl.unload_render_texture(_Shared.ink_target)
+    _Shared.ink_target = _Shared.ink_size = None
     _Shared.sky.materials[0].shader = rl.Shader()
     rl.unload_model(_Shared.sky)
     rl.unload_shader(_Shared.sky_shader)
     _Shared.model = _Shared.shader = _Shared.sky = _Shared.sky_shader = _Shared.prepass = None
+    _Shared.ink_shader = None
 
 
 class DistrictScenery(Renderable3D):
