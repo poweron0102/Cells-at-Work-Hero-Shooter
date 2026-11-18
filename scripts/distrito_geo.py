@@ -80,6 +80,10 @@ class Geo:
         self.rng = random.Random(seed)
         self.spots = []
         self.overlays = []
+        self.facades = []
+        self.solids = []
+        self.balconies = []
+        self.clear_zones = []
         self.zone('base')
 
     def zone(self, name):
@@ -190,12 +194,20 @@ class Geo:
     def tube(self, pts, r, color, pat=PLAIN, seg=8, collide=False, caps=True):
         """Sweep a circle along a polyline (pipes, arches, rails)."""
         rings = []
+        u = None
         for i, p in enumerate(pts):
             a = pts[max(0, i-1)]
             b = pts[min(len(pts)-1, i+1)]
             t = _norm(_sub(b, a))
-            up = (0, 1, 0) if abs(t[1]) < .9 else (1, 0, 0)
-            u = _norm(_cross(t, up))
+            if u is None:
+                up = (0, 1, 0) if abs(t[1]) < .9 else (1, 0, 0)
+                u = _norm(_cross(t, up))
+            else:
+                # Parallel transport: keep the previous ring orientation, only remove the
+                # component along the new tangent. A fixed "up" flips the frame when the
+                # tube turns vertical (arch feet), which twisted the rings into a braid.
+                d = _dot(u, t)
+                u = _norm((u[0]-t[0]*d, u[1]-t[1]*d, u[2]-t[2]*d))
             v = _norm(_cross(u, t))
             rings.append([(p[0]+(u[0]*math.cos(k)+v[0]*math.sin(k))*r,
                            p[1]+(u[1]*math.cos(k)+v[1]*math.sin(k))*r,
@@ -397,26 +409,57 @@ class Geo:
         self.box((x, y+.62, z), (.7, .5, .5), WHITE, ry=ry)
         self.cylinder((x, y, z), .05, 1.1, IRON, seg=5, caps=False)
 
-    def laundry(self, x0, x1, y, z):
+    def laundry(self, x0, x1, y, z, drop=(.4, .8), rng=None):
+        """Clothesline along x with clothes hanging from it (callers provide the supports)."""
         self.tube([(x0, y, z), (x1, y, z)], .02, IRON, seg=4, caps=False)
-        rng = self.rng
+        rng = rng or self.rng
         x = x0+.3
         while x < x1-.4:
-            w = rng.uniform(.3, .6)
+            w = min(rng.uniform(.3, .6), x1-.1-x)
             col = rng.choice((WHITE, SKY_BLUE, SALMON, YELLOW, MINT, (240, 240, 250)))
-            self.face([(x, y, z), (x+w, y, z), (x+w, y-rng.uniform(.4, .8), z), (x, y-.6, z)], col, PLAIN, (0, 0, 1))
-            self.face([(x, y, z), (x+w, y, z), (x+w, y-rng.uniform(.4, .8), z), (x, y-.6, z)], col, PLAIN, (0, 0, -1))
+            d0, d1 = rng.uniform(*drop), rng.uniform(*drop)
+            pts = [(x, y, z), (x+w, y, z), (x+w, y-d1, z), (x, y-d0, z)]
+            self.face(pts, col, PLAIN, (0, 0, 1))
+            self.face(pts, col, PLAIN, (0, 0, -1))
             x += w+rng.uniform(.1, .4)
 
     # -- arquitetura --------------------------------------------------------
-    def facade(self, axis_lo, axis_hi, fixed, y0, height, face_dir, along, floor_h=3.2, style='balcony',
-               wall=CREAM, accent=WOOD, ground_floor=None, start_floor=1, laundry=True, crowd=False):
+    def solid(self, lo, hi):
+        """Register a building volume: balconies never grow into it."""
+        self.solids.append((min(lo[0], hi[0]), min(lo[1], hi[1]), min(lo[2], hi[2]),
+                            max(lo[0], hi[0]), max(lo[1], hi[1]), max(lo[2], hi[2])))
+
+    def keep_clear(self, lo, hi):
+        """Wall area reserved for a sign: facades leave out windows and balconies there."""
+        self.clear_zones.append((min(lo[0], hi[0]), min(lo[1], hi[1]), min(lo[2], hi[2]),
+                                 max(lo[0], hi[0]), max(lo[1], hi[1]), max(lo[2], hi[2])))
+
+    @staticmethod
+    def _hits(box, others, eps=.01):
+        return any(box[0] < o[3]-eps and o[0] < box[3]-eps and box[1] < o[4]-eps and o[1] < box[4]-eps
+                   and box[2] < o[5]-eps and o[2] < box[5]-eps for o in others)
+
+    def facade(self, *args, **kw):
+        """Queue a facade; ``flush_facades`` decorates them once every volume is known."""
+        self.facades.append((self.current_name, args, kw))
+
+    def flush_facades(self):
+        previous = self.current_name
+        for zone, args, kw in self.facades:
+            self.zone(zone)
+            self._facade(*args, **kw)
+        self.facades = []
+        self.zone(previous)
+
+    def _facade(self, axis_lo, axis_hi, fixed, y0, height, face_dir, along, floor_h=3.2, style='balcony',
+                wall=CREAM, accent=WOOD, ground_floor=None, start_floor=1, laundry=True, crowd=False):
         """Decorate one face of a block: windows, balconies, cornices.
 
         along='x' -> facade spans x in [axis_lo, axis_hi] at z=fixed; face_dir = +1 (south) / -1 (north).
         along='z' -> facade spans z at x=fixed; face_dir = +1 (east) / -1 (west).
+        Each facade has its own random stream, so its look does not depend on build order.
         """
-        rng = self.rng
+        rng = random.Random(f'{axis_lo:.2f}|{axis_hi:.2f}|{fixed:.2f}|{y0:.2f}|{face_dir}|{along}')
         floors = int((height-.6)/floor_h)
         span = axis_hi-axis_lo
         bays = max(1, int(span/3.6))
@@ -424,6 +467,10 @@ class Geo:
 
         def P(a, y, out):
             return (a, y, fixed+face_dir*out) if along == 'x' else (fixed+face_dir*out, y, a)
+
+        def volume(a0, a1, ylo, yhi, out0, out1):
+            p, q = P(a0, ylo, out0), P(a1, yhi, out1)
+            return (min(p[0], q[0]), ylo, min(p[2], q[2]), max(p[0], q[0]), yhi, max(p[2], q[2]))
         nrm = (0, 0, face_dir) if along == 'x' else (face_dir, 0, 0)
         for f in range(start_floor, floors):
             y = y0+f*floor_h
@@ -433,13 +480,22 @@ class Geo:
                         CREAM2, collide=False)
             for b in range(bays):
                 a = axis_lo+bay*(b+.5)
-                # window
                 w, h = bay*.42, floor_h*.5
                 wy = y+floor_h*.3
+                if self._hits(volume(a-w/2-.2, a+w/2+.2, wy-.3, wy+h+.1, -.2, .4), self.clear_zones):
+                    continue  # a sign hangs here
+                # window
                 pts = [P(a-w/2, wy, .06), P(a+w/2, wy, .06), P(a+w/2, wy+h, .06), P(a-w/2, wy+h, .06)]
-                self.face(pts, GLASS_C if rng.random() < .8 else (250, 226, 170), WINDOW, nrm)
-                if style == 'balcony' and (b+f) % 1 == 0:
+                glass = GLASS_C if rng.random() < .8 else (250, 226, 170)
+                self.face(pts, glass, WINDOW, nrm)
+                if style == 'balcony':
                     bw, depth = bay*.86, 1.15
+                    body = volume(a-bw/2, a+bw/2, y, y+2.2, 0, depth)
+                    # Room in front of it: another facade across a narrow gap would collide.
+                    reach = volume(a-bw/2, a+bw/2, y-.5, y+2.2, .02, depth+1.0)
+                    if self._hits(reach, self.solids) or self._hits(reach, self.balconies):
+                        continue
+                    self.balconies.append(body)
                     c = P(a, y+.08, depth/2)
                     size = (bw, .16, depth) if along == 'x' else (depth, .16, bw)
                     self.box(c, size, accent, PLANK, collide=False)
@@ -456,7 +512,12 @@ class Geo:
                         yaw = (math.pi if face_dir > 0 else 0.0) if along == 'x' else (math.pi/2 if face_dir > 0 else -math.pi/2)
                         self.spots.append((spot[0], spot[1], spot[2], yaw))
                     if laundry and rng.random() < .18 and along == 'x':
-                        self.laundry(a-bw/2+.35, a+bw/2-.35, y+2.1, fixed+face_dir*(depth-.35))
+                        # Clothesline tied to two posts on the outer corners of the balcony,
+                        # with the clothes hanging above the parapet.
+                        out = depth-.12
+                        for sgn in (-1, 1):
+                            self.box(P(a+sgn*(bw/2-.06), y+1.5, out), (.06, .9, .06), IRON, collide=False)
+                        self.laundry(a-bw/2+.06, a+bw/2-.06, y+1.95, fixed+face_dir*out, drop=(.3, .55), rng=rng)
                     if rng.random() < .12:
                         cc = P(a+bw*.3, y+.5, .5)
                         self.sphere(cc, .32, LEAF_C, LEAF, seg=6, rings=4)
@@ -475,6 +536,7 @@ class Geo:
               faces=('north', 'south', 'east', 'west'), style='balcony', accent=WOOD, parapet=True, start_floor=1,
               crowd=False, face_start=None):
         self.bounds((x0, y0, z0), (x1, y0+h, z1), wall, pat, top=roof_color, pats={'top': roof})
+        self.solid((x0, y0, z0), (x1, y0+h, z1))
         if parapet:
             for (a, b) in (((x0, z0), (x1, z0+.3)), ((x0, z1-.3), (x1, z1)), ((x0, z0), (x0+.3, z1)), ((x1-.3, z0), (x1, z1))):
                 self.bounds((a[0], y0+h, a[1]), (b[0], y0+h+.8, b[1]), CREAM2, PLASTER, collide=False)

@@ -14,6 +14,7 @@ de layout é reprodutível.
 | `scripts/export_distrito.py` | Salva o `.blend`, exporta o GLB e escreve `runtime.json`. |
 | `scripts/build_navmesh.py` | Gera `nav.json` (grade em camadas para os bots) a partir da colisão. |
 | `scripts/rebuild_distrito.py` | Monta e exporta em um único processo do Blender sem janela. |
+| `scripts/check_rbc_routes.py` | Confere se cada trecho das rotas das hemácias tem chão contínuo e corredor livre (também em `tests/test_traversal.py`). |
 | `scripts/check_map_overlaps.py` | Detecta faces coplanares sobrepostas (z-fight); também roda em `tests/test_map_geometry.py`. |
 | `scripts/render_district.py` | Vistas do mapa pelo motor do jogo, incluindo cada captura de `capturas/` (`cap00`, `cap01`...). |
 | `Assets/Maps/BairroArterial/` | `BairroArterial.blend`, `.glb`, `runtime.json`, `nav.json`. |
@@ -79,6 +80,14 @@ A exportação junta as faces por zona em blocos de até 60 mil vértices (limit
   canal segue para um túnel de tijolos escuro além das grades.
 - Os prédios do horizonte não se sobrepõem e são rebaixados para não cruzar os
   vasos gigantes do céu.
+- Fachadas são decoradas no fim do build (`g.flush_facades()`), quando todos os volumes
+  já foram registrados com `g.solid(...)` (`g.block` registra sozinho). Uma sacada só
+  aparece se houver 1 m livre à frente dela: nunca invade outro prédio nem outra sacada.
+- Placas na parede usam `g.keep_clear(...)`, que tira as janelas atrás delas.
+- Escadas ficam fora das ruas e chegam de frente na borda do patamar (com abertura no
+  guarda-corpo): o controlador não sobe degraus, então chegar pela lateral não funciona.
+  As hemácias andam em linha reta
+  entre os nós de `rbc_edges`, então todo trecho precisa passar em `check_rbc_routes.py`.
 - O jogo usa plano de recorte próximo de 8 cm (`scenery.configure_depth`).
 
 Os testes de `tests/test_traversal.py` verificam: spawns sobre chão seguro;

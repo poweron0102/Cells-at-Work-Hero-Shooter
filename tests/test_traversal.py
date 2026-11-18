@@ -53,6 +53,15 @@ class TraversalTests(unittest.TestCase):
                 self.assertIsNotNone(y)
                 self.assertAlmostEqual(y, p[1], delta=.35)
 
+    def test_red_blood_cell_routes_never_cross_geometry(self):
+        # Red blood cells walk straight between route nodes: no wall, stair, railing or prop in the way.
+        import sys
+        from pathlib import Path
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1]/'scripts'))
+        from check_rbc_routes import edge_problems
+        from UserComponents.cells.layout import RBC_EDGES
+        self.assertEqual(edge_problems(self.game.physics_world, RBC_NODES, RBC_EDGES), [])
+
     def test_slowest_hero_leaves_canal_by_ramps(self):
         # Ramps along both banks rise toward the higher end (south bank west of the central bridge).
         for start, yaw, bank in (((-6, -1.4, 4.5), -math.pi/2, math.pi), ((6, -1.4, -4.5), math.pi/2, 0)):
@@ -82,6 +91,17 @@ class TraversalTests(unittest.TestCase):
         self.place('macrophage', (-8.8, 1, 72))
         self.drive(240, yaw=0, z=1)
         self.assertGreater(self.actor.transform.y, 4.8)
+
+    def test_plaza_terraces_are_reachable_by_their_stairs(self):
+        # The stairs must end on the terrace itself, not beside it.
+        for start, yaw, inside in (((-18, 1, 26.6), -math.pi/2, lambda x: x < -29), ((18, 1, 26.6), math.pi/2, lambda x: x > 29)):
+            with self.subTest(start=start):
+                self.place('macrophage', start)
+                self.drive(140, yaw=yaw, z=1)
+                self.drive(20)
+                self.assertGreater(self.actor.transform.y, 4.8)
+                self.assertTrue(inside(self.actor.transform.x), self.actor.transform.x)
+                self.assertTrue(self.actor.controller.is_grounded)
 
     def test_navigation_reaches_every_objective_from_both_bases(self):
         nav = self.arena.navigator

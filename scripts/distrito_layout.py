@@ -26,6 +26,7 @@ PIT_FLOOR = -2.5
 # Rampas do canal: (x alto, x baixo, margem) — margem +1 = sul, -1 = norte.
 CANAL_RAMPS = [(-55, -47, 1), (-16, -8, 1), (18, 26, 1), (-26, -18, -1), (16, 8, -1), (52, 44, -1)]
 BRIDGES = {'oeste': (-40, 4, 2.6), 'central': (0, 10, 1.0), 'leste': (40, 6, .9)}
+TERRACE_STAIR = 26.6  # z of the stairs that climb from the plaza onto the corner terraces
 
 
 def build(g, only=None):
@@ -35,11 +36,19 @@ def build(g, only=None):
         if only and fn.__name__ not in only:
             continue
         fn(g)
+    g.flush_facades()
     g.flush_overlays()
     return markers(g)
 
 
 # ---------------------------------------------------------------------------
+def oxygen_sign(g, x, y, z, n):
+    """White panel with the red mark of an oxygen building, on blank wall (no window behind)."""
+    g.box((x+n*.1, y, z), (.1, 2.2, 6), WHITE, collide=False)
+    g.box((x+n*.2, y, z), (.1, 1.4, 1.4), RED_ARCH, collide=False)
+    g.keep_clear((x-.4, y-1.3, z-3.3), (x+.4, y+1.3, z+3.3))
+
+
 def ground(g):
     g.zone('chao')
     side = {'north': ASHLAR, 'south': ASHLAR, 'east': ASHLAR, 'west': ASHLAR, 'top': FLAGSTONE}
@@ -163,6 +172,7 @@ def base(g):
         g.bounds((x, 0, z0), (x+1, h, z1), CREAM, PLASTER)
     g.bounds((x0, 0, z1-1), (x1, h, z1), CREAM, PLASTER)
     g.bounds((x0, h, z0), (x1, h+.6, z1), CREAM2, PLASTER, top=TERRACOTTA, pats={'top': ROOF})
+    g.solid((x0, 0, z0), (x1, h+.6, z1))
     # Station sign band: red with white panel.
     g.box((0, 6.2, z0-.15), (20, 1.6, .3), RED_ARCH, collide=False)
     g.box((0, 6.2, z0-.36), (12, 1.0, .12), WHITE, collide=False)
@@ -198,6 +208,7 @@ def avenue(g):
         g.block(x0, x1, z0, alley[0], 26, faces=faces+('north',), start_floor=1, crowd=True, face_start={face: 2})
         g.block(x0, x1, alley[1], 70, 26, faces=faces+('south',), start_floor=1, crowd=True, face_start={face: 2})
         g.bounds((x0, 4.5, alley[0]), (x1, 26, alley[1]), CREAM, PLASTER)
+        g.solid((x0, 4.5, alley[0]), (x1, 26, alley[1]))
         g.bounds((x0, 4.3, alley[0]), (x1, 4.5, alley[1]), WOOD, PLANK, collide=False)
         g.overlay(x0, alley[0], x1, alley[1], TILE_C, TILE, 5)
         for x in range(x0+3, x1-1, 5):
@@ -304,19 +315,19 @@ def cross_and_plaza(g):
     for s in (-1, 1):
         g.bounds((tx-3.5, 0, tz+s*3.4-.3), (tx+3.5, 1.0, tz+s*3.4+.3), (110, 70, 50), PLANK)
     # Blue pergola arches (east of the plaza).
-    for z in range(10, 27, 4):
+    for z in range(10, 23, 4):
         g.arch_rib((16, 0, z), 7, 5.5, .22, BLUE_STEEL, 'x', 16, METAL)
         for s in (-1, 1):
             g.collider((16+s*3.5-.25, 0, z-.25), (16+s*3.5+.25, 3, z+.25))
     for s in (-1, 0, 1):
         yy = 5.5*math.sqrt(1-(s*2.5/3.5)**2)
-        g.tube([(16+s*2.5, yy, 10), (16+s*2.5, yy, 26)], .16, BLUE_STEEL, METAL)
+        g.tube([(16+s*2.5, yy, 10), (16+s*2.5, yy, 22)], .16, BLUE_STEEL, METAL)
     # Wooden fences, benches, lamps, planters, trees.
     for (x0, z0, x1, z1) in ((-26, 25, -20, 25), (-26, 25, -26, 14), (22, 10, 27, 10)):
         g.railing((x0, 0, z0), (x1, 0, z1), (110, 64, 50), h=.9, gap=.5)
-    for (x, z) in ((-24, 11), (24, 26), (-6, 27), (8, 27), (-8, 10), (8, 10)):
+    for (x, z) in ((-24, 11), (23, 23.5), (-6, 27), (8, 27), (-8, 10), (8, 10)):
         g.lamp(x, 0, z, 4.4)
-    for (x, z) in ((-22, 26), (26, 12), (-4, 26.5), (4, 26.5)):
+    for (x, z) in ((-23, 23), (26, 12), (-5, 26.5), (5, 26.5)):
         g.planter(x, 0, z)
     for (x, z) in ((-24.6, 9.5), (-24.2, 20)):
         g.tree(x, 0, z, .9)
@@ -326,20 +337,23 @@ def cross_and_plaza(g):
     # Corner shop buildings with a terrace at y 4 (upper level over the plaza).
     for x0, x1 in ((-36, -28), (28, 36)):
         g.bounds((x0, 0, 12), (x1, 4, 28), PEACH, PLASTER, top=PAVING, pats={'top': FLAGSTONE})
-        face = 'east' if x0 < 0 else 'west'
-        fx = x1 if x0 < 0 else x0
-        n = 1 if x0 < 0 else -1
-        for z in (15, 20, 25):
+        g.solid((x0, 0, 12), (x1, 4, 28))
+        fx = x1 if x0 < 0 else x0  # plaza side
+        n = 1 if x0 < 0 else -1  # toward the plaza
+        for z in (14.5, 18.5, 22.5):
             g.box((fx+n*.05, 1.5, z), (.1, 2.3, 3.0), (250, 214, 160), WINDOW, collide=False)
             g.box((fx+n*.8, 2.9, z), (1.6, .1, 3.4), RED_ARCH if x0 < 0 else TEAL, collide=False)
-        rail_x = x1-.1 if x0 < 0 else x0+.1
-        g.railing((rail_x, 4, 12), (rail_x, 4, 24.5), IRON)
+        rail_x = fx-n*.1
+        z0s, z1s = TERRACE_STAIR-1.25, TERRACE_STAIR+1.25
+        g.railing((rail_x, 4, 12), (rail_x, 4, z0s), IRON)
         g.railing((x0+.1, 4, 12), (x1-.1, 4, 12), IRON)
-        xm = (x0+x1)/2
-        g.railing((x0+.1, 4, 28), (xm-1.4, 4, 28), IRON)
-        g.railing((xm+1.4, 4, 28), (x1-.1, 4, 28), IRON)
-        # stairs up from the plaza (south end)
-        g.stairs((xm, 0, 36.0), (xm, 4, 28.06), 2.4, STONE, FLAGSTONE, side_color=STONE_D)
+        g.railing((x0+.1, 4, 27.9), (x1-.1, 4, 27.9), IRON)
+        # Stairs from the plaza straight onto the terrace edge (the rail opens there),
+        # along the plaza's south edge so the cross street stays clear.
+        bottom = fx+n*7.94
+        g.stairs((bottom, 0, TERRACE_STAIR), (fx+n*.06, 4, TERRACE_STAIR), 2.5, STONE, FLAGSTONE, side_color=STONE_D)
+        for zz in (z0s+.08, z1s-.08):
+            g.railing((bottom, 0, zz), (fx, 4, zz), IRON)
         g.planter((x0+x1)/2, 4, 18, 3, .7)
         g.bench((x0+x1)/2, 4, 22, math.pi/2)
 
@@ -350,8 +364,7 @@ def west_side(g):
     g.block(-62, -44, 12, 34, 14, wall=MINT, faces=('east', 'north'), style='sill', accent=WHITE)
     g.door(-44, 0, 23, (1, 0), color=SKY_BLUE)
     g.door(-52, 0, 12, (0, -1), color=SKY_BLUE)
-    g.box((-43.9, 9, 23), (.1, 2.2, 6), WHITE, collide=False)
-    g.box((-43.8, 9, 23), (.1, 1.4, 1.4), RED_ARCH, collide=False)
+    oxygen_sign(g, -44, 9, 23, 1)
     for z in (17, 29):
         g.oxygen_box(-42.8, 0, z)
     # Western back block (backdrop) along the WS street.
@@ -388,6 +401,7 @@ def north_center(g):
     # Arcaded shophouses facing the canal: ground floor is an open hall with pillars.
     for x0, x1, gap in ((-36, -8, (-24, -20)), (8, 36, (20, 24))):
         g.bounds((x0, 3.6, -18), (x1, 8, -10), PEACH, PLASTER, top=TERRACOTTA, pats={'top': ROOF})
+        g.solid((x0, 0, -18), (x1, 8, -10))
         g.facade(x0, x1, -10, 3.6, 4.6, 1, 'x', style='shutter', start_floor=0)
         g.facade(x0, x1, -18, 3.6, 4.6, -1, 'x', style='shutter', start_floor=0)
         for x in range(x0+4, x1-3, 4):
@@ -403,12 +417,13 @@ def north_center(g):
     g.overlay(-8, -44, 8, -9, PAVING2, FLAGSTONE, 3)
     g.block(-36, -8, -44, -26, 18, faces=('east', 'south', 'north'), style='balcony', crowd=True)
     g.block(10.5, 36, -44, -26, 18, faces=('west', 'south', 'north'), style='sill', wall=CREAM2, face_start={'west': 2})
-    g.bounds((8, 4.0, -42), (10.5, 4.3, -27.5), WOOD, PLANK)
-    g.railing((8.05, 4.3, -42), (8.05, 4.3, -27.5), WOOD)
+    # The stairs climb along the facade itself (z -27.2 -> -36.5), leaving Rua Norte clear.
+    g.bounds((8, 4.0, -42), (10.5, 4.3, -36.5), WOOD, PLANK)
+    g.railing((8.05, 4.3, -42), (8.05, 4.3, -36.5), WOOD)
     g.railing((8.05, 4.3, -42), (10.5, 4.3, -42), WOOD)
-    g.stairs((9.25, 0, -19), (9.25, 4.3, -27.5), 2.4, WOOD, PLANK, side_color=(190, 140, 76))
-    g.railing((8.05, 0, -19), (8.05, 4.3, -27.5), WOOD)
-    for z in (-30, -36, -41):
+    g.stairs((9.25, 0, -27.2), (9.25, 4.3, -36.5), 2.4, WOOD, PLANK, side_color=(190, 140, 76))
+    g.railing((8.05, 0, -27.2), (8.05, 4.3, -36.5), WOOD)
+    for z in (-38.5, -41):
         g.box((8.2, 2, z), (.25, 4, .25), IRON)
     # Street furniture
     for (x, z) in ((-6, -20), (6, -34), (-6, -40), (6, -24)):
@@ -435,13 +450,14 @@ def north_west(g):
     g.bench(-50, 0, -27)
     g.bench(-58, 0, -35, math.pi/2)
     g.planter(-47, 0, -36)
+    for x in (-61, -50):
+        g.cylinder((x, 0, -25), .07, 3.4, IRON, seg=6)
     g.laundry(-61, -50, 3.2, -25)
     # Building C: oxygen destination, doors south (courtyard) and east (Rua da Obra).
     g.block(-62, -44, -62, -38, 16, wall=(232, 214, 236), faces=('east', 'south'), style='sill', accent=WHITE)
     g.door(-53, 0, -38, (0, 1), color=SKY_BLUE)
     g.door(-44, 0, -50, (1, 0), color=SKY_BLUE)
-    g.box((-43.9, 10, -50), (.1, 2.2, 6), WHITE, collide=False)
-    g.box((-43.8, 10, -50), (.1, 1.4, 1.4), RED_ARCH, collide=False)
+    oxygen_sign(g, -44, 10, -50, 1)
     g.block(-62, -44, -94, -62, 20, faces=('east',), style='shutter', wall=(206, 196, 180))
     for (x, z) in ((-42, -30), (-38, -40), (-42, -56)):
         g.lamp(x, 0, z, 4.2)
@@ -453,8 +469,7 @@ def north_east(g):
     g.block(44, 62, -42, -12, 14, wall=(246, 222, 170), faces=('west', 'north', 'south'), style='sill', accent=WHITE)
     g.door(44, 0, -30, (-1, 0), color=SKY_BLUE)
     g.door(52, 0, -42, (0, -1), color=SKY_BLUE)
-    g.box((43.9, 9, -30), (.1, 2.2, 6), WHITE, collide=False)
-    g.box((43.8, 9, -30), (.1, 1.4, 1.4), RED_ARCH, collide=False)
+    oxygen_sign(g, 44, 9, -30, -1)
     g.overlay(44, -12, 62, -9, PAVING2, FLAGSTONE, 3)
     for i in range(3):
         g.oxygen_box(46+i, 0, -10.5)
@@ -612,6 +627,7 @@ def perimeter(g):
             canal_span = along == 'z' and bz0 < CANAL[1]+2 and bz1 > CANAL[0]-2
             y0 = 3.9 if canal_span else -3
             wall = rng.choice((CREAM, CREAM2, PEACH, (236, 216, 184), MINT)) if not damaged else rng.choice(((206, 186, 172), (196, 170, 160)))
+            g.solid((bx0, -3, bz0), (bx1, h, bz1))
             if canal_span:
                 # Building over the culvert: sits on top of the tunnel vault.
                 g.bounds((bx0, y0, bz0), (bx1, h, bz1), wall, PLASTER, collide=False, top=CREAM2)
@@ -660,6 +676,7 @@ def skyline(g):
                 placed.append(rect)
                 wall = rng.choice((CREAM, CREAM2, PEACH, (236, 216, 184), MINT))
                 g.bounds((rect[0], -3, rect[1]), (rect[2], h, rect[3]), wall, PLASTER, collide=False, top=CREAM2)
+                g.solid((rect[0], -3, rect[1]), (rect[2], h, rect[3]))
                 face = {0: 'south', 1: 'north', 2: 'east', 3: 'west'}[side]
                 fx = {'south': ('x', rect[0], rect[2], rect[3], 1), 'north': ('x', rect[0], rect[2], rect[1], -1),
                       'east': ('z', rect[1], rect[3], rect[2], 1), 'west': ('z', rect[1], rect[3], rect[0], -1)}[face]
@@ -683,19 +700,25 @@ def markers(g):
         P[f'escort.{i:02}'] = p
     P['wound'] = (0, PIT_FLOOR, -78)
     P['recon'] = (-12.2, 0, 18)
+    # Red blood cells walk in straight lines between these nodes: every edge must keep
+    # clear of walls, stairs, railings and props (tests/test_traversal.py checks it).
     nodes = {
-        'depot': (5, 0, 42), 'S': (0, 0, 32), 'SW': (-40, 0, 31), 'A_e': (-42, 0, 23), 'WBs': (-40, 0, 13.5),
-        'WSb': (-45, 0, 10), 'A_n': (-52, 0, 10), 'WB': (-40, 2.6, 0), 'WBn': (-40, 0, -13.5), 'O': (-40, 0, -22),
-        'court': (-48, 0, -31), 'C_s': (-53, 0, -36.5), 'WN': (-40, 0, -48), 'C_e': (-42, 0, -50),
-        'P': (-6.5, 0, 20), 'P2': (6.5, 0, 20), 'Pw': (-27, 0, 10), 'Pw2': (-37, 0, 11.5), 'Pe': (27, 0, 9.5),
+        'depot': (5, 0, 42), 'depot_out': (1.6, 0, 42), 'S': (0, 0, 32), 'SW': (-40, 0, 31), 'A_e': (-42, 0, 23),
+        'WBs': (-40, 0, 13.8), 'WSc': (-43, 0, 13.8), 'WSb': (-43, 0, 10), 'A_n': (-52, 0, 10), 'WB': (-40, 2.6, 0),
+        'WBn': (-40, 0, -13.5), 'O': (-40, 0, -22), 'court': (-48, 0, -31), 'C_s': (-53, 0, -36.5),
+        'WN': (-40, 0, -48), 'C_e': (-42, 0, -50),
+        'P': (-6.5, 0, 20), 'P2': (6.5, 0, 20), 'Pt': (-9.5, 0, 8.5), 'Pt2': (9.5, 0, 8.5), 'Pw': (-27, 0, 8.5),
+        'Pw2': (-37, 0, 11.5), 'Pw3': (-37, 0, 13.8), 'Pe': (27, 0, 8.5),
         'MBs': (0, 0, 10), 'MB': (0, 1, 0), 'MBn': (0, 0, -10), 'NC': (0, 0, -22), 'NS': (2, 0, -34),
         'N': (0, 0, -48), 'L': (40, 0, -22), 'B_w': (42, 0, -30), 'EN': (40, 0, -48), 'B_n': (52, 0, -46),
-        'SE': (40, 0, 31), 'ESs': (40, 0, 13), 'EB': (40, .9, 0), 'EBn': (40, 0, -13),
+        'SE': (40, 0, 31), 'ESs': (40, 0, 11), 'EB': (40, .9, 0), 'EBn': (40, 0, -13),
     }
-    edges = [('depot', 'S'), ('S', 'SW'), ('SW', 'A_e'), ('A_e', 'WBs'), ('WBs', 'WSb'), ('WSb', 'A_n'), ('WBs', 'WB'),
+    edges = [('depot', 'depot_out'), ('depot_out', 'S'), ('S', 'SW'), ('SW', 'A_e'), ('A_e', 'WBs'),
+             ('WBs', 'WSc'), ('WSc', 'WSb'), ('WSb', 'A_n'), ('WBs', 'WB'),
              ('WB', 'WBn'), ('WBn', 'O'), ('O', 'court'), ('court', 'C_s'), ('O', 'WN'), ('WN', 'C_e'),
-             ('S', 'P'), ('S', 'P2'), ('P', 'MBs'), ('P2', 'MBs'), ('P', 'Pw'), ('Pw', 'Pw2'), ('Pw2', 'WBs'),
-             ('P2', 'Pe'), ('Pe', 'ESs'), ('MBs', 'MB'), ('MB', 'MBn'), ('MBn', 'NC'), ('NC', 'O'), ('NC', 'L'),
+             ('S', 'P'), ('S', 'P2'), ('P', 'MBs'), ('P2', 'MBs'), ('P', 'Pt'), ('Pt', 'Pw'), ('Pw', 'Pw2'),
+             ('Pw2', 'Pw3'), ('Pw3', 'WBs'), ('P2', 'Pt2'), ('Pt2', 'Pe'), ('Pe', 'ESs'), ('MBs', 'MB'), ('MB', 'MBn'),
+             ('MBn', 'NC'), ('NC', 'O'), ('NC', 'L'),
              ('NC', 'NS'), ('NS', 'N'), ('N', 'WN'), ('N', 'EN'), ('EN', 'B_n'), ('L', 'B_w'), ('B_w', 'EN'),
              ('L', 'EBn'), ('EBn', 'EB'), ('EB', 'ESs'), ('ESs', 'SE'), ('SE', 'S')]
     for k, v in nodes.items():
