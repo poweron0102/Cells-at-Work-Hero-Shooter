@@ -38,13 +38,14 @@ def load_captures():
 
 def main():
     os.chdir(ROOT)
-    from UserComponents.cells.scenery import draw_district, release, configure_depth
+    from UserComponents.cells.scenery import draw_district, release, configure_depth, prepare
     out = ROOT/'.scratch/district'
     out.mkdir(parents=True, exist_ok=True)
     rl.set_trace_log_level(rl.TraceLogLevel.LOG_WARNING)
     rl.set_config_flags(rl.ConfigFlags.FLAG_WINDOW_HIDDEN | rl.ConfigFlags.FLAG_MSAA_4X_HINT)
     rl.init_window(1280, 720, 'District views')
     configure_depth()
+    prepare()
     extra = load_captures()
     VIEWS.update(extra)
     try:

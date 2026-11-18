@@ -2,12 +2,15 @@
 
 O GLB guarda cor por vertice e, em UV.x, o id do padrao (tijolo, pedra,
 ladrilho, madeira, agua animada...). O shader desenha os padroes no espaco do
-mundo, aplica luz em faixas (cel shading), ceu em degrade e neblina quente.
+mundo e aplica a iluminacao de ``lighting.py`` (sol com sombra projetada em
+faixas, ceu ocluido em tuneis/sob pontes, postes), ceu em degrade e neblina
+quente que brilha na direcao do sol.
 Carregado sob demanda: servidores e testes sem GPU nunca abrem o modelo.
 """
 import pyray as rl
 from EasyCells3D.Components.Camera3D import Renderable3D
-from .layout import MAP_FOLDER, MAP_FILE
+from . import lighting
+from .layout import MAP_FOLDER, MAP_FILE, X0, Z0, X1, Z1
 
 FOG = (0.955, 0.915, 0.835)
 
@@ -18,6 +21,7 @@ in vec3 vertexNormal;
 in vec4 vertexColor;
 uniform mat4 mvp;
 uniform mat4 matModel;
+invariant gl_Position;
 out vec3 wPos;
 out vec3 wNor;
 out vec4 vCol;
@@ -43,6 +47,7 @@ uniform float time;
 uniform vec3 fogColor;
 uniform float fogDensity;
 out vec4 finalColor;
+''' + lighting.GLSL + '''
 
 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 vec2 hash2(vec2 p) { return fract(sin(vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)))) * 43758.5453); }
@@ -163,19 +168,42 @@ void main() {
         col = mix(col, col * vec3(1.35, 1.05, 1.1), l * 0.6);
         col = mix(col, col * 0.6, 1.0 - smoothstep(0.02, 0.06, v.x));
     }
+    float ndl = dot(n, SUN_DIR);
+    float direct, sky;
+    vec3 light = sceneLight(wPos, n, ndl, direct, sky);
     if (lit) {
-        vec3 L = normalize(vec3(-0.42, 0.82, 0.38));
-        float d = dot(n, L);
-        float band = d > 0.38 ? 1.0 : (d > -0.02 ? 0.86 : 0.74);
-        vec3 hemi = mix(vec3(0.9, 0.84, 0.84), vec3(1.03, 1.02, 1.05), n.y * 0.5 + 0.5);
-        col *= band * hemi;
-        if (abs(n.y) < 0.5) col *= mix(0.8, 1.0, smoothstep(-0.4, 1.3, wPos.y));
+        // Dois tons no lado iluminado (topo/fachada de frente x rasante), como pintura de cenario.
+        float tone = mix(0.9, 1.0, smoothstep(0.28, 0.46, ndl));
+        vec3 hemi = mix(vec3(0.96, 0.93, 0.95), vec3(1.02, 1.01, 1.02), n.y * 0.5 + 0.5);
+        col *= mix(light, light * tone, direct) * hemi;
+    } else if (pat == 5) {
+        // Agua: so escurece na sombra (pontes, predios), sem perder o brilho proprio.
+        col *= mix(light * 1.12, vec3(1.0), direct);
+    } else if (pat == 13) {
+        // Lanternas acesas: mais vivas onde esta escuro.
+        col *= mix(1.35, 1.0, smoothstep(0.2, 0.7, sky));
     }
-    float dist = length(wPos - viewPos);
+    vec3 V = wPos - viewPos;
+    float dist = length(V);
     float fog = 1.0 - exp(-pow(dist * fogDensity, 1.6));
-    col = mix(col, fogColor, clamp(fog, 0.0, 0.9));
+    float glow = pow(max(dot(V / max(dist, 1e-3), SUN_DIR), 0.0), 6.0);
+    vec3 haze = mix(fogColor, vec3(1.0, 0.97, 0.88), glow * 0.6);
+    col = mix(col, haze, clamp(fog, 0.0, 0.9));
     finalColor = vec4(col, 1.0);
 }
+'''
+
+# Pre-passe so de profundidade: o shader caro (padroes + luz) roda uma vez por pixel visivel,
+# nao em cada camada de sacada/predio escondida atras de outra.
+PREPASS_VERTEX = '''#version 330
+in vec3 vertexPosition;
+uniform mat4 mvp;
+invariant gl_Position;
+void main() { gl_Position = mvp * vec4(vertexPosition, 1.0); }
+'''
+PREPASS_FRAGMENT = '''#version 330
+out vec4 finalColor;
+void main() { finalColor = vec4(1.0); }
 '''
 
 SKY_VERTEX = '''#version 330
@@ -188,19 +216,23 @@ SKY_FRAGMENT = '''#version 330
 in vec3 dir;
 uniform vec3 fogColor;
 out vec4 finalColor;
+const vec3 SUN_DIR = normalize(vec3(%s));
 void main() {
-    float h = normalize(dir).y;
+    vec3 d = normalize(dir);
     vec3 top = vec3(0.82, 0.9, 0.93);
-    vec3 col = mix(fogColor, top, smoothstep(0.02, 0.55, h));
-    col = mix(col, vec3(1.0, 0.97, 0.88), smoothstep(0.995, 1.0, dot(normalize(dir), normalize(vec3(-0.42, 0.82, 0.38)))));
+    vec3 col = mix(fogColor, top, smoothstep(0.02, 0.55, d.y));
+    float s = max(dot(d, SUN_DIR), 0.0);
+    col = mix(col, vec3(1.0, 0.97, 0.88), pow(s, 6.0) * 0.6);
+    col = mix(col, vec3(1.0, 0.99, 0.94), smoothstep(0.9965, 0.9985, s));
     finalColor = vec4(col, 1.0);
 }
-'''
+''' % ', '.join(f'{c:.4f}' for c in lighting.SUN)
 
 
 class _Shared:
     model = None
     shader = None
+    prepass = None
     sky_shader = None
     sky = None
     users = 0
@@ -218,6 +250,12 @@ def _load():
         model.materials[i].shader = shader
     _Shared.model, _Shared.shader = model, shader
     _Shared.locs = {name: rl.get_shader_location(shader, name) for name in ('viewPos', 'time', 'fogColor', 'fogDensity')}
+    _Shared.prepass = rl.load_shader_from_memory(PREPASS_VERTEX, PREPASS_FRAGMENT)
+    lighting.register(shader)
+    try:
+        lighting.bake(model, (X0, Z0, X1, Z1))
+    except Exception as exc:  # noqa: BLE001 - sem a luz assada o mapa ainda desenha (faixas simples)
+        print(f'WARNING: iluminacao do mapa desativada ({type(exc).__name__}: {exc})', flush=True)
     _Shared.sky_shader = rl.load_shader_from_memory(SKY_VERTEX, SKY_FRAGMENT)
     sky = rl.load_model_from_mesh(rl.gen_mesh_sphere(800, 16, 16))
     sky.materials[0].shader = _Shared.sky_shader
@@ -233,13 +271,19 @@ def _set(shader, loc, values, kind):
         rl.set_shader_value(shader, loc, rl.ffi.new('float *', values), rl.SHADER_UNIFORM_FLOAT)
 
 
+def prepare():
+    """Carrega o mapa e assa a iluminacao fora de qualquer passe de desenho (usa framebuffers)."""
+    _load()
+
+
 def configure_depth():
     """Near plane at 8 cm (raylib default is 1 cm): far fewer depth fights on distant surfaces."""
     rl.rl_set_clip_planes(.08, 2000)
 
 
-def draw_district(camera_position, time, fog_density=.0062):
-    """Draw sky + district; ``camera_position`` is a raylib Vector3."""
+def draw_district(camera_position, time, fog_density=.0062, lit=True):
+    """Draw sky + district; ``camera_position`` is a raylib Vector3. ``lit=False`` skips the
+    baked shadows/sky occlusion (flat colours, used by the minimap)."""
     _load()
     shader, locs = _Shared.shader, _Shared.locs
     _set(shader, locs['viewPos'], (camera_position.x, camera_position.y, camera_position.z), 'vec3')
@@ -248,23 +292,41 @@ def draw_district(camera_position, time, fog_density=.0062):
     _set(shader, locs['fogDensity'], fog_density, 'float')
     sky_loc = rl.get_shader_location(_Shared.sky_shader, 'fogColor')
     _set(_Shared.sky_shader, sky_loc, FOG, 'vec3')
+    lighting.bind()
+    lighting.update_lamps((camera_position.x, camera_position.y, camera_position.z))
     rl.rl_disable_backface_culling()
     rl.rl_disable_depth_mask()
     rl.draw_model(_Shared.sky, camera_position, 1, rl.WHITE)
     rl.rl_enable_depth_mask()
     rl.rl_enable_backface_culling()
-    rl.draw_model(_Shared.model, rl.Vector3(0, 0, 0), 1, rl.WHITE)
+    model = _Shared.model
+    rl.rl_draw_render_batch_active()
+    rl.rl_color_mask(False, False, False, False)
+    for i in range(model.materialCount):
+        model.materials[i].shader = _Shared.prepass
+    rl.draw_model(model, rl.Vector3(0, 0, 0), 1, rl.WHITE)
+    for i in range(model.materialCount):
+        model.materials[i].shader = shader
+    rl.rl_color_mask(True, True, True, True)
+    if not lit:
+        lighting.enable(shader, False)
+    rl.draw_model(model, rl.Vector3(0, 0, 0), 1, rl.WHITE)
+    if not lit:
+        lighting.enable(shader, True)
 
 
 def release():
     if _Shared.model is None:
         return
+    lighting.unregister(_Shared.shader)
+    lighting.release()
     rl.unload_model(_Shared.model)
     rl.unload_shader(_Shared.shader)
+    rl.unload_shader(_Shared.prepass)
     _Shared.sky.materials[0].shader = rl.Shader()
     rl.unload_model(_Shared.sky)
     rl.unload_shader(_Shared.sky_shader)
-    _Shared.model = _Shared.shader = _Shared.sky = _Shared.sky_shader = None
+    _Shared.model = _Shared.shader = _Shared.sky = _Shared.sky_shader = _Shared.prepass = None
 
 
 class DistrictScenery(Renderable3D):
@@ -274,6 +336,8 @@ class DistrictScenery(Renderable3D):
     def init(self):
         super().init()
         configure_depth()
+        if rl.is_window_ready():
+            prepare()
 
     def render(self):
         self.time += rl.get_frame_time()

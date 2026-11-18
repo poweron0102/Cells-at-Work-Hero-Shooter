@@ -189,7 +189,8 @@ class CombatHUD(Canvas):
 
     # -- minimapa -------------------------------------------------------------------------
     def build_minimap(self):
-        from .scenery import draw_district
+        from .scenery import draw_district, prepare
+        prepare()
         w, h = 496, int(496*(Z1-Z0)/(X1-X0))
         target = rl.load_render_texture(w, h)
         cam = rl.Camera3D(rl.Vector3(0, 300, (Z0+Z1)/2), rl.Vector3(0, 0, (Z0+Z1)/2), rl.Vector3(0, 0, -1),
@@ -197,7 +198,7 @@ class CombatHUD(Canvas):
         rl.begin_texture_mode(target)
         rl.clear_background(rl.Color(60, 70, 74, 255))
         rl.begin_mode_3d(cam)
-        draw_district(rl.Vector3(0, 300, 0), 0, .0001)
+        draw_district(rl.Vector3(0, 300, 0), 0, .0001, lit=False)
         rl.end_mode_3d()
         rl.end_texture_mode()
         rl.set_texture_wrap(target.texture, rl.TextureWrap.TEXTURE_WRAP_CLAMP)

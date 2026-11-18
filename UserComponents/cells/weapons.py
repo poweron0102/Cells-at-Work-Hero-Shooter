@@ -546,6 +546,8 @@ class ViewModel(Renderable3D):
             rl.rl_disable_depth_test()
         model_lighting.shader()
         model_lighting.set_light(*VM_LIGHT)
+        eye = self.cam.rl_camera.position
+        model_lighting.set_probe((eye.x, eye.y, eye.z))
         f = self.flash
         flash_k = 0.0
         if f is not None:
@@ -565,6 +567,7 @@ class ViewModel(Renderable3D):
         self.update_swoosh(a, dt)
         model_lighting.set_light(*model_lighting.WORLD_LIGHT)
         model_lighting.set_highlight(0.0, 0.0, 0.0, 0.0)
+        model_lighting.set_probe(None)
         self.draw_shells(dt)
         if flash_k > 0:
             self.draw_flash(a, f, flash_k)

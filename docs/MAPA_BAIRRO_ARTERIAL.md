@@ -70,6 +70,25 @@ desenhado pelo shader de `UserComponents/cells/scenery.py`:
 A exportação junta as faces por zona em blocos de até 60 mil vértices (limite de
 índices de 16 bits do raylib), mantendo poucos *draw calls*.
 
+## Iluminação
+
+A luz não vem do Blender: `UserComponents/cells/lighting.py` "assa" tudo no jogo ao
+carregar o mapa (≈0,5 s, só com GPU), a partir da própria geometria do GLB:
+
+- **Sol** (`lighting.SUN`, do sudoeste, ~53° de altura): mapa de sombra de 4096 px
+  sobre a área jogável e o começo do horizonte. A sombra projetada tem borda nítida
+  (cel) e o mesmo tom lavanda das faces de costas para o sol.
+- **Céu**: volume de visibilidade do céu (voxels de 0,5 m). Túneis, o vão sob pontes,
+  passarelas e pilotis escurecem para um tom quente e profundo; ruas abertas não.
+  Objetos com menos de ~1 m de largura (fios, corrimãos, postes) são ignorados aqui.
+- **Postes**: as cabeças com padrão 13 viram luzes quentes, visíveis só onde falta céu.
+- Água (5) e lanternas (13) não fazem sombra; redes (12) fazem sombra quadriculada.
+
+Personagens e a arma em primeira pessoa usam as mesmas texturas
+(`model_lighting.py`), então escurecem junto com o cenário. O minimapa é desenhado
+sem essa luz. Para mudar o horário, altere `SUN` (personagens acompanham) e a paleta
+`SUN_COLOR`/`SHADE_COLOR`/`DEEP_COLOR` no mesmo arquivo; não é preciso reexportar.
+
 ## Regras que a geometria precisa manter
 
 - Pisos decorativos usam `g.overlay(...)` com prioridade: a exportação recorta os
