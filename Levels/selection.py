@@ -1,11 +1,12 @@
-from UserComponents.cells.screens import SelectionScreen
+from UserComponents.cells.screens import LobbyScreen
 from UserComponents.cells.ui_base import load_ui
 from UserComponents.cells.cursor import set_cursor_captured
 
 
 def init(game):
+    # A seleção de personagem agora fica embutida no lobby (tira de retratos + prévia do kit).
     set_cursor_captured(False)
-    load_ui(game, SelectionScreen())
+    load_ui(game, LobbyScreen(picking=True))
 
 
 def loop(game):

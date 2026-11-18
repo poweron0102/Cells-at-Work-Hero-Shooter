@@ -1,1 +1,1 @@
-"""EasyCells3D scenes: menu, lobby, selection, abrasion and results."""
+"""EasyCells3D scenes: menu, lobby (com a selecao embutida), abrasion and results."""

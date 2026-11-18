@@ -192,3 +192,6 @@ capturas/
 
 # Logs de rede gerados com --rpc-log
 logs/
+
+# Nomes e IPs recentes do menu (locais de cada computador)
+/saves/

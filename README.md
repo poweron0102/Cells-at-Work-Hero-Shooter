@@ -21,9 +21,14 @@ O ambiente `.venv` deste workspace já está preparado. Execute:
 Também pode abrir `Jogar.bat`. No menu, informe seu nome e escolha **Criar sala**.
 Os outros jogadores informam o IPv4 do anfitrião em **IP do servidor** e clicam em
 **Entrar na rede**. Use `127.0.0.1` para vários processos no mesmo computador.
+Os nomes e IPs usados ficam como etiquetas abaixo de cada campo (clique para
+preencher, **×** para apagar); eles são salvos só neste computador, em
+`saves/recentes.json`. Tab troca de campo e Enter entra na rede.
 
-No lobby, **Escolher herói** permite escolher também a facção, respeitando três
-vagas por time. **Iniciar 3v3** exige seis jogadores humanos. **Treino + bots**
+No lobby, seu herói aparece animado e explica as habilidades em balões.
+**Trocar herói** abre a tira de retratos: passar o mouse mostra a prévia do kit,
+clicar marca e **Escolher!** confirma (Esc cancela). Dá para escolher também a
+facção, respeitando três vagas por time. **Iniciar 3v3** exige seis jogadores humanos. **Treino + bots**
 completa as vagas restantes com combatentes de treino identificados como BOT.
 
 ```powershell
@@ -188,7 +193,9 @@ Bairro Arterial, sem partida, bots ou colisões.
 
 ## Estrutura e validação
 
-As cenas `menu`, `lobby`, `selection`, `abrasion` e `results` ficam em `Levels/`.
+As cenas `menu`, `lobby`, `selection` (abre o lobby já na seleção), `abrasion` e `results`
+ficam em `Levels/`. Os menus usam o estilo Mangá de `manga_ui.py` (fontes Bangers e
+M PLUS Rounded 1c, OFL, em `Assets/fonts/`); as telas ficam em `screens.py`.
 Regras, física, combate, rede, interface e fábricas ficam em `UserComponents/cells/`:
 
 - `rules.py`: estado da partida, escolta, colônias, infecção, antígenos, vitória.

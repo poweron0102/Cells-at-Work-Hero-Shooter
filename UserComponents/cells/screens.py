@@ -1,73 +1,22 @@
-"""Menu, lobby, selection and result views; each is mounted by its own Level."""
+"""Menus no estilo Mangá: Menu (M1, com nomes/IPs recentes), Lobby (M2: elenco 3 VS 3, herói
+animado explicando o kit) com a seleção de personagem embutida (S2) e Resultados.
+Cada tela é montada pelo seu Level."""
+import math
+import socket
+import time
 import pyray as rl
-from .ui_base import Canvas, INK, MUTED, PAPER, TEAL, RED, LINE, WHITE
-from .catalog import HEROES, CELLS, BACTERIA, can_select, unlocked
+from . import recents
+from . import kit_lines
+from .catalog import HEROES, KIT, ICONS, CELLS, BACTERIA, BALANCE, UNLOCKS, can_select, unlocked
+from .hud_icons import draw_icon
+from .manga_ui import (MangaCanvas, HeroStage, INK, PAPER, WHITE, YELLOW, RED, CYAN, PINK, BLUSH, MINT,
+                       GREY, MUTED, BURST_SOFT, ease_out)
 from .session import connect, disconnect
 
-
-class MenuScreen(Canvas):
-    def __init__(self):
-        super().__init__()
-        self.ip = "127.0.0.1"
-        self.name = "Worker 1146"
-        self.error = ""
-        self.show_help = False
-
-    def open_session(self, host):
-        try:
-            connect(self.game, "0.0.0.0" if host else self.ip.strip(), 25765, host, self.name)
-        except (OSError, ValueError):
-            self.error = "Nao foi possivel abrir a sala. Confira o IP e a porta 25765."
-            return
-        self.game.new_game("lobby")
-
-    def loop(self):
-        super().loop()
-        if self.focus:
-            text = getattr(self, self.focus)
-            char = rl.get_char_pressed()
-            while char:
-                if 32 <= char < 127 and len(text) < (48 if self.focus == "ip" else 20):
-                    text += chr(char)
-                char = rl.get_char_pressed()
-            if rl.is_key_pressed(rl.KeyboardKey.KEY_BACKSPACE):
-                text = text[:-1]
-            setattr(self, self.focus, text)
-
-    def field(self, field, label, x, y, w):
-        self.text(label, x, y-19, 11, MUTED)
-        self.panel(x, y, w, 43, WHITE)
-        self.panel(x, y+42, w, 2, TEAL if self.focus == field else LINE)
-        self.text(getattr(self, field)+("|" if self.focus == field else ""), x+12, y+10, 18)
-        self.controls.append((self.rect(x, y, w, 43), lambda: setattr(self, "focus", field)))
-
-    def render(self):
-        self.chrome("01 / CENTRAL DE OPERACOES")
-        self.panel(685, 96, 551, 552, (219, 230, 213))
-        self.circle(960, 368, 229, (203, 220, 201))
-        self.circle(960, 368, 187, (229, 236, 220))
-        for i in range(8):
-            self.line(706, 151+i*64, 505, (210, 224, 206))
-        self.text("IMMUNE RESPONSE UNIT", 716, 116, 12, TEAL)
-        self.text("1146", 1043, 546, 73, (176, 202, 179))
-        self.portrait("neutrophil", 724, 139, 439, 487)
-        self.panel(704, 575, 217, 55, INK)
-        self.text("NEUTROPHIL", 721, 584, 21, WHITE)
-        self.text("PRIMEIRA LINHA DE DEFESA", 722, 611, 10, (180, 207, 189))
-        self.text("O CORPO E O SEU CAMPO DE BATALHA.", 47, 118, 13, TEAL)
-        self.text("CELLS", 40, 145, 99)
-        self.text("AT WORK", 40, 239, 99)
-        self.panel(47, 347, 5, 47, RED)
-        self.text("Uma invasao. Seis combatentes.", 65, 345, 23)
-        self.text("Defenda o organismo ou estabeleca a infeccao.", 65, 376, 18, MUTED)
-        self.field("name", "SEU NOME", 47, 434, 216)
-        self.field("ip", "IP DO SERVIDOR", 280, 434, 342)
-        self.button("CRIAR SALA  >", 47, 498, 280, lambda: self.open_session(True), True, h=55)
-        self.button("ENTRAR NA REDE", 343, 498, 279, lambda: self.open_session(False), h=55)
-        self.text("3v3 EM REDE", 47, 579, 13, TEAL)
-        self.text("8 HEROIS", 244, 579, 13, TEAL)
-        self.text("1 CORPO VIVO", 437, 579, 13, TEAL)
-        self.text(self.error or "BAIRRO ARTERIAL  /  Escolta, hemacias, colonias e reconhecimento", 47, 617, 13, RED if self.error else MUTED)
+TEAM_TINT = {CELLS: CYAN, BACTERIA: PINK}
+TEAM_PAGE = {CELLS: MINT, BACTERIA: BLUSH}
+SLOTS = ("rmb", "q", "e", "f")
+KEYS = {"rmb": "RMB", "q": "Q", "e": "E", "f": "F"}
 
 
 def leave(game):
@@ -75,84 +24,631 @@ def leave(game):
     game.new_game("menu")
 
 
-class LobbyScreen(Canvas):
-    def render(self):
-        self.chrome("02 / PREPARACAO DA EQUIPE")
-        net = self.game.session
-        self.text("OPERACAO ABRASION", 45, 110, 42)
-        self.text("Escolha sua funcao. Prepare a equipe. Proteja ou invada.", 47, 164, 18, MUTED)
-        self.text(f"{sum(not p['bot'] for p in net.roster.value.values())} / 6 CONECTADOS", 1018, 121, 19, TEAL)
-        for team, x, title, subtitle, accent in [(CELLS, 46, "DEFESA IMUNE", "CONTER / IDENTIFICAR / ELIMINAR", TEAL),
-                                                (BACTERIA, 658, "INVASAO BACTERIANA", "INVADIR / ADERIR / COLONIZAR", RED)]:
-            self.panel(x, 214, 576, 324, WHITE)
-            self.panel(x, 214, 576, 5, accent)
-            self.text(title, x+22, 236, 27)
-            self.text(subtitle, x+23, 273, 12, MUTED)
-            for row, slot in enumerate(range(3) if team == CELLS else range(3, 6)):
-                y = 310+row*70
-                p = net.roster.value.get(slot)
-                self.line(x+20, y+57, 534)
-                self.text(f"0{slot%3+1}", x+24, y+7, 21, accent)
-                if p:
-                    self.text(p["name"]+("  / VOCE" if slot == net.local_slot else ""), x+79, y, 21)
-                    self.text(HEROES[p["hero"]].name, x+80, y+29, 12, MUTED)
-                else:
-                    self.text("Aguardando combatente...", x+79, y+13, 19, MUTED)
-        self.button("ESCOLHER HEROI", 46, 564, 246, lambda: self.game.new_game("selection"), True, net.local_slot is not None)
-        self.button("SAIR", 309, 564, 103, lambda: leave(self.game))
-        if net.manager.is_server:
-            self.button("TREINO + BOTS", 676, 564, 250, lambda: net.start(True))
-            self.button("INICIAR 3v3  >", 944, 564, 290, lambda: net.start(False), True, len(net.roster.value) == 6)
+def lan_ip():
+    """IPv4 desta máquina na rede local (o connect UDP não envia pacotes)."""
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
+            probe.connect(("10.255.255.255", 1))
+            return probe.getsockname()[0]
+    except OSError:
+        return "127.0.0.1"
+
+
+def key_hit(key):
+    repeat = getattr(rl, "is_key_pressed_repeat", None)
+    return rl.is_key_pressed(key) or bool(repeat and repeat(key))
+
+
+def clip_segment(p0, p1, polygon):
+    """Recorta o segmento p0-p1 no polígono convexo (Cyrus-Beck); None se ficar fora."""
+    t0, t1 = 0.0, 1.0
+    dx, dy = p1[0] - p0[0], p1[1] - p0[1]
+    n = len(polygon)
+    cx = sum(p[0] for p in polygon) / n
+    cy = sum(p[1] for p in polygon) / n
+    for i in range(n):
+        a, b = polygon[i], polygon[(i + 1) % n]
+        nx, ny = b[1] - a[1], a[0] - b[0]
+        if nx * (cx - a[0]) + ny * (cy - a[1]) > 0:  # normal apontando para fora
+            nx, ny = -nx, -ny
+        num = nx * (p0[0] - a[0]) + ny * (p0[1] - a[1])
+        den = nx * dx + ny * dy
+        if abs(den) < 1e-9:
+            if num > 0:
+                return None
+            continue
+        t = -num / den
+        if den < 0:
+            t0 = max(t0, t)
         else:
-            self.text("O anfitriao inicia a partida.", 901, 580, 20, MUTED)
-        self.text(net.error or f"REDE LOCAL  /  TCP + UDP {net.manager.port}  /  {'Compartilhe o IPv4 deste computador com a equipe.' if net.manager.is_server else net.manager.ip}", 48, 636, 14, RED if net.error else MUTED)
+            t1 = min(t1, t)
+        if t0 > t1:
+            return None
+    return (p0[0] + dx * t0, p0[1] + dy * t0), (p0[0] + dx * t1, p0[1] + dy * t1)
 
 
-class SelectionScreen(Canvas):
-    def render(self):
-        self.chrome("03 / SELECAO DE PERSONAGEM")
-        net = self.game.session
-        local = net.roster.value.get(net.local_slot)
-        self.text("CADA CELULA TEM UMA FUNCAO.", 46, 109, 38)
-        self.text("Selecione para ocupar uma vaga. Especialistas imunes sao liberados durante a partida.", 48, 164, 17, MUTED)
-        for i, (key, hero) in enumerate(HEROES.items()):
-            col, row = i % 4, i // 4
-            x, y = 46+col*300, 218+row*184
-            selected = local and local["hero"] == key
-            available = can_select(key, hero.team, net.roster.value, exclude=net.local_slot)
-            if local and local["team"] != hero.team:
-                available = available and sum(p["team"] == hero.team for p in net.roster.value.values()) < 3
-            self.panel(x, y, 279, 165, (218, 231, 211) if selected else WHITE)
-            self.panel(x, y, 4, 165, TEAL if hero.team == CELLS else RED)
-            self.text(hero.name, x+17, y+14, 19)
-            self.text(hero.role, x+18, y+42, 10, MUTED)
-            self.text(f"{hero.health} HP  /  {hero.magazine} MUN.", x+18, y+71, 13)
-            self.text(f"SALTO {hero.jump_height:.1f}m", x+18, y+92, 11, MUTED)
-            self.portrait(key, x+172, y+44, 99, 118)
-            label = "SELECIONADO" if selected else "BLOQUEADO" if not unlocked(key, 0) else "OCUPADO" if not available else "SELECIONAR"
-            self.button(label, x+16, y+115, 164, lambda h=key: net.choose(h), selected, available or bool(selected), h=35)
-        self.button("< VOLTAR A EQUIPE", 46, 610, 280, lambda: self.game.new_game("lobby"), True)
-        self.text("B Cell e Killer T: liberados pelo reconhecimento de antigenos", 640, 625, 15, MUTED)
+
+class MenuScreen(MangaCanvas):
+    """M1 · Página de mangá: título, splash do Neutrófilo e formulário com recentes."""
+
+    def __init__(self):
+        super().__init__()
+        self.recent = recents.load()
+        self.name = self.recent["names"][0]["value"] if self.recent["names"] else "Worker 1146"
+        self.ip = self.recent["ips"][0]["value"] if self.recent["ips"] else "127.0.0.1"
+        self.error = ""
+
+    def open_session(self, host):
+        if not self.name.strip():
+            self.error = "Digite um nome antes de entrar."
+            return
+        try:
+            connect(self.game, "0.0.0.0" if host else self.ip.strip(), 25765, host, self.name.strip())
+        except (OSError, ValueError):
+            self.error = "Não foi possível abrir a sala. Confira o IP e a porta 25765."
+            return
+        recents.push("names", self.name)
+        if not host:
+            recents.push("ips", self.ip)
+        self.game.new_game("lobby")
+
+    def pick(self, field, value):
+        setattr(self, field, value)
+        self.focus = ""
+        self.error = ""
+
+    def forget(self, kind, value):
+        self.recent = recents.remove(kind, value)
+
+    def loop(self):
+        super().loop()
+        if rl.is_key_pressed(rl.KeyboardKey.KEY_TAB):
+            self.focus = "ip" if self.focus == "name" else "name"
+        if not self.focus:
+            if rl.is_key_pressed(rl.KeyboardKey.KEY_ENTER):
+                self.open_session(False)
+            return
+        text = getattr(self, self.focus)
+        limit = 48 if self.focus == "ip" else 20
+        char = rl.get_char_pressed()
+        while char:
+            if 32 <= char < 256 and len(text) < limit:
+                text += chr(char)
+            char = rl.get_char_pressed()
+        ctrl = rl.is_key_down(rl.KeyboardKey.KEY_LEFT_CONTROL) or rl.is_key_down(rl.KeyboardKey.KEY_RIGHT_CONTROL)
+        if ctrl and rl.is_key_pressed(rl.KeyboardKey.KEY_V):
+            pasted = rl.get_clipboard_text()
+            pasted = rl.ffi.string(pasted).decode("utf-8", "ignore") if isinstance(pasted, rl.ffi.CData) else str(pasted or "")
+            text = (text + pasted.strip().splitlines()[0] if pasted.strip() else text)[:limit]
+        if key_hit(rl.KeyboardKey.KEY_BACKSPACE):
+            text = text[:-1]
+        setattr(self, self.focus, text)
+        if rl.is_key_pressed(rl.KeyboardKey.KEY_ENTER):
+            if self.focus == "name":
+                self.focus = "ip"
+            else:
+                self.open_session(False)
+
+    # -- partes ----------------------------------------------------------------------------
+    def field(self, field, label, x, y, w):
+        focused = self.focus == field
+        self.t(label, x, y - 23, 14, INK)
+        if focused:
+            self.panel(x + 5, y + 5, w, 48, YELLOW)
+            self.outline(x + 5, y + 5, w, 48, INK, 2)
+        self.box(x, y, w, 48, WHITE, 3, 0)
+        value = getattr(self, field)
+        caret = "|" if focused and int(time.perf_counter() * 2) % 2 == 0 else ""
+        self.fit(value + caret, x + 14, y + 11, w - 28, 21, font="body")
+        self.click(x, y, w, 48, lambda: setattr(self, "focus", field))
+
+    def recent_row(self, kind, field, x, y, width):
+        entries = self.recent[kind]
+        if not entries:
+            self.t("Os " + ("nomes" if kind == "names" else "IPs") + " usados aparecem aqui.", x, y + 7, 14, MUTED, "body")
+            return
+        self.t("RECENTES", x, y + 8, 13, MUTED)
+        cx = x + self.measure("RECENTES", 13) + 12
+        for entry in entries:
+            value = entry["value"]
+            note = ""
+            if kind == "ips":
+                note = "local" if value in ("127.0.0.1", "localhost") else recents.when(entry["t"])
+            size_guess = 12 + self.measure(value, 15) + (self.measure(" · " + note, 13, "body") if note else 0) + 32
+            if cx + size_guess > x + width:
+                break
+            current = getattr(self, field) == value
+            cx += self.chip(value, cx, y, lambda v=value: self.pick(field, v), lambda v=value: self.forget(kind, v),
+                            YELLOW if current else WHITE, note) + 7
+
+    def splash(self, now, left):
+        top, right, bottom = self.top + 22, self.W - 22, self.bottom - 24
+        slant = 65
+        pts = [(left + slant, top), (right, top), (right, bottom), (left, bottom)]
+        self.poly([(px + 5, py + 5) for px, py in pts], INK)
+        self.poly(pts, WHITE)
+        self.scissor(left, top, right - left, bottom - top)
+        cx, cy = (left + right) / 2 + 80, top + (bottom - top) * .46
+        self.speed_lines(cx, cy, 175, max(820, right - left), INK, 95, 80, spin=now * .015)
+        self.halftone_fade(left, bottom - 200, right - left, 200, INK, 80)
+        art_h = (bottom - top) * 1.04
+        self.art("neutrophil", left, top, right - left, bottom - top, art_h, dx=110, dy=26 + math.sin(now * 2) * 6)
+        self.tri((left - 2, top - 2), (left + slant, top - 2), (left - 2, bottom), PAPER)
+        self.end_scissor()
+        for a, b in zip(pts, pts[1:] + pts[:1]):
+            self.seg(a[0], a[1], b[0], b[1], 4, INK)
+            self.circle(a[0], a[1], 2, INK)
+        # Onomatopeia, legenda e plaqueta
+        self.t("ZAN!", right - 190, top + 50, 76, YELLOW, "title", stroke=3, shadow=5, angle=10)
+        cap = ("Um corte limpo.", "Nenhuma bactéria passa daqui.")
+        cw = max(self.measure(c, 15, "body") for c in cap) + 28
+        self.rbox(left + 100, top + 44, cw, 58, INK, -2)
+        self.rbox(left + 96, top + 40, cw, 58, INK, -2)
+        self.rbox(left + 99, top + 43, cw - 6, 52, WHITE, -2)
+        self.t(cap[0], left + 111, top + 51, 15, font="body", angle=-2)
+        self.t(cap[1], left + 112, top + 71, 15, font="body", angle=-2)
+        self.panel(left + 40, bottom - 96, 278, 44, INK)
+        self.t("NEUTRÓFILO 1146", left + 54, bottom - 90, 33, WHITE, "title")
+        tag = "PRIMEIRA LINHA DE DEFESA"
+        self.box(left + 40, bottom - 44, self.measure(tag, 14) + 22, 26, WHITE, 3, 3)
+        self.t(tag, left + 51, bottom - 40, 14)
+
+    def draw(self):
+        now = time.perf_counter()
+        self.page(PAPER)
+        col = 560 + min(160, (self.W - 1280) * .25)  # coluna do formulário cresce um pouco em telas largas
+        self.splash(now, 22 + col + 22)
+
+        # Quadro A: título
+        self.box(22, 22, col, 286)
+        self.halftone_fade(25, 200, col - 6, 105, INK, 45)
+        self.ring(61, 56, 5, 11, 0, 360, RED)
+        self.t("O CORPO É O SEU CAMPO DE BATALHA", 80, 46, 15)
+        self.t("CELLS", 48, 70, 108, INK, "title")
+        self.t("AT WORK!", 48, 160, 108, RED, "title", stroke=3, shadow=5)
+        x = 50
+        for tag in ("3v3 EM REDE", "8 HERÓIS", "1 CORPO VIVO"):
+            w = self.measure(tag, 14) + 22
+            self.panel(x, 266, w, 26, INK)
+            self.t(tag, x + 11, 270, 14, WHITE)
+            x += w + 8
+
+        # Quadro C: formulário com recentes
+        self.box(22, 326, col, 370)
+        self.rbox(16, 312, 300, 32, INK, -2)
+        self.rbox(12, 308, 300, 32, INK, -2)
+        self.rbox(15, 311, 294, 26, YELLOW, -2)
+        self.t("CAPÍTULO 1 · APRESENTE-SE!", 26, 315, 21, INK, "title", angle=-2)
+        fw = col - 52
+        self.field("name", "SEU NOME", 48, 376, fw)
+        self.recent_row("names", "name", 48, 431, fw)
+        self.field("ip", "IP DO SERVIDOR", 48, 496, fw)
+        self.recent_row("ips", "ip", 48, 551, fw)
+        bw = (fw - 14) / 2
+        self.button("CRIAR SALA!", 48, 598, bw, lambda: self.open_session(True), True, h=58, size=30)
+        self.button("ENTRAR NA REDE", 62 + bw, 598, bw, lambda: self.open_session(False), h=58, size=28, arrow=True)
+        if self.error:
+            self.fit(self.error, 48, 666, fw, 14, tint=RED)
+        else:
+            self.fit("Porta 25765 · Bairro Arterial · clique numa etiqueta para preencher", 48, 667, fw, 14,
+                     tint=MUTED, font="body")
 
 
-class ResultScreen(Canvas):
-    def render(self):
-        self.chrome("05 / RELATORIO DA OPERACAO")
+class LobbyScreen(MangaCanvas):
+    """M2 · elenco 3 VS 3 + herói animado explicando o kit; "Trocar herói" abre a seleção (S2)."""
+
+    LEFT = 96  # depois da lombada
+
+    def __init__(self, picking=False):
+        super().__init__()
+        self.picking = picking
+        self.candidate = None
+        self.hover_hero = None
+        self.stage = HeroStage()
+        self.stage_box = None
+        self.stage_hero = None
+        self.shown = None
+        self.changed = time.perf_counter()
+        self.room = None
+
+    def on_destroy(self):
+        self.stage.unload()
+        super().on_destroy()
+
+    @property
+    def R(self):
+        return self.W - 22
+
+    # -- estado ----------------------------------------------------------------------------
+    @property
+    def net(self):
+        return self.game.session
+
+    def local(self):
+        return self.net.roster.value.get(self.net.local_slot)
+
+    def open_picker(self):
+        local = self.local()
+        if local:
+            self.picking = True
+            self.candidate = local["hero"]
+
+    def close_picker(self):
+        self.picking = False
+        self.candidate = None
+
+    def availability(self, key):
+        """(pode escolher, motivo) para o herói ``key`` no lobby."""
+        net = self.net
+        roster = net.roster.value
+        local = roster.get(net.local_slot)
+        hero = HEROES[key]
+        if local and local["hero"] == key:
+            return True, "ATUAL"
+        if not unlocked(key, 0):
+            return False, f"BLOQUEADO · {BALANCE[UNLOCKS[key]]}"
+        if not can_select(key, hero.team, roster, exclude=net.local_slot):
+            return False, "OCUPADO"
+        if local and local["team"] != hero.team and sum(p["team"] == hero.team for p in roster.values()) >= 3:
+            return False, "EQUIPE CHEIA"
+        return True, ""
+
+    def confirm(self, key):
+        local = self.local()
+        ok, _ = self.availability(key)
+        if not ok:
+            return
+        if local and local["hero"] != key:
+            self.net.choose(key)
+        self.close_picker()
+
+    def loop(self):
+        super().loop()
+        if self.picking:
+            if rl.is_key_pressed(rl.KeyboardKey.KEY_ESCAPE):
+                self.close_picker()
+            elif rl.is_key_pressed(rl.KeyboardKey.KEY_ENTER) and self.candidate:
+                self.confirm(self.candidate)
+        self.stage.warm(HEROES)
+        if self.stage_box and self.stage_hero:
+            _, _, w, h = self.stage_box
+            k = self.scale * self.ss  # o palco também sai supersampleado
+            self.stage.update(self.stage_hero, w * k, h * k)
+
+    # -- partes ----------------------------------------------------------------------------
+    def spine(self, count):
+        self.panel(0, self.top, 72, self.bottom - self.top, INK)
+        self.ring(36, 34, 7, 14, 0, 360, RED)
+        self.circle(36, 34, 7, WHITE)
+        label = "CAP. 2 · OPERAÇÃO ABRASION"
+        w = self.measure(label, 30, "title")
+        self.t(label, 52, 360 - w / 2, 30, WHITE, "title", angle=90)
+        self.panel(10, 664, 52, 34, YELLOW)
+        self.t(f"{count}/6", 36, 669, 24, INK, "title", "c")
+
+    def card(self, slot, x, y, w, h, picking):
+        net = self.net
+        p = net.roster.value.get(slot)
+        if p is None:
+            self.box(x, y, w, h, WHITE, 3, 4, dashed=True)
+            self.halftone_rect(x + 3, y + 3, w - 6, h - 6, INK, 70)
+            self.t("?", x + w / 2, y + h / 2 - 70, 80, WHITE, "title", "c", stroke=3)
+            tw = self.measure("VAGA ABERTA", 14) + 20
+            self.box(x + (w - tw) / 2, y + h / 2 + 20, tw, 28, WHITE, 2, 0)
+            self.t("VAGA ABERTA", x + w / 2, y + h / 2 + 24, 14, INK, align="c")
+            return
+        hero, team = p["hero"], p["team"]
+        mine = slot == net.local_slot
+        if mine:
+            self.panel(x + 1, y + 1, w + 10, h + 10, INK)
+            self.panel(x - 5, y - 5, w + 10, h + 10, YELLOW)
+            self.box(x, y, w, h, WHITE if team == CELLS else BLUSH, 3, 0)
+        else:
+            self.box(x, y, w, h, WHITE if team == CELLS else BLUSH)
+        big = team == CELLS
+        img_h = (330 if big else 230) * h / 270
+        if mine and picking:
+            self.art(hero, x + 3, y + 3, w - 6, h - 6, img_h, dy=8 if big else 20, tint=(150, 150, 150), alpha=120)
+            wob = math.sin(time.perf_counter() * 5) * 3
+            self.t("?", x + w / 2, y + 50, 76, WHITE, "title", "c", stroke=3, angle=wob)
+        else:
+            self.art(hero, x + 3, y + 3, w - 6, h - 6, img_h, dy=8 if big else 20)
+        band = YELLOW if mine else INK
+        self.panel(x + 3, y + h - 52, w - 6, 49, band)
+        name = p["name"] + (" · você" if mine and picking else "")
+        self.fit(name, x + 12, y + h - 48, w - 22, 17, tint=INK if mine else WHITE)
+        sub = "ESCOLHENDO…" if mine and picking else kit_lines.name(hero).upper()
+        self.fit(sub, x + 12, y + h - 25, w - 22, 14, tint=INK if mine else TEAM_TINT[team])
+        if mine and not picking:
+            self.rbox(x + w - 64, y + 10, 56, 26, INK, 6)
+            self.rbox(x + w - 62, y + 12, 52, 22, RED, 6)
+            self.t("VOCÊ", x + w - 53, y + 12, 18, WHITE, "title", angle=6)
+        if p.get("bot"):
+            self.panel(x + 8, y + 8, 40, 22, INK)
+            self.t("BOT", x + 14, y + 11, 14, WHITE)
+
+    def roster(self, picking):
+        h = 250 if picking else 270
+        y = 58
+        avail = self.R - self.LEFT
+        w = min(230.0, (avail - 86 - 2 * 12 - 4 * 12) / 6)
+        total = 6 * w + 4 * 12 + 2 * 12 + 86
+        x = self.LEFT + (avail - total) / 2
+        for slot in range(3):
+            self.card(slot, x, y, w, h, picking)
+            x += w + 12
+        self.burst(x, y + h / 2 - 60, 86, 120, RED, BURST_SOFT, border=6, shadow=4)
+        self.t("VS", x + 43, y + h / 2 - 22, 38, WHITE, "title", "c", stroke=1.5)
+        x += 98
+        for slot in range(3, 6):
+            self.card(slot, x, y, w, h, picking)
+            x += w + 12
+
+    def cut_in(self, hero, x, y, w, h, fill):
+        pts = [(x, y + h * .06), (x + w, y), (x + w * .92, y + h), (x, y + h * .96)]
+        self.poly([(px + 5, py + 5) for px, py in pts], INK)
+        self.poly(pts, fill)
+        k = -h * .36
+        while k < w:
+            seg = clip_segment((x + k, y + h), (x + k + h * .36, y), pts)
+            if seg:
+                (a, b) = seg
+                self.seg(a[0], a[1], b[0], b[1], 3, WHITE, 180)
+            k += 17
+        # Maior retângulo dentro do quadro inclinado: o boneco nunca vaza pela borda de cima.
+        self.stage_box = (x + 4, y + h * .06 + 4, w * .92 - 8, h * .9 - 8)
+        self.stage_hero = hero
+        self.stage.draw(self, *self.stage_box)
+        for a, b in zip(pts, pts[1:] + pts[:1]):
+            self.seg(a[0], a[1], b[0], b[1], 4, INK)
+            self.circle(a[0], a[1], 2, INK)
+        name = kit_lines.name(hero).upper()
+        nw = self.measure(name, 24, "title") + 22
+        self.panel(x + 10, y + h - 46, nw, 32, INK)
+        self.t(name, x + 21, y + h - 42, 24, WHITE, "title")
+
+    def kit_bubbles(self, hero, x, y, w, row_h, size=16):
+        now = time.perf_counter()
+        if hero != self.shown:
+            self.shown, self.changed = hero, now
+        col_w = (w - 16) / 2
+        leading = 1.25
+        max_lines = max(1, int((row_h - 44) / (size * leading)))
+        for i, slot in enumerate(SLOTS):
+            bx = x + (i % 2) * (col_w + 16)
+            by = y + (i // 2) * (row_h + 10)
+            e = ease_out((now - self.changed - i * .1) / .35)
+            if e <= 0:
+                continue
+            alpha = int(255 * e)
+            by += (1 - e) * 12
+            special = slot == "f"
+            self.bubble(bx, by, col_w, row_h, YELLOW if special else WHITE, 20, alpha=alpha)
+            kw = self.kb(KEYS[slot], bx + 14, by + 12, 30, RED if special else INK)
+            title, text = kit_lines.line(hero, slot)
+            icon = ICONS.get(KIT.get(hero, {}).get(slot, ("",))[0])
+            tx = bx + 14 + kw + 10
+            if icon:
+                draw_icon(self, icon, bx + col_w - 32, by + 28, 28, INK)
+            self.fit((title + "!") if special else title, tx, by + 13, col_w - (tx - bx) - 56, 22, font="title",
+                     alpha=alpha)
+            self.wrap(text, tx, by + 40, col_w - (tx - bx) - 18, size, INK, alpha=alpha, max_lines=max_lines,
+                      leading=leading)
+
+    def passive_line(self, hero, x, y, w, h=40):
+        self.circle(x + 6, y + h / 2 + 8, 4, WHITE)
+        self.ring(x + 6, y + h / 2 + 8, 3, 5, 0, 360, INK)
+        self.circle(x + 18, y + h / 2 + 2, 6, WHITE)
+        self.ring(x + 18, y + h / 2 + 2, 5, 7, 0, 360, INK)
+        bx = x + 30
+        self.bubble(bx, y, w - 30, h, WHITE, h / 2, shadow=0, border=2)
+        p_name, p_text = kit_lines.line(hero, "passive")
+        l_name, l_text = kit_lines.line(hero, "lmb")
+        cx = bx + 18
+        cx += self.t(f"PASSIVA · {p_name}", cx, y + h / 2 - 10, 20, INK, "title") + 10
+        right = f"{l_name}: {l_text}"
+        rw = min(320, self.measure(right, 14, "body"))
+        lx = bx + w - 30 - 18 - rw
+        self.kb("LMB", lx - 50, y + h / 2 - 12, 24)
+        self.fit(right, lx, y + h / 2 - 9, rw, 14, font="body")
+        self.fit(p_text, cx, y + h / 2 - 9, lx - 50 - 16 - cx, 14, font="body")
+
+    def footer(self, local):
+        net = self.net
+        roster = net.roster.value
+        y, L, R = 654, self.LEFT, self.R
+        self.button("TROCAR HERÓI", L, y, 196, self.open_picker, True, local is not None, h=50, size=23)
+        self.button("SAIR", L + 210, y, 104, lambda: leave(self.game), h=50, size=23)
+        if net.manager.is_server:
+            missing = 6 - len(roster)
+            label = "INICIAR 3v3" if missing <= 0 else f"INICIAR 3v3 · FALTAM {missing}"
+            self.button(label, R - 256, y, 256, lambda: net.start(False), True, missing <= 0, h=50, size=21,
+                        arrow=missing <= 0)
+            self.button("TREINO + BOTS", R - 256 - 14 - 196, y, 196, lambda: net.start(True), h=50, size=23)
+            middle = (L + 330, R - 256 - 14 - 196 - 16)
+        else:
+            hint = "O anfitrião inicia a partida."
+            self.t(hint, R, y + 15, 16, MUTED, "body", align="r")
+            middle = (L + 330, R - self.measure(hint, 16, "body") - 24)
+        text = net.error or (f"Dica: {kit_lines.tip(local['hero'])}" if local else "")
+        if text:
+            self.wrap(text, middle[0], y + 6, middle[1] - middle[0], 15, RED if net.error else INK, max_lines=2,
+                      leading=1.25)
+
+    def showcase(self, local):
+        L, R = self.LEFT, self.R
+        if local is None:
+            self.stage_hero = None
+            self.bubble(L + 276, 420, 540, 96, WHITE, 26, tail=((L + 324, 510), (L + 364, 510), (L + 304, 546)))
+            self.t("Conectando à sala…", L + 304, 442, 30, INK, "title")
+            self.t("Assim que o anfitrião aceitar, seu herói aparece aqui.", L + 304, 478, 16, font="body")
+            return
+        hero = local["hero"]
+        self.cut_in(hero, L, 360, 250, 266, YELLOW)
+        # Em telas largas os balões ficam compridos: o texto cresce um pouco para preenchê-los.
+        self.kit_bubbles(hero, L + 276, 352, R - L - 276, 106, size=16 + min(2.0, (self.W - 1280) / 200))
+        self.passive_line(hero, L + 276, 586, R - L - 276)
+
+    def picker(self, local):
+        L, R = self.LEFT, self.R
+        focus = self.hover_hero or self.candidate or local["hero"]
+        team = HEROES[focus].team
+        self.cut_in(focus, L, 330, 236, 250, TEAM_TINT[team])
+        hp = HEROES[focus]
+        tag = f"{kit_lines.role(focus).upper()} · {hp.health} HP"
+        tw = self.measure(tag, 13) + 18
+        self.box(L + 10, 330 + 250 - 80, tw, 24, WHITE, 2, 2)
+        self.t(tag, L + 19, 330 + 250 - 76, 13)
+        kx = L + 260
+        lw = self.measure("PRÉVIA DO KIT", 13) + 18
+        self.panel(kx, 330, lw, 24, INK)
+        self.t("PRÉVIA DO KIT", kx + 9, 334, 13, WHITE)
+        p_name, p_text = kit_lines.line(focus, "passive")
+        l_name, l_text = kit_lines.line(focus, "lmb")
+        self.fit(f"Passiva · {p_name}: {p_text}   ·   LMB {l_name}: {l_text}", kx + lw + 12, 333, R - kx - lw - 12, 15,
+                 font="body")
+        self.kit_bubbles(focus, kx, 364, R - kx, 84, size=15)
+        self.fit(f"Dica: {kit_lines.tip(focus)}", kx, 552, R - kx, 15, tint=MUTED, font="body")
+
+        # Tira de retratos
+        self.hover_hero = None
+        x = L
+        for group, title in ((CELLS, "DEFESA IMUNE"), (BACTERIA, "INVASÃO BACTERIANA")):
+            self.t(title, x, 584, 13, INK)
+            for key in [k for k, h in HEROES.items() if h.team == group]:
+                self.frame(key, x, 606, focus)
+                x += 108
+            if group == CELLS:
+                self.panel(x + 2, 606, 3, 100, INK)
+                x += 17
+        strip_end = x - 8
+
+        ok, reason = self.availability(focus)
+        bw, bh = 176, 88
+        bx, by = strip_end + max(16, (R - strip_end - bw) / 2), 588
+        hover = ok and self.hovered(bx, by, bw, bh)
+        grow = 4 if hover else 0
+        self.burst(bx - grow, by - grow, bw + 2 * grow, bh + 2 * grow, YELLOW if ok else GREY, BURST_SOFT, border=8,
+                   shadow=4)
+        label = ("MANTER!" if reason == "ATUAL" else "ESCOLHER!") if ok else "INDISPONÍVEL"
+        self.fit(label, bx + bw / 2, by + 29, 116, 28, font="title", align="c")
+        if ok:
+            self.click(bx, by, bw, bh, lambda h=focus: self.confirm(h))
+        self.button("× CANCELAR", bx + (bw - 140) / 2, 682, 140, self.close_picker, h=28, size=17)
+
+    def frame(self, key, x, y, focus):
+        ok, reason = self.availability(key)
+        team = HEROES[key].team
+        focused = key == focus
+        if self.hovered(x, y, 100, 100):
+            self.hover_hero = key
+        lift = 8 if focused else (4 if self.hovered(x, y, 100, 100) else 0)
+        y -= lift
+        locked = reason.startswith("BLOQUEADO")
+        fill = YELLOW if focused else GREY if locked else TEAM_PAGE[team] if ok else (238, 238, 238)
+        self.box(x, y, 100, 100, fill, 4 if focused else 3, 4 if focused else 3)
+        if locked:
+            self.halftone_rect(x + 3, y + 3, 94, 94, (120, 120, 120), 255)
+        big = team == CELLS
+        tint, alpha = ((80, 80, 80), 255) if locked else ((255, 255, 255), 255 if ok else 115)
+        self.art(key, x + 3, y + 3, 94, 94, 220 if big else 110, dy=4, tint=tint, alpha=alpha)
+        label = kit_lines.name(key) if ok or not reason else reason
+        band = RED if focused else (85, 85, 85) if not ok else INK
+        self.panel(x + 3, y + 76, 94, 21, band)
+        self.fit(label.upper(), x + 50, y + 78, 88, 16, tint=WHITE, font="title", align="c")
+        if reason == "ATUAL":
+            self.panel(x + 6, y + 6, 52, 20, INK)
+            self.t("ATUAL", x + 11, y + 8, 13, YELLOW)
+        if locked:
+            cx, cy = x + 50, y + 38
+            self.round(cx - 11, cy - 4, 22, 18, 3, WHITE)
+            self.ring(cx, cy - 4, 5, 8, 180, 360, WHITE)
+        self.click(x, y, 100, 100, lambda h=key: setattr(self, "candidate", h))
+
+    def draw(self):
+        net = self.net
+        roster = net.roster.value
+        local = self.local()
+        if local is None:
+            self.picking = False
+        self.page(WHITE)
+        self.halftone_rect(72, self.top, self.W - 72, (330 if self.picking else 362) - self.top, INK, 36)
+        self.spine(sum(not p["bot"] for p in roster.values()))
+        if self.room is None:
+            self.room = lan_ip() if net.manager.is_server else net.manager.ip
+        tag = f"SALA {self.room} · PORTA {net.manager.port}" + (" · VOCÊ É O ANFITRIÃO" if net.manager.is_server else "")
+        tw = self.measure(tag, 13) + 22
+        self.panel(self.R - tw, 16, tw, 28, INK)
+        self.t(tag, self.R - tw + 11, 21, 13, WHITE)
+        count = len(roster)
+        if self.picking:
+            story = f"{local['name']} está escolhendo um herói…"
+        else:
+            story = f"{count} de 6 combatentes chegaram ao Bairro Arterial…"
+        sw = self.measure(story, 22, "title") + 28
+        self.rbox(100, 18, sw, 34, INK, -1)
+        self.rbox(96, 14, sw, 34, INK, -1)
+        self.rbox(99, 17, sw - 6, 28, YELLOW, -1)
+        self.t(story, 110, 20, 22, INK, "title", angle=-1)
+        self.roster(self.picking)
+        if self.picking:
+            self.picker(local)
+        else:
+            self.hover_hero = None
+            self.showcase(local)
+            self.footer(local)
+
+
+class ResultScreen(MangaCanvas):
+    """Relatório da operação no mesmo estilo."""
+
+    def draw(self):
         net = self.game.session
         data = net.result or {"state": {}, "actors": {}}
         state = data["state"]
         winner = state.get("winner", CELLS)
-        self.text("INFECCAO CONTIDA" if winner == CELLS else "INFECCAO ESTABELECIDA", 46, 115, 48, TEAL if winner == CELLS else RED)
-        self.text("Resultado decidido por escolta, colonias e infeccao.", 49, 178, 20, MUTED)
-        colonies = len(state.get('colonies', []))
-        self.text(f"TEMPO  {int(state.get('elapsed', 0))//60:02}:{int(state.get('elapsed', 0))%60:02}       ANTIGENO  {int(state.get('recognition', 0))}%       "
-                  f"ESCOLTA  {int(100*state.get('escort', 0)/max(1, state.get('escort_total', 1)))}%       COLONIAS  {colonies}", 49, 223, 17)
+        now = time.perf_counter()
+        self.page(PAPER)
+        R = self.W - 22
+        # Splash do lado vencedor
+        hero = next((p["hero"] for p in net.roster.value.values() if p["team"] == winner), "neutrophil")
+        right, top, bottom = R, 22, 300
+        left = right - 438 - min(220, (self.W - 1280) * .4)
+        self.box(left, top, right - left, bottom - top, WHITE, 3, 5)
+        self.scissor(left + 3, top + 3, right - left - 6, bottom - top - 6)
+        self.speed_lines((left + right) / 2, 160, 70, 420 + (right - left) / 2, INK, 90, 60, spin=now * .02)
+        self.art(hero, left, top, right - left, bottom - top, 520 if HEROES[hero].team == CELLS else 300, dy=10)
+        self.end_scissor()
+        self.outline(left, top, right - left, bottom - top, INK, 3)
+
+        title = "INFECÇÃO CONTIDA!" if winner == CELLS else "INFECÇÃO ESTABELECIDA!"
+        self.fit(title, 46, 40, left - 46 - 24, 74, tint=TEAM_TINT[winner] if winner == CELLS else RED, font="title",
+                 stroke=3, shadow=5)
+        sub = "Resultado decidido por escolta, colônias e infecção."
+        self.rbox(46, 132, self.measure(sub, 16, "body") + 24, 32, YELLOW, -1)
+        self.t(sub, 58, 138, 16, font="body", angle=-1)
+        elapsed = int(state.get("elapsed", 0))
+        stats = [("TEMPO", f"{elapsed // 60:02}:{elapsed % 60:02}"), ("ANTÍGENO", f"{int(state.get('recognition', 0))}%"),
+                 ("ESCOLTA", f"{int(100 * state.get('escort', 0) / max(1, state.get('escort_total', 1)))}%"),
+                 ("COLÔNIAS", str(len(state.get('colonies', []))))]
+        sw = min(186.0, (left - 46 - 24) / 4)
+        for i, (label, value) in enumerate(stats):
+            x = 46 + i * sw
+            self.box(x, 186, sw - 16, 94)
+            self.t(label, x + 14, 195, 14)
+            self.t(value, x + 14, 216, 48, INK, "title")
+
         for i, (slot, player) in enumerate(sorted(net.roster.value.items())):
-            y = 289+i*45
+            y = 318 + i * 50
             a = data["actors"].get(slot, {})
-            self.panel(46, y, 1188, 39, WHITE)
-            self.text(player["name"], 64, y+8, 19)
-            self.text(HEROES[player["hero"]].name, 400, y+9, 17)
-            self.text("CELULAS" if player["team"] == CELLS else "BACTERIAS", 800, y+10, 14, TEAL if player["team"] == CELLS else RED)
-            self.text(f"{a.get('kills', 0)} K   /   {a.get('deaths', 0)} D", 1080, y+8, 18)
-        self.button("VOLTAR AO MENU", 46, 600, 300, lambda: leave(self.game), True)
+            team = player["team"]
+            self.box(46, y, R - 46, 42, WHITE if team == CELLS else BLUSH, 3, 3)
+            self.art(player["hero"], 49, y + 3, 60, 36, 150 if team == CELLS else 80, dy=4)
+            self.fit(player["name"], 124, y + 10, 300, 19)
+            self.t(kit_lines.name(player["hero"]).upper(), 440, y + 8, 25, INK, "title")
+            tag = "CÉLULAS" if team == CELLS else "BACTÉRIAS"
+            tw = self.measure(tag, 14) + 18
+            self.panel(R - 460, y + 9, tw, 24, INK)
+            self.t(tag, R - 451, y + 12, 14, TEAM_TINT[team])
+            self.t(f"{a.get('kills', 0)} K  /  {a.get('deaths', 0)} D", R - 18, y + 6, 30, INK, "title", "r")
+        self.button("VOLTAR AO MENU", 46, 640, 300, lambda: leave(self.game), True, h=54, size=26)
