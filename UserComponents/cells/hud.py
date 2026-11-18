@@ -7,6 +7,7 @@ sempre vermelha (dos dois lados). Dourado = especial.
 """
 import math
 import re
+from contextlib import contextmanager
 from pathlib import Path
 import pyray as rl
 from EasyCells3D.Geometry import Vec3
@@ -68,6 +69,30 @@ class CombatHUD(Canvas):
                 self.fonts[key] = font
             else:
                 self.fonts[key] = self.font
+
+    # -- layout ancorado -------------------------------------------------------------------
+    # O espaco virtual tem altura (ou largura) minima de 720 (1280) e se estende para cobrir a
+    # janela inteira: W x H. Cada bloco do HUD desenha nas coordenadas de referencia 1280x720 e
+    # e deslocado pela ancora (0 = esquerda/topo, .5 = centro, 1 = direita/base).
+    def layout(self):
+        sw, sh = rl.get_screen_width(), rl.get_screen_height()
+        self.scale = min(sw/1280, sh/720)
+        self.W, self.H = sw/self.scale, sh/self.scale
+        self.ox = self.oy = 0.0
+        self.controls = []
+
+    @contextmanager
+    def anchor(self, ax, ay):
+        old = self.ox, self.oy
+        self.ox = (self.W-1280)*ax*self.scale
+        self.oy = (self.H-720)*ay*self.scale
+        try:
+            yield
+        finally:
+            self.ox, self.oy = old
+
+    def full(self, tint, alpha):
+        rl.draw_rectangle(0, 0, rl.get_screen_width(), rl.get_screen_height(), color(tint, alpha))
 
     # -- primitivas (espaco virtual 1280x720) ------------------------------------------
     def P(self, x, y):
@@ -144,10 +169,11 @@ class CombatHUD(Canvas):
         rl.draw_rectangle_gradient_h(int(r.x), int(r.y), int(r.width), int(r.height), color(tint, a0), color(tint, a1))
 
     def vignette(self, tint, alpha, depth=90):
-        self.vgrad(0, 0, 1280, depth, tint, alpha, 0)
-        self.vgrad(0, 720-depth, 1280, depth, tint, 0, alpha)
-        self.hgrad(0, 0, depth, 720, tint, alpha, 0)
-        self.hgrad(1280-depth, 0, depth, 720, tint, 0, alpha)
+        W, H = self.W, self.H
+        self.vgrad(0, 0, W, depth, tint, alpha, 0)
+        self.vgrad(0, H-depth, W, depth, tint, 0, alpha)
+        self.hgrad(0, 0, depth, H, tint, alpha, 0)
+        self.hgrad(W-depth, 0, depth, H, tint, 0, alpha)
 
     def world_to_screen(self, position):
         camera = self.player_input.camera
@@ -509,8 +535,8 @@ class CombatHUD(Canvas):
     # -- mira e sobreposicoes ---------------------------------------------------------------
     def crosshair(self, me, s):
         if me.hero == 'b_cell' and me.zoom:
-            self.rect(0, 0, 1280, 720, (6, 10, 14), 70)
-            self.ring(640, 360, 228, 520, 0, 360, (6, 10, 14), 235)
+            self.full((6, 10, 14), 70)
+            self.ring(640, 360, 228, math.hypot(self.W, self.H)/2+20, 0, 360, (6, 10, 14), 235)
             self.ring(640, 360, 226, 229, 0, 360, WHITE, 120)
             self.seg(420, 360, 620, 360, 2, WHITE)
             self.seg(660, 360, 860, 360, 2, WHITE)
@@ -549,7 +575,7 @@ class CombatHUD(Canvas):
 
     def overlays(self, me, s):
         if me.in_zone('cloud', enemy=True):
-            self.rect(0, 0, 1280, 720, (110, 80, 140), 150)
+            self.full((110, 80, 140), 150)
         if me.hurt > 0:
             self.vignette(RED_L, int(170*min(1.0, me.hurt*4)), 110)
         elif me.health.value <= HEROES[me.hero].health*.3:
@@ -558,7 +584,7 @@ class CombatHUD(Canvas):
             self.vignette(GOLD, 70, 70)
         if me.front == 'engulf' and me.third_person < .3:
             self.vignette((255, 120, 170), 120, 140)
-            self.ring(640, 360, 300, 312, 0, 360, (255, 150, 190), 70)
+            self.ring(self.W/2, self.H/2, 300, 312, 0, 360, (255, 150, 190), 70)
         if me.front == 'barrier' and me.third_person < .3:
             self.vignette((170, 120, 255), 90, 90)
 
@@ -597,7 +623,7 @@ class CombatHUD(Canvas):
         if p is None:
             return None
         x, y = p
-        if not (10 < x < 1270 and 10 < y < 710):
+        if not (10 < x < self.W-10 and 10 < y < self.H-10):
             return None
         if title:
             self.tx(title, x, y-24, size, tint, align='c')
@@ -667,7 +693,7 @@ class CombatHUD(Canvas):
                 continue
             tint = TEAL_L if ally else RED_L
             p = self.world_to_screen(pos+Vec3(0, 1.45, 0))
-            if p is None or not (10 < p[0] < 1270 and 30 < p[1] < 710):
+            if p is None or not (10 < p[0] < self.W-10 and 30 < p[1] < self.H-10):
                 continue
             x, y = p
             # Inimigos: contorno vermelho + silhueta atraves da parede (outline.py), sem barra.
@@ -687,7 +713,6 @@ class CombatHUD(Canvas):
     # -- cartao do kit (F1) ---------------------------------------------------------------------
     def kit_card(self, me, kit):
         info = KIT[me.hero]
-        self.rect(0, 0, 1280, 720, (4, 8, 12), 175)
         x, y, w, h = 230, 96, 820, 520
         self.sk(x, y, w, h, PANEL, 235)
         self.skout(x, y, w, h, TEAL_L, 3)
@@ -731,7 +756,6 @@ class CombatHUD(Canvas):
 
     def respawn(self, me):
         net, s = self.game.session, self.arena.state
-        self.rect(0, 0, 1280, 720, (4, 8, 12), 110)
         x, y = 200, 250
         self.sk(x, y, 880, 270, PANEL, 230)
         if me.waiting:
@@ -767,8 +791,9 @@ class CombatHUD(Canvas):
         me = a.actors.get(net.local_slot)
         if me is None:
             set_cursor_captured(False)
-            self.sk(420, 320, 440, 60, PANEL, 230)
-            self.tx("sincronizando com o servidor...", 640, 338, 22, WHITE, align='c')
+            with self.anchor(.5, .5):
+                self.sk(420, 320, 440, 60, PANEL, 230)
+                self.tx("sincronizando com o servidor...", 640, 338, 22, WHITE, align='c')
             return
         if not me.alive or self.player_input.paused or net.error:
             set_cursor_captured(False)
@@ -776,24 +801,41 @@ class CombatHUD(Canvas):
         if me.alive:
             self.overlays(me, s)
             self.world_markers(me, s, net)
-            self.crosshair(me, s)
-            self.damage_direction(me, s)
-        self.top_bar(me, s, net)
-        self.killfeed(me, s)
+            with self.anchor(.5, .5):
+                self.crosshair(me, s)
+                self.damage_direction(me, s)
+        with self.anchor(.5, 0):
+            self.top_bar(me, s, net)
+        with self.anchor(1, 0):
+            self.killfeed(me, s)
         self.draw_minimap(me, s)
-        self.economy(me, s)
+        with self.anchor(0, 0 if me.team == CELLS else 1):
+            self.economy(me, s)
         if me.alive:
-            self.health(me, kit, s)
-            self.ultimate_meter(me, kit, s)
-            self.abilities(me, kit, s)
-            self.prompts(me, s)
-            self.tx("f1 kit", 1262, 696-0, 11, MUTED, font='m', align='r')
+            with self.anchor(0, 1):
+                self.health(me, kit, s)
+            with self.anchor(.5, 1):
+                self.ultimate_meter(me, kit, s)
+            with self.anchor(.5, .5):
+                self.prompts(me, s)
+            with self.anchor(1, 1):
+                self.abilities(me, kit, s)
+                self.tx("f1 kit", 1262, 696-0, 11, MUTED, font='m', align='r')
             if self.player_input.kit_card and not self.player_input.paused:
-                self.kit_card(me, kit)
+                self.full((4, 8, 12), 175)
+                with self.anchor(.5, .5):
+                    self.kit_card(me, kit)
         if not me.alive and not s.winner:
-            self.respawn(me)
+            self.full((4, 8, 12), 110)
+            with self.anchor(.5, .5):
+                self.respawn(me)
         if self.player_input.paused or net.error:
-            self.rect(0, 0, 1280, 720, (4, 8, 12), 170)
+            self.full((4, 8, 12), 170)
+        with self.anchor(.5, .5):
+            self._center_modals(me, s, net)
+
+    def _center_modals(self, me, s, net):
+        if self.player_input.paused or net.error:
             self.sk(340, 230, 600, 260, PANEL, 240)
             self.tx("operacao em andamento", 380, 254, 34, WHITE)
             self.tx("a partida em rede continua durante este menu.", 382, 300, 17, MUTED, font='m')
