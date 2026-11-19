@@ -6,7 +6,8 @@
 | `Characters3D/` | Modelos `.glb` dos heróis e NPCs, com metadados `.json`. | `scripts/build_characters.py` |
 | `Weapons/` | Modelos `.glb` e metadados `.json` das armas. | `scripts/build_weapons.py` |
 | `characters/` | Retratos 2D e referências usadas para os personagens. | [Fontes e geração](characters/SOURCES.md) |
-| `audio/` | Efeitos sonoros do jogo. | `scripts/build_audio.py` |
+| `audio/` | Efeitos sonoros procedurais do jogo (`.wav`). | `scripts/build_audio.py` |
+| `audio/voice/` | Falas dos personagens recortadas do anime, em japonês (`ja/`) e inglês (`en/`). | [Fontes e geração](audio/voice/SOURCES.md), `scripts/build_voices.py` |
 
 O jogo usa os exports e metadados diretamente; Blender só é necessário para
 editar ou regenerar modelos. Mantenha cada export junto de seus metadados.

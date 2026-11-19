@@ -207,6 +207,8 @@ Regras, física, combate, rede, interface e fábricas ficam em `UserComponents/c
 - `npcs.py`: hemácias (rotas, percepção, fuga, retomada).
 - `actors.py` / `combat.py`: heróis, kits, construção e respawn.
 - `bots.py`, `navigation.py`, `hud.py`, `visuals.py`, `player.py`, `scenery.py`.
+- `audio.py` / `voice.py`: efeitos sonoros posicionados e falas dos personagens (dublagem
+  japonesa ou inglesa, escolhida em `saves/config.json` via `settings.py`, ou por `CELLS_VOICE=en`).
 
 Cada jogador simula seu movimento, mira, arma e habilidades localmente
 (`NetworkTransform` por UDP). Pedidos sobre objetos compartilhados (construir,
