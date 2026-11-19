@@ -23,7 +23,8 @@ buscar ou editar esses arquivos fica aqui em `referencias/`.
 | `imagens/` | Capturas do anime e key visual usados como referência visual do mapa e da arte. |
 | `personagens_oficiais/` | Acervo das páginas oficiais de personagens (`1st/`, `assets/`), `manifest.json` e [SOURCES.md](personagens_oficiais/SOURCES.md). |
 | `audio/` | `voice_clips.json` (episódio, tempos e textos de cada fala) e [SOURCES.md](audio/SOURCES.md). |
-| `blender/` | Fontes editáveis: `BairroArterial.blend` (mapa) e `platelet.blend` (plaqueta com esqueleto e ações). |
+| `blender/` | Fontes editáveis: `BairroArterial.blend` (mapa) e `red_blood_cell.blend`, `macrophage.blend`, `platelet.blend` (modelos do Tripo com esqueleto, adereço e ações, gerados por `rig_tripo.py`). |
+| `Tripo 3D assets/` | Modelos exportados do Tripo (T-pose texturizada) e as imagens de referência da caixa da hemácia e da sacolinha da plaqueta. |
 | `scripts/mapa/` | Montagem do mapa no Blender (`build_distrito`, `distrito_geo`, `distrito_layout`), exportação (`export_distrito`, `rebuild_distrito`) e navegação (`build_navmesh`). |
 | `scripts/personagens/` | Modelagem dos personagens e armas no Blender e download do acervo oficial. |
 | `scripts/audio/` | Síntese dos efeitos sonoros e recorte das falas. |
@@ -39,6 +40,7 @@ $blender = 'C:\Program Files\Blender Foundation\Blender 5.2\blender.exe'
 & $blender --background referencias\blender\BairroArterial.blend --python referencias\scripts\mapa\export_distrito.py
 .venv\Scripts\python.exe referencias\scripts\mapa\build_navmesh.py
 # Personagens e armas
+& $blender --background --factory-startup --python referencias\scripts\personagens\rig_tripo.py  # esqueleto/ações -> referencias\blender\*.blend
 & $blender --background --factory-startup --python referencias\scripts\personagens\build_characters.py
 & $blender --background --factory-startup --python referencias\scripts\personagens\build_weapons.py
 # Retratos e faces (requer internet)

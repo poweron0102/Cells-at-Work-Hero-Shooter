@@ -1,96 +1,27 @@
 {
  "key": "platelet",
- "height": 1.4687999486923218,
+ "height": 1.3,
  "convention": "glTF/raylib: Y para cima, personagem olha para +Z, pés em y=0 e origem entre os pés. Sufixo _l = lado esquerdo do personagem = +X; _r = lado direito = -X. \"mesh\" = índice em model.meshes do raylib (nós do GLB em ordem, um primitivo por parte). \"pivot\" = articulação no espaço do personagem (metros). \"swing\": static|arm|leg|weapon|tail|tentacle|head. \"phase\" = defasagem (rad) do ciclo; \"action\" = como a parte reage ao ataque.",
- "mesh_count": 9,
- "triangles": 22822,
+ "mesh_count": 2,
+ "triangles": 9394,
  "clips": [
   "Idle",
   "Repair",
   "Walk"
  ],
+ "clip_seconds": {
+  "Idle": 3,
+  "Repair": 1.6,
+  "Walk": 1
+ },
+ "action_clip": "Repair",
+ "action_mode": "blend",
+ "walk_rate": 1.0,
  "parts": [
   {
-   "name": "body",
-   "mesh": 2,
-   "pivot": [
-    0,
-    0,
-    0
-   ],
-   "parent": "body",
-   "swing": "static"
-  },
-  {
-   "name": "leg_l",
-   "mesh": 7,
-   "pivot": [
-    0.08,
-    0.5,
-    -0.0
-   ],
-   "parent": "body",
-   "swing": "leg"
-  },
-  {
-   "name": "arm_l",
+   "name": "bag",
    "mesh": 0,
    "pivot": [
-    0.144,
-    0.96,
-    -0.0
-   ],
-   "parent": "body",
-   "swing": "arm"
-  },
-  {
-   "name": "leg_r",
-   "mesh": 8,
-   "pivot": [
-    -0.08,
-    0.5,
-    -0.0
-   ],
-   "parent": "body",
-   "swing": "leg"
-  },
-  {
-   "name": "arm_r",
-   "mesh": 1,
-   "pivot": [
-    -0.144,
-    0.96,
-    -0.0
-   ],
-   "parent": "body",
-   "swing": "arm"
-  },
-  {
-   "name": "head",
-   "mesh": 5,
-   "pivot": [
-    0.0,
-    1.02,
-    -0.0
-   ],
-   "parent": "body",
-   "swing": "head"
-  },
-  {
-   "name": "hair",
-   "mesh": 4,
-   "pivot": [
-    0.0,
-    1.14,
-    -0.09
-   ],
-   "parent": "body",
-   "swing": "static"
-  },
-  {
-   "name": "cap",
-   "mesh": 3,
-   "pivot": [
     0,
     0,
     0
@@ -99,8 +30,8 @@
    "swing": "static"
   },
   {
-   "name": "kit",
-   "mesh": 6,
+   "name": "body",
+   "mesh": 1,
    "pivot": [
     0,
     0,

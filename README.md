@@ -157,9 +157,20 @@ personagens. Para editar e reexportar, veja
 ## Personagens
 
 Os personagens foram modelados no Blender a partir das imagens de `referencias/personagens_oficiais/`.
-A plaqueta é editável em `referencias/blender/platelet.blend`. As ações `Idle`, `Walk`
-e `Repair` acompanham o esqueleto no GLB. Os oito heróis e a hemácia usam animação
-procedural por partes. Para reexportar, veja `referencias/scripts/personagens/build_characters.py`.
+Hemácia, macrófago e plaqueta vêm dos modelos do Tripo em `referencias/Tripo 3D assets/`, com
+esqueleto, pesos, adereços e ações criados por `referencias/scripts/personagens/rig_tripo.py`
+(cenas editáveis em `referencias/blender/<key>.blend`):
+
+| Personagem | Adereço | Ações |
+| --- | --- | --- |
+| Hemácia | caixa de oxigênio (酸素) presa ao peito | `Idle`, `Walk`, `Wave` (aceno, misturado pela ação) |
+| Macrófago | escopeta presa ao osso da mão direita | `Idle`, `Walk`, `Attack` (machadada, pelo andamento da ação) |
+| Plaqueta | sacolinha de fibrina na mão esquerda | `Idle`, `Walk`, `Repair` (agachada batendo o remendo) |
+
+Cabelo, trança, saia, barra da jaqueta e camiseta têm ossos próprios com movimento secundário.
+O jogo deforma esses modelos na GPU (`model_lighting.SKIN_GLSL`) com a textura de cor do GLB.
+Os demais heróis usam animação procedural por partes. Para reexportar, veja
+`referencias/scripts/personagens/build_characters.py`.
 
 ## Armas e tiros
 

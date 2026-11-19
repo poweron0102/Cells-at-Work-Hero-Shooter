@@ -28,9 +28,11 @@ in vec3 vertexNormal;
 uniform mat4 mvp;
 uniform vec2 screen;
 uniform float width;
+''' + model_lighting.SKIN_GLSL + '''
 void main() {
-    vec4 pos = mvp * vec4(vertexPosition, 1.0);
-    vec4 nrm = mvp * vec4(vertexNormal, 0.0);
+    mat4 sk = skinMatrix();
+    vec4 pos = mvp * (sk * vec4(vertexPosition, 1.0));
+    vec4 nrm = mvp * vec4(mat3(sk) * vertexNormal, 0.0);
     vec2 dir = nrm.xy;
     float len = length(dir);
     dir = len > 1e-5 ? dir / len : vec2(0.0);
@@ -55,10 +57,13 @@ uniform mat4 matNormal;
 uniform mat4 matView;
 out vec3 viewNormal;
 out vec3 viewPos;
+''' + model_lighting.SKIN_GLSL + '''
 void main() {
-    viewNormal = mat3(matView) * normalize(mat3(matNormal) * vertexNormal);
-    viewPos = (matView * matModel * vec4(vertexPosition, 1.0)).xyz;
-    gl_Position = mvp * vec4(vertexPosition, 1.0);
+    mat4 sk = skinMatrix();
+    vec4 p = sk * vec4(vertexPosition, 1.0);
+    viewNormal = mat3(matView) * normalize(mat3(matNormal) * (mat3(sk) * vertexNormal));
+    viewPos = (matView * matModel * p).xyz;
+    gl_Position = mvp * p;
 }
 '''
 
@@ -161,7 +166,9 @@ def draw_silhouette(model, args, rgb, alpha=.8, occluded_only=True):
 def release():
     for key in ('outline', 'silhouette'):
         if key in _state:
-            rl.unload_shader(_state.pop(key)[0])
+            shader = _state.pop(key)[0]
+            model_lighting.forget_skin(shader)
+            rl.unload_shader(shader)
 
 
 class SilhouettePass(Renderable3D):

@@ -5,7 +5,8 @@ Uso (a partir da raiz do repositório):
     & 'C:\\Program Files\\Blender Foundation\\Blender 5.2\\blender.exe' --background --factory-startup `
         --python referencias\\scripts\\personagens\\build_characters.py -- [--only neutrophil,b_cell] [--no-preview]
 
-A plaqueta usa a cena de autoria platelet.blend, com esqueleto e ações. Os demais
+Hemácia, macrófago e plaqueta vêm das cenas de autoria referencias/blender/<key>.blend
+(modelos do Tripo com esqueleto, adereços e ações, gerados por rig_tripo.py). Os demais
 personagens são modelados com primitivas procedurais (lathe, tubos varridos,
 elipsoides, placas extrudadas) e algumas passagens de modificadores do Blender
 (Subdivision/Bevel), aplicados antes da exportação. As cores ficam num atributo de cor
@@ -793,203 +794,6 @@ def build_b_cell():
     return dict(height=1.88, parts=[body, arm_l, arm_r, leg_l, leg_r], mount=dict(part='arm_r', pos=hcr))
 
 
-def build_macrophage():
-    rig = Rig(1.0, shoulder=0.165, hip=0.085, female=True)
-    s = rig.s
-    CR, CR2, LACE, SK, HAIR = '#efe2cf', '#e0cfb8', '#fbf7f1', '#f6dccb', '#c9a17a'
-    body, arm_l, arm_r, leg_l, leg_r = human_parts(rig, leg_amp=0.32, weapon_arm_amp=0.18)
-    female_torso(body, rig, CR, bust=1.0)
-    neck(body, rig, SK, r=0.036)
-    # Saia em sino com dobras, babados na barra e faixa recortada.
-    folds = lambda i, a: 1 + 0.028 * math.sin(a * 9) * min(1, i / 3)
-    body.add(lathe([(0, 1.06 * s), (0.125 * s, 1.06 * s), (0.17 * s, 0.98 * s), (0.27 * s, 0.75 * s),
-                    (0.36 * s, 0.5 * s), (0.42 * s, 0.3 * s), (0.44 * s, 0.2 * s), (0, 0.2 * s)][::-1], 36,
-                   rfunc=lambda i, a: 1 + 0.028 * math.sin(a * 9) * min(1, (7 - i) / 3)), CR)
-    body.add(lathe([(0, 0.1 * s), (0.45 * s, 0.1 * s), (0.47 * s, 0.13 * s), (0.462 * s, 0.215 * s),
-                    (0.44 * s, 0.22 * s), (0, 0.22 * s)], 40, rfunc=lambda i, a: 1 + 0.03 * math.sin(a * 20)), LACE)
-    body.add(lathe([(0, 0.06 * s), (0.44 * s, 0.06 * s), (0.455 * s, 0.08 * s), (0.45 * s, 0.13 * s), (0, 0.13 * s)],
-                   40, rfunc=lambda i, a: 1 + 0.035 * math.sin(a * 20 + 1.6)), '#f6ede2')
-    body.add(lathe([(0, 0.22 * s), (0.442 * s, 0.22 * s), (0.425 * s, 0.32 * s), (0, 0.32 * s)], 40,
-                   rfunc=lambda i, a: 1 + (0.012 if i in (1, 2) else 0) * abs(math.sin(a * 10))), '#f3e6d6')
-    for i in range(16):
-        a = TAU * i / 16
-        r = 0.437 * s
-        body.ell(V(r * math.cos(a), r * math.sin(a), 0.255 * s), (0.022 * s, 0.02 * s, 0.024 * s), LACE, 6, 4)
-    body.ring(V(0, 0, 1.06 * s), 0.12 * s, 0.012 * s, CR2, h=0.05 * s, sx=1, sy=.7, seg=18)
-    # Peitilho de renda, gola alta e babados dos ombros.
-    body.box(V(0, -0.098 * s, 1.31 * s), (0.06 * s, 0.012 * s, 0.17 * s), LACE, rot=(-6, 0, 0))
-    for i in range(4):
-        body.ell(V(0, -0.104 * s, (1.39 - i * 0.045) * s), (0.04 * s, 0.012 * s, 0.018 * s), LACE, 10, 5)
-    body.add(lathe([(0.036 * s, 1.43 * s), (0.05 * s, 1.44 * s), (0.052 * s, 1.5 * s), (0.04 * s, 1.5 * s),
-                    (0.036 * s, 1.43 * s)], 16, rfunc=lambda i, a: 1 + 0.08 * math.sin(a * 10)), LACE)
-    for side in (1, -1):
-        for k in range(3):
-            body.add(slab([(0, 0), (0.12 * s, 0.02 * s), (0.14 * s, -0.045 * s), (0.02 * s, -0.05 * s)],
-                          0.012 * s), LACE if k % 2 == 0 else '#f3e9dc',
-                     xform(V(side * 0.07 * s, (-0.06 + k * 0.05) * s, 1.42 * s), (75 + k * 10, -side * 25, side * (12 - k * 8))),
-                     smooth=False)
-    hc = rig.head_c
-    hs = rig.hsz
-    face(body, hc, hs, SK, '#8f5a2c', mouth='#d06a72', brows='#a9805a', lashes='#4a3020')
-    hair_shell(body, hc, hs, HAIR, back_drop=0.05)
-    bangs(body, hc, hs, HAIR, [(-0.07, -0.01), (-0.045, 0.0), (-0.02, 0.0), (0.03, 0.01), (0.06, 0.015)], drop=0.075)
-    for side in (1, -1):
-        body.tube([hc + V(side * 0.095, -0.03, 0.05) * hs, hc + V(side * 0.11, -0.04, -0.06) * hs,
-                   hc + V(side * 0.095, -0.03, -0.13) * hs], [0.03 * hs, 0.032 * hs, 0.012 * hs], HAIR, 10)
-    # Touca franzida.
-    cap_c = hc + V(0, 0.012, 0.045) * hs
-    body.add(apply_matrix(lathe([(0, -0.01 * hs), (0.125 * hs, -0.01 * hs), (0.14 * hs, 0.04 * hs), (0.13 * hs, 0.1 * hs),
-                                 (0.08 * hs, 0.14 * hs), (0, 0.15 * hs)], 24,
-                                rfunc=lambda i, a: 1 + (0.035 * math.sin(a * 10) if 1 <= i <= 3 else 0)),
-                          xform(cap_c, (-14, 0, 0))), '#f6efe3')
-    body.add(apply_matrix(lathe([(0.118 * hs, -0.02 * hs), (0.142 * hs, -0.012 * hs), (0.142 * hs, 0.012 * hs),
-                                 (0.118 * hs, 0.018 * hs), (0.118 * hs, -0.02 * hs)], 36,
-                                rfunc=lambda i, a: 1 + 0.045 * math.sin(a * 18)), xform(cap_c, (-14, 0, 0))), LACE)
-    # Trança (parte própria, balança como cauda).
-    braid = Part('braid', 'tail', hc + V(0, 0.1, -0.05) * hs, phase=0.6, amp=0.25)
-    pts = bezier(hc + V(0.03, 0.1, -0.05) * hs, hc + V(0.1, 0.2, -0.25) * hs, V(0.2 * hs, 0.17 * hs, 1.15 * hs),
-                 V(0.24 * hs, 0.1 * hs, 1.0 * hs), 9)
-    for i, q in enumerate(pts):
-        nxt = pts[min(i + 1, len(pts) - 1)]
-        r = (0.038 - i * 0.002) * hs
-        braid.ell(q + V((-1) ** i * 0.008 * hs, 0, 0), (r, r * .9, r * 1.25), HAIR, 8, 6, rot=(0, (-1) ** i * 25, 0))
-    tip = pts[-1]
-    braid.ell(tip + V(0, 0, -0.05 * hs), (0.02 * hs, 0.02 * hs, 0.035 * hs), HAIR, 8, 5)
-    for side in (1, -1):
-        braid.ell(tip + V(side * 0.035 * hs, 0, 0.0), (0.035 * hs, 0.012 * hs, 0.022 * hs), LACE, 8, 5, rot=(0, side * 20, 0))
-    braid.ell(tip, (0.014 * hs, 0.014 * hs, 0.014 * hs), LACE, 8, 5)
-    # Braços: mangas bufantes, punhos de renda.
-    for side, part in ((1, arm_l), (-1, arm_r)):
-        sh = V(side * rig.sh_x, 0, rig.sh_z)
-        part.ell(sh + V(side * 0.01 * s, 0, -0.03 * s), (0.065 * s, 0.065 * s, 0.07 * s), CR, 12, 8)
-    std_arm(arm_l, rig, 1, CR, SK, upper=0.046, fore=0.038, cuff=LACE)
-    hcr = std_arm(arm_r, rig, -1, CR, SK, pose='hold', upper=0.046, fore=0.038, cuff=LACE)
-    for side, leg in ((1, leg_l), (-1, leg_r)):
-        hip, kn, an = std_leg(leg, rig, side, '#efe7dc', thigh=0.07, calf=0.05)
-        sneaker(leg, an, s, '#e8e0d4', '#9c9286', boot=0.22, boot_col='#e8e0d4', laces='#8d8378', height=0.12,
-                width=0.1)
-    return dict(height=1.82, parts=[body, braid, arm_l, arm_r, leg_l, leg_r], mount=dict(part='arm_r', pos=hcr))
-
-
-def build_red_blood_cell():
-    rig = Rig(0.975, shoulder=0.165, hip=0.088, female=True)
-    s = rig.s
-    RED, RED2, TEE, SK, HAIR, DEN, DEN2 = '#d63a3c', '#9f2530', '#2b2b30', '#f6d6c0', '#d9472e', '#5d89b4', '#88acd2'
-    body, arm_l, arm_r, leg_l, leg_r = human_parts(rig, arm_amp=0.7, leg_amp=0.6)
-    arm_r.action = 'wave'
-    female_torso(body, rig, TEE, bust=0.9)
-    # Jaqueta vermelha aberta na frente (casca cortada sobre a camiseta).
-    jk = tube([V(0, 0, 1.0 * s), V(0, 0, 1.08 * s), V(0, -0.004, 1.2 * s), V(0, -0.012, 1.3 * s),
-               V(0, -0.006, 1.38 * s), V(0, 0, 1.43 * s)],
-              [(0.142 * s, 0.098 * s), (0.135 * s, 0.093 * s), (0.142 * s, 0.1 * s), (0.162 * s, 0.112 * s),
-               (0.16 * s, 0.096 * s), (0.11 * s, 0.07 * s)], 20, (None, None))
-    jk = cut(jk, lambda q: not (q.y < -0.035 * s and abs(q.x) < 0.06 * s + (q.z - 1.0 * s) * 0.15))
-    body.add(jk, RED)
-    body.add(lathe([(0.062 * s, 1.41 * s), (0.075 * s, 1.43 * s), (0.068 * s, 1.5 * s), (0.055 * s, 1.5 * s),
-                    (0.062 * s, 1.41 * s)], 16, 1, .95), RED)
-    body.ring(V(0, 0, 1.0 * s), 0.142 * s, 0.012 * s, RED2, h=0.035 * s, sx=1.0, sy=.7, seg=18)
-    # Short jeans + cinto.
-    torso(body, [(0.79 * s, 0, 0), (0.81 * s, 0.11 * s, 0.075 * s), (0.86 * s, 0.158 * s, 0.104 * s),
-                 (0.95 * s, 0.158 * s, 0.106 * s), (0.99 * s, 0.13 * s, 0.09 * s), (1.0 * s, 0, 0)], DEN)
-    body.ring(V(0, 0, 0.97 * s), 0.152 * s, 0.01 * s, '#b0282e', h=0.03 * s, sx=1.0, sy=.68, seg=18)
-    body.box(V(0, -0.108 * s, 0.97 * s), (0.04 * s, 0.01 * s, 0.03 * s), '#d7dbe0')
-    # Bolsinha vermelha na cintura (atrás, à direita).
-    body.ell(V(-0.12 * s, 0.1 * s, 0.9 * s), (0.07 * s, 0.05 * s, 0.06 * s), RED, 12, 7)
-    body.ell(V(-0.12 * s, 0.12 * s, 0.93 * s), (0.06 * s, 0.04 * s, 0.025 * s), RED2, 10, 5)
-    neck(body, rig, SK, r=0.036)
-    hc = rig.head_c
-    hs = rig.hsz
-    face(body, hc, hs, SK, '#d29a2c', mouth='#c45a5a', smile=False, brows='#b33a26', lashes='#5a2018')
-    hair_shell(body, hc, hs, HAIR)
-    bangs(body, hc, hs, HAIR, [(-0.075, -0.02), (-0.05, -0.01), (-0.02, 0.0), (0.01, 0.0), (0.04, 0.01), (0.07, 0.02)],
-          drop=0.085)
-    spikes(body, hc, hs, HAIR, [((1, -0.1, -0.5), 0.06, 0.03, (0, -0.02, -0.04)), ((-1, -0.1, -0.5), 0.06, 0.03, (0, -0.02, -0.04)),
-                               ((0.6, 0.8, -0.5), 0.06, 0.035, (0, 0, -0.03)), ((-0.6, 0.8, -0.5), 0.06, 0.035, (0, 0, -0.03)),
-                               ((0, 1, -0.6), 0.06, 0.04, (0, 0, -0.02))])
-    # Boné vermelho volumoso com aba preta e emblema branco.
-    m = ball_cap(body, hc, hs, RED, '#232428', tilt=-10, r=0.13, h=0.1, brim_len=0.14, brim_w=0.13, puff=1.1,
-                 sx=1.05, sy=1.08, badge=None)
-    body.ell(m @ V(0.06 * hs, -0.12 * hs, 0.06 * hs), (0.02 * hs, 0.008 * hs, 0.02 * hs), '#f2f2f2', 10, 5, rot=(-30, 0, 20))
-    spikes(body, hc + V(0, 0, 0.16) * hs, s, HAIR, [((0.2, -0.2, 1), 0.05, 0.012, (0, 0, -0.1))])
-    for side, part in ((1, arm_l), (-1, arm_r)):
-        std_arm(part, rig, side, RED, '#f6f6f4', sleeve_end=0.35, forearm_col=SK, cuff=RED2, upper=0.048, fore=0.038)
-    arm_l.ell(V(rig.sh_x + 0.055 * s, -0.01 * s, rig.sh_z - 0.08 * s), (0.008 * s, 0.024 * s, 0.024 * s), WHITE, 10, 5)
-    arm_l.ell(V(rig.sh_x + 0.06 * s, -0.01 * s, rig.sh_z - 0.08 * s), (0.006 * s, 0.014 * s, 0.014 * s), RED, 8, 5)
-    for side, leg in ((1, leg_l), (-1, leg_r)):
-        hip, kn, an = std_leg(leg, rig, side, DEN, shorts=DEN, cuff=DEN2, skin=SK, shorts_len=0.13, thigh=0.074,
-                              calf=0.052)
-        leg.tube([an + V(0, 0, 0.0), an + V(0, 0, 0.07 * s)], [0.046 * s, 0.046 * s], '#2a2a2e', 10)
-        sneaker(leg, an, s, '#d4473b', '#f0ece6', height=0.1, laces='#f3d0c8', width=0.098)
-    return dict(height=1.78, parts=[body, arm_l, arm_r, leg_l, leg_r])
-
-
-def build_platelet():
-    s = 0.58
-    rig = Rig(s, shoulder=0.18, hip=0.1)
-    # Proporções infantis: cabeça grande, pernas curtas.
-    rig.head = 0.875
-    rig.sh_z, rig.hip_z, rig.knee, rig.ankle = 0.645, 0.43, 0.25, 0.05
-    BLU, BLU2, SK, HAIR, SH, CAP = '#a9dcf1', '#8ec8e2', '#f8dccb', '#c8874c', '#e7d6bb', '#efefec'
-    body, arm_l, arm_r, leg_l, leg_r = human_parts(rig, arm_amp=0.8, leg_amp=0.55)
-    arm_r.action = 'wave'
-    hs = 1.32  # escala da cabeça (proporção infantil)
-    # Bata azul larga em sino.
-    body.add(lathe([(0, 0.355), (0.205, 0.355), (0.215, 0.37), (0.19, 0.48), (0.15, 0.6), (0.12, 0.65),
-                    (0.06, 0.68), (0, 0.69)], 24, sx=1.0, sy=.78), BLU)
-    body.add(lathe([(0.2, 0.345), (0.218, 0.35), (0.22, 0.38), (0.2, 0.38), (0.2, 0.345)], 24, sx=1, sy=.78), BLU2)
-    body.ring(V(0, 0, 0.675), 0.05, 0.01, BLU2, h=0.02, sy=.9)
-    torso(body, [(0.33, 0, 0), (0.34, 0.12, 0.08), (0.38, 0.13, 0.085), (0.40, 0, 0)], SH)
-    body.tube([V(0, 0, 0.66), V(0, 0, rig.head - 0.1)], [0.03, 0.028], SK, 10)
-    hc = V(0, 0.004, rig.head)
-    face(body, hc, s * hs * 1.12, SK, '#8a4f22', smile=True, brows='#9a6232', lashes='#4a2810', eye_w=1.08)
-    # Cabelo longo pelas costas.
-    hair_shell(body, hc, s * hs * 1.12, HAIR, back_drop=0.02)
-    body.add(cut(lathe([(0.0, 0.47), (0.13, 0.47), (0.14, 0.6), (0.13, 0.75), (0.12, 0.86), (0.0, 0.9)], 18,
-                       sx=1.05, sy=.8), lambda q: q.y > 0.0), HAIR, at=V(0, 0.025, 0))
-    bangs(body, hc, s * hs * 1.12, HAIR, [(-0.07, -0.02), (-0.04, -0.01), (-0.01, 0.0), (0.02, 0.01), (0.05, 0.015),
-                                           (0.075, 0.025)], drop=0.075)
-    for side in (1, -1):
-        body.tube([hc + V(side * 0.075, -0.03, 0.03), hc + V(side * 0.085, -0.035, -0.07), V(side * 0.08, -0.01, 0.6)],
-                  [0.025, 0.028, 0.01], HAIR, 10)
-    m = ball_cap(body, hc, s * hs * 1.12, CAP, '#e2e2de', tilt=-6)
-    for i in range(3):
-        body.box(m @ V((i - 1) * 0.024, -0.08, 0.035), (0.018, 0.005, 0.018), '#8a8a86', rot=(-28, 0, 0))
-    # Bolsa amarela e alça cruzada.
-    body.box(V(0.2, -0.02, 0.43), (0.06, 0.16, 0.13), '#f0c24a', bevel=0.015)
-    body.box(V(0.232, -0.02, 0.46), (0.012, 0.15, 0.07), '#e2ad32')
-    body.tube([V(-0.11, -0.005, 0.66), V(-0.02, -0.085, 0.6), V(0.12, -0.095, 0.5), V(0.2, -0.04, 0.49)],
-              [0.012, 0.012, 0.012, 0.012], '#f0c24a', 6, hint=(0, 1, 0))
-    body.tube([V(-0.11, 0.005, 0.66), V(0.0, 0.075, 0.6), V(0.12, 0.08, 0.5), V(0.2, 0.0, 0.49)],
-              [0.012, 0.012, 0.012, 0.012], '#f0c24a', 6, hint=(0, 1, 0))
-    for side, part in ((1, arm_l), (-1, arm_r)):
-        sh = V(side * 0.115, 0, rig.sh_z)
-        el = V(side * 0.15, 0.01, 0.53)
-        wr = V(side * 0.17, -0.02, 0.42)
-        part.ell(sh, (0.05, 0.05, 0.045), BLU, 12, 7)
-        part.tube([sh, sh.lerp(el, 0.65)], [0.048, 0.05], BLU, 12, ('round', 'flat'))
-        part.add(tube([sh.lerp(el, 0.6), sh.lerp(el, 0.7)], [0.052, 0.052], 12, ('flat', 'flat')), BLU2)
-        part.tube([sh.lerp(el, 0.3), el, wr], [0.028, 0.026, 0.022], SK, 10)
-        hand(part, wr + V(0, -0.005, -0.03), 0.62, SK, fist=False)
-        part.pivot = sh
-    for side, leg in ((1, leg_l), (-1, leg_r)):
-        hip = V(side * 0.065, 0, rig.hip_z)
-        an = V(side * 0.07, 0, 0.07)
-        leg.tube([hip, V(side * 0.068, 0, 0.3)], [0.06, 0.062], SH, 12, ('round', 'flat'))
-        leg.tube([V(side * 0.068, 0, 0.32), an], [0.035, 0.03], SK, 10)
-        leg.add(tube([V(side * 0.07, 0.0, 0.02), V(side * 0.07, 0.0, 0.2)], [0.048, 0.05], 14, ('flat', 'flat')),
-                '#2c2f36')
-        leg.add(tube([V(side * 0.07, 0.0, 0.18), V(side * 0.07, 0.0, 0.235)], [0.054, 0.058], 14, ('flat', 'flat')),
-                '#eceeef')
-        leg.ell(V(side * 0.07, -0.035, 0.045), (0.05, 0.085, 0.045), '#2c2f36', 12, 7)
-        leg.box(V(side * 0.07, -0.03, 0.009), (0.1, 0.17, 0.018), '#dfe2e4', bevel=0.006)
-        leg.pivot = hip
-    return dict(height=1.0, parts=[body, arm_l, arm_r, leg_l, leg_r])
-
-
-# ---------------------------------------------------------------------------------------
-# Bactérias
-# ---------------------------------------------------------------------------------------
-
 def bead_chain(p, pts, r0, r1, color, ring_col=None, every=3, seg=8):
     p.tube(pts, [r0 + (r1 - r0) * i / (len(pts) - 1) for i in range(len(pts))], color, seg)
     if ring_col:
@@ -1391,15 +1195,15 @@ def build_plasma_turret():
 
 BUILDERS = {
     'neutrophil': build_neutrophil,
-    'macrophage': build_macrophage,
+    'macrophage': None,  # referencias/blender/macrophage.blend (rig_tripo.py)
     'b_cell': build_b_cell,
     'killer_t': build_killer_t,
     'pneumococcus': build_pneumococcus,
     'staphylococcus': build_staphylococcus,
     'pseudomonas': build_pseudomonas,
     'streptococcus': build_streptococcus,
-    'red_blood_cell': build_red_blood_cell,
-    'platelet': build_platelet,
+    'red_blood_cell': None,  # referencias/blender/red_blood_cell.blend
+    'platelet': None,  # referencias/blender/platelet.blend
     'plasma_turret': build_plasma_turret,
 }
 
@@ -1480,45 +1284,71 @@ def to_gltf(v):
     return [round(v.x, 4), round(v.z, 4), round(-v.y, 4)]
 
 
-def build_platelet_from_blend():
-    """Exporta a malha deformável e as ações da cena de autoria."""
-    with bpy.data.libraries.load(str(ROOT / 'referencias' / 'blender' / 'platelet.blend')) as (source, loaded):
-        loaded.collections = ['Plaqueta']
+# Personagens com esqueleto (rig_tripo.py): clipes exportados, clipe tocado pela "ação" do jogo
+# (blend = laço misturado pelo peso da ação; progress = quadro pelo andamento 1 - ação) e
+# ritmo da caminhada (ciclos do clipe Walk por ciclo de passada informado pelo jogo).
+RIGGED = {
+    'red_blood_cell': dict(clips={'Idle', 'Walk', 'Wave'}, action_clip='Wave', action_mode='blend'),
+    'macrophage': dict(clips={'Idle', 'Walk', 'Attack'}, action_clip='Attack', action_mode='progress',
+                       walk_rate=0.5),
+    'platelet': dict(clips={'Idle', 'Walk', 'Repair'}, action_clip='Repair', action_mode='blend'),
+}
+BLENDER_TO_GLTF = Matrix(((1, 0, 0, 0), (0, 0, 1, 0), (0, -1, 0, 0), (0, 0, 0, 1)))
+
+
+def build_rigged_from_blend(key):
+    """Exporta a malha deformável, o adereço e as ações da cena de autoria
+    ``referencias/blender/<key>.blend`` (gerada por rig_tripo.py)."""
+    spec = RIGGED[key]
+    # O exportador leva toda ação compatível com o esqueleto: descarta as do personagem anterior.
+    for act in list(bpy.data.actions):
+        bpy.data.actions.remove(act)
+    with bpy.data.libraries.load(str(ROOT / 'referencias' / 'blender' / f'{key}.blend')) as (source, loaded):
+        loaded.collections = [key]
         loaded.actions = list(source.actions)
     collection = loaded.collections[0]
     bpy.context.scene.collection.children.link(collection)
+    bpy.context.scene.render.fps = 30  # as ações foram gravadas a 30 quadros/s (rig_tripo.FPS)
     bpy.ops.object.select_all(action='DESELECT')
     for obj in collection.all_objects:
         obj.select_set(True)
     rig = next(obj for obj in collection.all_objects if obj.type == 'ARMATURE')
-    meshes = [obj for obj in collection.all_objects if obj.type == 'MESH']
+    meshes = sorted((obj for obj in collection.all_objects if obj.type == 'MESH'), key=lambda o: o.name)
     bpy.context.view_layer.objects.active = rig
-    path = OUT / 'platelet.glb'
+    path = OUT / f'{key}.glb'
     bpy.ops.export_scene.gltf(filepath=str(path), export_format='GLB', use_selection=True,
                               export_animation_mode='ACTIONS', export_anim_single_armature=True,
                               export_anim_slide_to_zero=True, export_frame_range=False,
-                              export_vertex_color='ACTIVE')
+                              export_vertex_color='ACTIVE', export_image_format='JPEG',
+                              export_jpeg_quality=88, export_tangents=False, export_cameras=False,
+                              export_lights=False, export_extras=False)
     gltf, _ = read_glb(path)
     mapping, count = raylib_mesh_indices(gltf)
     clips = [a['name'] for a in gltf['animations']]
-    if set(clips) != {'Idle', 'Walk', 'Repair'}:
-        raise ValueError(f'Clipes da plaqueta: {clips}')
+    if set(clips) != spec['clips']:
+        raise ValueError(f'Clipes de {key}: {clips}')
+    # Duração de cada clipe (s): o raylib reamostra o glTF numa taxa própria, então o jogo converte
+    # tempo em quadro por esta duração.
+    seconds = {a['name']: round(max(gltf['accessors'][smp['input']]['max'][0] for smp in a['samplers']), 4)
+               for a in gltf['animations']}
     primitives = [p for m in gltf['meshes'] for p in m['primitives']]
     height = max(gltf['accessors'][p['attributes']['POSITION']]['max'][1] for p in primitives)
-    meta = {'key': 'platelet', 'height': height, 'convention': CONVENTION, 'mesh_count': count,
+    meta = {'key': key, 'height': round(height, 4), 'convention': CONVENTION, 'mesh_count': count,
             'triangles': sum(gltf['accessors'][p['indices']]['count'] // 3 for p in primitives),
-            'clips': clips, 'parts': []}
+            'clips': clips, 'clip_seconds': seconds, 'action_clip': spec['action_clip'], 'action_mode': spec['action_mode'],
+            'walk_rate': spec.get('walk_rate', 1.0), 'parts': []}
     for obj in meshes:
         name = obj.name.split('.', 1)[1]
-        kind, _, side = name.partition('_')
-        bone = {'arm': 'upper_arm', 'leg': 'thigh'}.get(kind, kind)
-        if side:
-            bone += '.' + side.upper()
-        joint = rig.data.bones.get(bone)
-        pivot = to_gltf(joint.head_local) if joint else [0, 0, 0]
-        meta['parts'].append({'name': name, 'mesh': mapping[obj.name][0], 'pivot': pivot,
-                              'parent': 'body', 'swing': kind if kind in ('leg', 'arm', 'head') else 'static'})
-    (OUT / 'platelet.json').write_text(json.dumps(meta, indent=1, ensure_ascii=False), encoding='utf-8')
+        meta['parts'].append({'name': name, 'mesh': mapping[obj.name][0], 'pivot': [0, 0, 0],
+                              'parent': 'body', 'swing': 'static'})
+    mount = rig.get('weapon_mount')
+    if mount is not None:
+        # Arma (Assets/Weapons) na mão: matriz arma -> espaço de repouso do personagem (glTF); o jogo
+        # aplica por cima a matriz de pele do osso da mão no quadro atual.
+        m = BLENDER_TO_GLTF @ Matrix([list(r) for r in mount]) @ BLENDER_TO_GLTF.inverted()
+        meta['mount'] = {'bone': 'hand.R', 'matrix': [[round(m[i][j], 6) for j in range(4)] for i in range(3)]}
+    (OUT / f'{key}.json').write_text(json.dumps(meta, indent=1, ensure_ascii=False), encoding='utf-8')
+    print(f'{key:15s} tris={meta["triangles"]:5d} meshes={count} clips={clips}', flush=True)
     # As prévias em grupo reposicionam as malhas individualmente depois da exportação.
     for obj in meshes:
         obj.modifiers.clear()
@@ -1527,8 +1357,8 @@ def build_platelet_from_blend():
 
 
 def build(key):
-    if key == 'platelet':
-        return build_platelet_from_blend()
+    if key in RIGGED:
+        return build_rigged_from_blend(key)
     spec = BUILDERS[key]()
     parts = spec['parts']
     # Pés exatamente em z=0 (o menor vértice de qualquer parte).

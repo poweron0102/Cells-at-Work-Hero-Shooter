@@ -3,23 +3,44 @@
 Usa os nomes padrão do raylib (vertexPosition/vertexNormal/vertexColor, mvp, matModel,
 matNormal, matView, colDiffuse) para funcionar direto com ``rl.draw_mesh``.
 
-* cor = vertexColor (linear no GLB, convertido para sRGB aqui) x colDiffuse (tint);
+* cor = vertexColor (linear no GLB, convertido para sRGB aqui) x textura de cor (sRGB, quando
+  a malha tem uma; a textura branca 1x1 padrão do raylib não é amostrada) x colDiffuse (tint);
 * luz direcional fixa no mundo com três faixas suaves;
 * sombra do cenário (``lighting.py``): na sombra de um prédio o corpo inteiro vai para a faixa
   escura, e em túneis/sob pontes o céu ocluído escurece e os postes aquecem;
 * rim light suave no contorno;
-* ``highlight`` (rgb, intensidade) para revelar/escudo: realça o contorno e tinge de leve.
+* ``highlight`` (rgb, intensidade) para revelar/escudo: realça o contorno e tinge de leve;
+* skinning na GPU (``SKIN_GLSL``) para os personagens com esqueleto: o raylib deste projeto só
+  deforma na CPU (e reenvia a malha a cada desenho), caro demais para as multidões.
 
 Carregamento preguiçoso: nada de GPU acontece na importação.
 """
 import pyray as rl
+import raylib as _raw
 
 from . import lighting
+
+MAX_BONES = 48
+# Índices/pesos de osso nas posições 7 e 8 do VAO (models._Rig envia esses buffers).
+# ``skinned`` = 0 deixa a malha como está (cenário, armas, personagens por partes).
+SKIN_GLSL = '''
+layout(location = 7) in vec4 vertexBoneIndices;
+layout(location = 8) in vec4 vertexBoneWeights;
+uniform mat4 boneMatrices[48];
+uniform float skinned;
+mat4 skinMatrix() {
+    if (skinned < 0.5) return mat4(1.0);
+    ivec4 i = ivec4(vertexBoneIndices + 0.5);
+    vec4 w = vertexBoneWeights;
+    return boneMatrices[i.x] * w.x + boneMatrices[i.y] * w.y + boneMatrices[i.z] * w.z + boneMatrices[i.w] * w.w;
+}
+'''
 
 VERTEX = '''#version 330
 in vec3 vertexPosition;
 in vec3 vertexNormal;
 in vec4 vertexColor;
+in vec2 vertexTexCoord;
 uniform mat4 mvp;
 uniform mat4 matModel;
 uniform mat4 matNormal;
@@ -29,14 +50,19 @@ out vec3 fragViewNormal;
 out vec3 fragViewPos;
 out vec3 fragWorld;
 out vec4 fragColor;
+out vec2 fragTexCoord;
+''' + SKIN_GLSL + '''
 void main() {
-    vec3 n = normalize(mat3(matNormal) * vertexNormal);
+    mat4 sk = skinMatrix();
+    vec4 pos = sk * vec4(vertexPosition, 1.0);
+    vec3 n = normalize(mat3(matNormal) * (mat3(sk) * vertexNormal));
     fragNormal = n;
-    fragWorld = (matModel * vec4(vertexPosition, 1.0)).xyz;
+    fragWorld = (matModel * pos).xyz;
     fragViewNormal = mat3(matView) * n;
-    fragViewPos = (matView * matModel * vec4(vertexPosition, 1.0)).xyz;
+    fragViewPos = (matView * matModel * pos).xyz;
     fragColor = vertexColor;
-    gl_Position = mvp * vec4(vertexPosition, 1.0);
+    fragTexCoord = vertexTexCoord;
+    gl_Position = mvp * pos;
 }
 '''
 
@@ -46,6 +72,8 @@ in vec3 fragViewNormal;
 in vec3 fragViewPos;
 in vec3 fragWorld;
 in vec4 fragColor;
+in vec2 fragTexCoord;
+uniform sampler2D texture0;
 uniform vec4 colDiffuse;
 uniform vec4 highlight;
 uniform vec3 lightDir;
@@ -60,6 +88,8 @@ void main() {
     if (!gl_FrontFacing) { n = -n; vn = -vn; }
     // Cores do GLB são lineares (spec glTF): volta para sRGB para manter a paleta anime.
     vec3 base = pow(max(fragColor.rgb, vec3(0.0)), vec3(1.0/2.2)) * colDiffuse.rgb;
+    // Malhas sem UV (cor por vértice) usam a textura 1x1 padrão: não amostra coordenadas indefinidas.
+    if (textureSize(texture0, 0).x > 1) base *= texture(texture0, fragTexCoord).rgb;
     // Luz do cenário: no mundo usa o próprio fragmento; a arma em 1ª pessoa usa ``probe`` (olho).
     bool atProbe = probe.w > 0.5;
     vec3 P = atProbe ? probe.xyz : fragWorld;
@@ -148,6 +178,32 @@ def set_highlight(r, g, b, a):
                         rl.ShaderUniformDataType.SHADER_UNIFORM_VEC4)
 
 
+_skin_locs = {}
+
+
+def set_skin(target, matrices=None, count=0):
+    """Liga o skinning na GPU em ``target`` com ``count`` matrizes (ponteiro ``Matrix *``) ou
+    desliga (``None``). Devolve False se o shader não tem skinning."""
+    locs = _skin_locs.get(target.id)
+    if locs is None:
+        locs = _skin_locs[target.id] = (rl.get_shader_location(target, 'boneMatrices'),
+                                        rl.get_shader_location(target, 'skinned'))
+    bones, flag = locs
+    if flag < 0:
+        return False
+    rl.rl_enable_shader(target.id)  # rlSetUniform* escrevem no programa ativo
+    if matrices is not None and bones >= 0:
+        _raw.rlSetUniformMatrices(bones, matrices, count)
+    _raw.rlSetUniform(flag, rl.ffi.new('float *', 1.0 if matrices is not None else 0.0),
+                      rl.ShaderUniformDataType.SHADER_UNIFORM_FLOAT, 1)
+    return True
+
+
+def forget_skin(target):
+    """Esquece as posições de uniform de um shader descarregado (o id pode ser reutilizado)."""
+    _skin_locs.pop(target.id, None)
+
+
 def begin():
     rl.begin_shader_mode(shader())
 
@@ -160,6 +216,7 @@ def release():
     global _shader, _highlight, _light, _probe
     if _shader is not None:
         lighting.unregister(_shader)
+        forget_skin(_shader)
         rl.unload_shader(_shader)
         _shader = None
         _highlight = None

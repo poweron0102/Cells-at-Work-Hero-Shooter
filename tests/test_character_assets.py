@@ -7,6 +7,17 @@ from pathlib import Path
 from UserComponents.cells.models import ASSET_DIR, CHARACTER_KEYS, raylib_mesh_indices, read_glb
 
 SWINGS = {'static', 'arm', 'leg', 'weapon', 'tail', 'tentacle', 'head'}
+# Modelos do Tripo com esqueleto (rig_tripo.py): clipe de ação e um osso que ele mexe.
+RIGGED = {'red_blood_cell': ('Wave', 'forearm.R'), 'macrophage': ('Attack', 'forearm.R'),
+          'platelet': ('Repair', 'forearm.R')}
+
+
+def positions(gltf, binary, prim):
+    acc = gltf['accessors'][prim['attributes']['POSITION']]
+    view = gltf['bufferViews'][acc['bufferView']]
+    offset = view.get('byteOffset', 0) + acc.get('byteOffset', 0)
+    stride = view.get('byteStride', 12)
+    return [struct.unpack_from('<3f', binary, offset + i * stride) for i in range(acc['count'])]
 
 
 class CharacterAssetTests(unittest.TestCase):
@@ -21,8 +32,13 @@ class CharacterAssetTests(unittest.TestCase):
             self.assertTrue((ASSET_DIR / f'{key}.glb').is_file(), key)
             self.assertTrue((ASSET_DIR / f'{key}.json').is_file(), key)
 
-    def test_platelet_skin_and_looping_gameplay_clips(self):
-        gltf, binary, meta = self.load('platelet')
+    def test_rigged_skin_and_looping_gameplay_clips(self):
+        for key, (action, action_bone) in RIGGED.items():
+            with self.subTest(key=key):
+                self.check_rigged(key, action, action_bone)
+
+    def check_rigged(self, key, action, action_bone):
+        gltf, binary, meta = self.load(key)
         for node in gltf['nodes']:
             if 'mesh' in node:
                 self.assertIn('skin', node)
@@ -31,7 +47,9 @@ class CharacterAssetTests(unittest.TestCase):
 
         clips = {a['name']: a for a in gltf['animations']}
         self.assertEqual(set(meta['clips']), set(clips))
-        for name, bone in [('Idle', 'head'), ('Walk', 'thigh.L'), ('Repair', 'forearm.R')]:
+        self.assertEqual(meta['action_clip'], action)
+        self.assertEqual(set(meta['clip_seconds']), set(clips))
+        for name, bone in [('Idle', 'head'), ('Walk', 'thigh.L'), (action, action_bone)]:
             with self.subTest(name=name):
                 clip = clips[name]
                 channel = next(c for c in clip['channels'] if c['target']['path'] == 'rotation'
@@ -70,7 +88,11 @@ class CharacterAssetTests(unittest.TestCase):
                 for mesh in gltf['meshes']:
                     for prim in mesh['primitives']:
                         attrs = prim['attributes']
-                        self.assertIn('COLOR_0', attrs)
+                        if 'COLOR_0' not in attrs:
+                            # Modelos do Tripo: cor na textura do material (UV + baseColorTexture).
+                            self.assertIn('TEXCOORD_0', attrs)
+                            pbr = gltf['materials'][prim['material']]['pbrMetallicRoughness']
+                            self.assertIn('baseColorTexture', pbr)
                         self.assertIn('NORMAL', attrs)
                         self.assertLessEqual(gltf['accessors'][attrs['POSITION']]['count'], 65535)
 
@@ -93,6 +115,14 @@ class CharacterAssetTests(unittest.TestCase):
         for key in CHARACTER_KEYS:
             with self.subTest(key=key):
                 gltf, binc, meta = self.load(key)
+                if key in RIGGED:
+                    # Malha única deformável: as pontas das botas avançam mais em +Z que os calcanhares.
+                    node = next(n for n in gltf['nodes'] if n.get('name') == f'{key}.body')
+                    feet = [p for p in positions(gltf, binc, gltf['meshes'][node['mesh']]['primitives'][0])
+                            if p[1] < 0.04 * meta['height']]
+                    self.assertTrue(feet)
+                    self.assertGreater(max(p[2] for p in feet) + min(p[2] for p in feet), 0.0)
+                    continue
                 mapping, _ = raylib_mesh_indices(gltf)
                 legs = [p for p in meta['parts'] if p['swing'] in ('leg', 'head')]
                 self.assertTrue(legs)

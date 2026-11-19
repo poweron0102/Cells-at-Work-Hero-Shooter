@@ -67,7 +67,12 @@ class WeaponAssetTests(unittest.TestCase):
                 mount = meta.get('mount')
                 self.assertIsNotNone(mount)
                 parts = {p['name'] for p in meta['parts']}
-                self.assertIn(mount['part'], parts | {'body'})
+                if 'bone' in mount:
+                    # Arma presa a um osso do esqueleto (modelos com clipes).
+                    gltf, _ = read_glb(CHAR_DIR / f'{key}.glb')
+                    self.assertIn(mount['bone'], {n.get('name') for n in gltf['nodes']})
+                else:
+                    self.assertIn(mount['part'], parts | {'body'})
                 y = mount['matrix'][1][3]
                 self.assertTrue(.6 < y < meta['height'], 'arma na altura das mãos/ombro')
 

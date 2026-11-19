@@ -5,6 +5,10 @@ tail, tentacles_*, ...) e um JSON com o índice da malha no raylib, o pivô da a
 família de animação.  Nada é carregado na importação: o Model é carregado na primeira vez que
 um personagem é desenhado (precisa de contexto OpenGL) e fica em cache por chave, compartilhado
 por todas as instâncias.
+
+Personagens com esqueleto (hemácia, macrófago e plaqueta; referencias/scripts/personagens/
+rig_tripo.py) trazem clipes Idle/Walk e um clipe de ação ("action_clip"), textura de cor no
+material e, no macrófago, a arma presa ao osso da mão ("mount.bone").
 """
 import json
 import math
@@ -12,6 +16,7 @@ import struct
 import time
 from pathlib import Path
 
+import numpy as np
 import pyray as rl
 import raylib as _raw
 
@@ -102,6 +107,47 @@ def _to_matrix(m):
 _IDENTITY = (((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0)), (0.0, 0.0, 0.0))
 
 
+# --------------------------------------------------------------------------------------
+# Skinning na GPU: poses do raylib (Transform no espaço do modelo) -> matrizes de pele
+# --------------------------------------------------------------------------------------
+
+def _poses(poses, frames, bones):
+    """``ModelAnimPose`` x quadros -> (quadros, ossos, 10): translação, rotação xyzw, escala."""
+    out = np.empty((frames, bones, 10), np.float32)
+    for f in range(frames):
+        out[f] = np.frombuffer(_ffi.buffer(poses[f], bones * 40), np.float32).reshape(bones, 10)
+    return out
+
+
+def _transforms(p):
+    """(..., 10) -> (..., 4, 4) com vetores-coluna (T * R * S)."""
+    x, y, z, w = p[..., 3], p[..., 4], p[..., 5], p[..., 6]
+    m = np.zeros(p.shape[:-1] + (4, 4), np.float32)
+    m[..., 0, 0] = 1 - 2 * (y * y + z * z)
+    m[..., 0, 1] = 2 * (x * y - z * w)
+    m[..., 0, 2] = 2 * (x * z + y * w)
+    m[..., 1, 0] = 2 * (x * y + z * w)
+    m[..., 1, 1] = 1 - 2 * (x * x + z * z)
+    m[..., 1, 2] = 2 * (y * z - x * w)
+    m[..., 2, 0] = 2 * (x * z - y * w)
+    m[..., 2, 1] = 2 * (y * z + x * w)
+    m[..., 2, 2] = 1 - 2 * (x * x + y * y)
+    m[..., :3, :3] *= p[..., None, 7:10]
+    m[..., :3, 3] = p[..., :3]
+    m[..., 3, 3] = 1.0
+    return m
+
+
+def _blend_poses(a, b, k):
+    """Mistura duas poses (ossos, 10): translação/escala lineares, rotação nlerp."""
+    qa, qb = a[:, 3:7], b[:, 3:7]
+    qb = np.where((qa * qb).sum(1, keepdims=True) < 0, -qb, qb)
+    out = a + (b - a) * k
+    q = qa + (qb - qa) * k
+    out[:, 3:7] = q / np.linalg.norm(q, axis=1, keepdims=True)
+    return out
+
+
 def _slash(a):
     """Golpe: prepara (braço sobe à frente/acima) e corta para baixo. Ângulo em X (rad)."""
     if a <= 0.0:
@@ -121,11 +167,12 @@ def _slash(a):
 # --------------------------------------------------------------------------------------
 
 class _Part:
-    __slots__ = ('name', 'mesh', 'swing', 'pivot', 'parent', 'phase', 'amp', 'action', 'side')
+    __slots__ = ('name', 'mesh', 'texture', 'swing', 'pivot', 'parent', 'phase', 'amp', 'action', 'side')
 
-    def __init__(self, entry, mesh):
+    def __init__(self, entry, mesh, texture):
         self.name = entry['name']
         self.mesh = mesh
+        self.texture = texture
         self.swing = entry.get('swing', 'static')
         self.pivot = tuple(entry.get('pivot', (0.0, 0.0, 0.0)))
         self.parent = entry.get('parent', 'body')
@@ -144,9 +191,30 @@ class _Rig:
         if self.model.meshCount != meta.get('mesh_count', self.model.meshCount):
             raise RuntimeError(f'{key}: GLB tem {self.model.meshCount} malhas, JSON espera {meta["mesh_count"]}')
         self.material = rl.load_material_default()
+        self.default_texture = _ffi.new('Texture *', self.material.maps[0].texture)[0]
+        # Textura de cor de cada malha (a do material do GLB; sem textura = branca 1x1 do raylib).
+        self.textures = []
+        self.owned_textures = {}
+        for i in range(self.model.meshCount):
+            maps = self.model.materials[self.model.meshMaterial[i]].maps
+            tex = maps[0].texture
+            if tex.id != self.default_texture.id and tex.id not in self.owned_textures:
+                # Mipmaps: as multidões aparecem pequenas e de longe.
+                _raw.GenTextureMipmaps(_ffi.addressof(maps[0], 'texture'))
+                rl.set_texture_filter(maps[0].texture, rl.TextureFilter.TEXTURE_FILTER_TRILINEAR)
+                self.owned_textures[tex.id] = maps[0].texture
+            self.textures.append(maps[0].texture)
         self.animations = None
         self.clips = {}
+        self.poses = {}
+        self.skins = {}
+        self.skin = None
+        self.skin_ptr = None
         self.animation_count = 0
+        self.seconds = meta.get('clip_seconds', {})
+        self.action_clip = meta.get('action_clip')
+        self.action_mode = meta.get('action_mode', 'blend')
+        self.walk_rate = float(meta.get('walk_rate', 1.0))
         if meta.get('clips'):
             count = _ffi.new('int *')
             self.animations = rl.load_model_animations(str(ASSET_DIR / f'{key}.glb'), count)
@@ -158,24 +226,90 @@ class _Rig:
             if set(self.clips) != set(meta['clips']):
                 self.unload()
                 raise ValueError(f'{key}: clipes incompatíveis com o esqueleto')
-        parts = [_Part(e, self.model.meshes[e['mesh']]) for e in meta['parts']]
+            self._init_skinning()
+        parts = [_Part(e, self.model.meshes[e['mesh']], self.textures[e['mesh']]) for e in meta['parts']]
         # Pais antes dos filhos (a arma usa a matriz do braço direito).
         order = {p.name: i for i, p in enumerate(parts)}
         parts.sort(key=lambda p: (p.parent != 'body' and p.parent in order, order[p.name]))
         self.parts = parts
         self.has_weapon = any(p.swing == 'weapon' for p in parts)
         self.identity = _to_matrix(_IDENTITY)
-        # Arma do herói (Assets/Weapons) presa a uma parte: matriz arma -> personagem.
+        # Arma do herói (Assets/Weapons) presa a uma parte ou a um osso: matriz arma -> personagem
+        # (no osso, arma -> pose de repouso; a matriz de pele do osso no quadro vai por cima).
         mount = meta.get('mount')
-        self.mount_part = mount['part'] if mount else None
-        self.mount = (tuple(tuple(r[:3]) for r in mount['matrix']), tuple(r[3] for r in mount['matrix']))             if mount else None
+        self.mount_part = mount.get('part') if mount else None
+        self.mount_bone = None
+        if mount and mount.get('bone'):
+            names = [_ffi.string(self.model.skeleton.bones[i].name).decode()
+                     for i in range(self.model.skeleton.boneCount)]
+            self.mount_bone = names.index(mount['bone'])
+        self.mount = (tuple(tuple(r[:3]) for r in mount['matrix']), tuple(r[3] for r in mount['matrix'])) \
+            if mount else None
+
+    def _init_skinning(self):
+        """Envia índices/pesos de osso para o VAO de cada malha (posições 7 e 8 do shader) e
+        pré-calcula as matrizes de pele de todos os quadros de cada clipe."""
+        bones = self.model.skeleton.boneCount
+        if bones > model_lighting.MAX_BONES:
+            raise RuntimeError(f'{self.key}: {bones} ossos (máximo {model_lighting.MAX_BONES})')
+        for i in range(self.model.meshCount):
+            mesh = self.model.meshes[i]
+            if mesh.boneIndices == _ffi.NULL or mesh.vboId[7]:
+                continue
+            rl.rl_enable_vertex_array(mesh.vaoId)
+            mesh.vboId[7] = rl.rl_load_vertex_buffer(mesh.boneIndices, mesh.vertexCount * 4, False)
+            rl.rl_set_vertex_attribute(7, 4, rl.RL_UNSIGNED_BYTE, False, 0, 0)
+            rl.rl_enable_vertex_attribute(7)
+            mesh.vboId[8] = rl.rl_load_vertex_buffer(mesh.boneWeights, mesh.vertexCount * 16, False)
+            rl.rl_set_vertex_attribute(8, 4, rl.RL_FLOAT, False, 0, 0)
+            rl.rl_enable_vertex_attribute(8)
+            rl.rl_disable_vertex_array()
+        bind = _poses([self.model.skeleton.bindPose], 1, bones)[0]
+        self.bind_inv = np.linalg.inv(_transforms(bind)).astype(np.float32)
+        for name, clip in self.clips.items():
+            poses = _poses(clip.keyframePoses, clip.keyframeCount, bones)
+            self.poses[name] = poses
+            # Linhas da matriz em sequência = layout do struct Matrix do raylib.
+            self.skins[name] = np.ascontiguousarray(_transforms(poses) @ self.bind_inv, np.float32)
+
+    def frame(self, name, cycles):
+        """Quadro do clipe ``name`` após ``cycles`` voltas (a fração é a posição no laço)."""
+        clip = self.clips[name]
+        return (cycles % 1.0) * max(1, clip.keyframeCount - 1)
+
+    def pose_skin(self, name, frame, work=None, work_frame=0.0, weight=0.0):
+        """Matrizes de pele do quadro (``frame`` fracionário) com mistura opcional de ``work``."""
+        skins = self.skins[name]
+        last = len(skins) - 1
+        f0 = min(int(frame), last)
+        f1 = min(f0 + 1, last)
+        k = frame - f0
+        if work is None or weight <= 0.0:
+            skin = skins[f0] if k < 1e-3 else skins[f0] + (skins[f1] - skins[f0]) * k
+        else:
+            a = self.poses[name][f0]
+            b = self.poses[work][min(int(round(work_frame)), len(self.poses[work]) - 1)]
+            skin = _transforms(_blend_poses(a, b, min(1.0, weight))) @ self.bind_inv
+        self.skin = np.ascontiguousarray(skin, np.float32)
+        self.skin_ptr = _ffi.cast('Matrix *', _ffi.from_buffer(self.skin))
+        return self.skin
+
+    def bone_matrix(self, index):
+        """Matriz de pele do osso no quadro atual (repouso -> pose), como (r, t)."""
+        b = self.skin[index]
+        return ((float(b[0, 0]), float(b[0, 1]), float(b[0, 2])), (float(b[1, 0]), float(b[1, 1]), float(b[1, 2])),
+                (float(b[2, 0]), float(b[2, 1]), float(b[2, 2]))), (float(b[0, 3]), float(b[1, 3]), float(b[2, 3]))
 
     def unload(self):
         if self.animations:
             rl.unload_model_animations(self.animations, self.animation_count)
         # O shader do material é o toon compartilhado: não deixa UnloadMaterial descarregá-lo.
         self.material.shader = rl.Shader(rl.rl_get_shader_id_default(), rl.rl_get_shader_locs_default())
+        # As texturas do GLB são liberadas aqui (UnloadModel não as descarrega).
+        self.material.maps[0].texture = self.default_texture
         rl.unload_material(self.material)
+        for tex in self.owned_textures.values():
+            rl.unload_texture(tex)
         rl.unload_model(self.model)
 
 
@@ -230,6 +364,7 @@ class CharacterModel:
         t = now + (position.x * 1.37 + position.z * 0.71) % math.tau
         material = rig.material
         material.shader = model_lighting.shader()
+        skinned = False
         c = _WHITE if tint is None else ((tint.r, tint.g, tint.b, tint.a) if hasattr(tint, 'r') else tuple(tint))
         color = material.maps[0].color
         color.r, color.g, color.b, color.a = c[0], c[1], c[2], (c[3] if len(c) > 3 else 255)
@@ -241,20 +376,8 @@ class CharacterModel:
             model_lighting.set_highlight(0.0, 0.0, 0.0, 0.0)
         bob = abs(math.sin(phase)) * 0.035 * walk + math.sin(t * 2.1) * 0.006 * (1 - walk)
         if rig.clips:
-            name = animation or ('Walk' if moving else 'Idle')
-            clip = rig.clips[name]
-            # Raylib reamostra o glTF a 60 Hz. A passada acompanha a distância da escolta.
-            period = max(1, clip.keyframeCount - 1)
-            if name == 'Walk':
-                frame = (phase % math.tau) / math.tau * period
-            else:
-                frame = ((t if name == 'Idle' else phase) * 60) % period
-            if action > 0 and animation is None:
-                work = rig.clips['Repair']
-                work_frame = (t * 60) % max(1, work.keyframeCount - 1)
-                rl.update_model_animation_ex(rig.model, clip, frame, work, work_frame, min(1, action))
-            else:
-                rl.update_model_animation(rig.model, clip, frame)
+            self._animate(rig, phase, moving, t, action, animation)
+            skinned = model_lighting.set_skin(material.shader, rig.skin_ptr, len(rig.skin))
             bob = 0.0
         rl.rl_push_matrix()
         rl.rl_translatef(position.x, position.y + bob, position.z)
@@ -267,6 +390,7 @@ class CharacterModel:
             rl.rl_disable_backface_culling()
         mats = {}
         for part in rig.parts:
+            material.maps[0].texture = part.texture
             if rig.clips:
                 _DrawMesh(part.mesh, material, rig.identity[0])
                 continue
@@ -280,6 +404,9 @@ class CharacterModel:
             else:
                 p = _to_matrix(m)
                 _DrawMesh(part.mesh, material, p[0])
+        material.maps[0].texture = rig.default_texture
+        if skinned:
+            model_lighting.set_skin(material.shader, None)  # arma e cenário usam o mesmo shader
         muzzle = None
         if weapon and rig.mount is not None:
             muzzle = self._draw_weapon(rig, mats, kick, position, bob, yaw)
@@ -294,7 +421,10 @@ class CharacterModel:
         a = asset(self.hero)
         if a is None:
             return None
-        parent = mats.get(rig.mount_part) if rig.mount_part != 'body' else None
+        if rig.mount_bone is not None:
+            parent = rig.bone_matrix(rig.mount_bone)
+        else:
+            parent = mats.get(rig.mount_part) if rig.mount_part != 'body' else None
         base = rig.mount if parent is None else _compose(parent, rig.mount)
         if kick > 0:
             # Recuo: arma desliza para trás e o cano sobe, girando na mão.
@@ -307,6 +437,31 @@ class CharacterModel:
         ang = math.pi - yaw
         c, s = math.cos(ang), math.sin(ang)
         return (position.x + x * c + z * s, position.y + bob + y, position.z - x * s + z * c)
+
+    @staticmethod
+    def _animate(rig, phase, moving, t, action, animation):
+        """Pose esquelética do quadro. ``Walk`` segue a distância andada (``phase``: 2π por passada
+        do jogo, vezes ``walk_rate``); ``Idle`` e o laço de trabalho seguem o relógio; um clipe pedido
+        por nome (``animation``) usa ``phase`` como tempo em segundos. A ação do jogo mistura o
+        clipe de ação: em laço (``blend``) ou pelo andamento do golpe, 1 - ação (``progress``)."""
+        name = animation or ('Walk' if moving else 'Idle')
+        if name == 'Walk':
+            frame = rig.frame(name, phase * rig.walk_rate / math.tau)
+        else:
+            clock = t if animation is None else phase
+            frame = rig.frame(name, clock / rig.seconds.get(name, 1.0))
+        work_name = rig.action_clip if action > 0 and animation is None else None
+        if work_name in rig.clips:
+            work = rig.clips[work_name]
+            if rig.action_mode == 'progress':
+                work_frame = (1.0 - min(1.0, action)) * max(1, work.keyframeCount - 1)
+                weight = min(1.0, action / 0.08)
+            else:
+                work_frame = rig.frame(work_name, t / rig.seconds.get(work_name, 1.0))
+                weight = min(1.0, action * 2.0)
+            rig.pose_skin(name, frame, work_name, work_frame, weight)
+        else:
+            rig.pose_skin(name, frame)
 
     @staticmethod
     def _part_transform(part, phase, walk, t, action, kick=0.0):

@@ -138,12 +138,9 @@ class ArenaEffects(Renderable3D):
             if cell['state'] in ('dead', 'inside'):
                 continue
             x, y, z = cell['pos']
+            # A caixa de oxigênio faz parte do modelo (presa ao peito da hemácia).
             model('red_blood_cell').draw(Vec3(x, y, z), cell['yaw'], cell['phase'], cell['moving'],
                                          0, 0, 0, rl.Color(255, 200, 200, 255) if cell['state'] in ('flee', 'hide') else None)
-            # Oxygen box carried in front.
-            fx, fz = math.sin(cell['yaw']), -math.cos(cell['yaw'])
-            rl.draw_cube(rl.Vector3(x+fx*.38, y+1.0, z+fz*.38), .42, .3, .32, rl.Color(240, 244, 248, 255))
-            rl.draw_cube(rl.Vector3(x+fx*.38, y+1.0, z+fz*.38), .43, .08, .33, rl.Color(130, 190, 230, 255))
             if cell['state'] in ('flee', 'hide'):
                 rl.draw_sphere(rl.Vector3(x, y+2.3+.08*math.sin(self.time*9), z), .12, rl.Color(255, 90, 80, 255))
 
