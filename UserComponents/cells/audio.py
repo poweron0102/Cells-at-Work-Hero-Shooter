@@ -250,7 +250,7 @@ class AudioFeedback(Component):
         now = dict(hero=me.hero, alive=me.alive, health=me.health.value, hit=me.hit_marker, kill=me.kill_marker,
                    ability=me.ability_cd, ability2=me.ability2_cd, dash=me.dash, swing=me.swing,
                    absorbed=me.absorbed_fx, charge=me.charge, reload=weapon.reload_time if weapon else 0,
-                   lowhp=self.low_enemies(me))
+                   lowhp=self.low_enemies(me), front=me.front, charges=me.q_charges)
         prev, self.me_prev = self.me_prev, now
         if prev is None or prev['hero'] != now['hero']:
             if me.alive:
@@ -282,12 +282,16 @@ class AudioFeedback(Component):
             self.play("swing", .35)
         if now['dash'] > prev['dash'] + .05:
             self.play("dash", .4, DASH_PITCH.get(me.hero, 1.0))
-        if now['ability'] > prev['ability'] + .3:
+        # Q por cargas (Streptococcus) nao mexe no cooldown: conta a carga gasta.
+        if now['ability'] > prev['ability'] + .3 or (me.hero == 'streptococcus' and now['charges'] < prev['charges']):
             if me.hero == 'killer_t':
                 self.play("dash", .45, .7)
             self.say(me, "q", chance=.45)
         if now['ability2'] > prev['ability2'] + .3:
             self.say(me, "e", chance=.45)
+        # Engolir da Macrofago (botao direito segurado): comentario ao abrir a membrana.
+        if me.hero == 'macrophage' and now['front'] == 'engulf' and prev['front'] != 'engulf':
+            self.say(me, "rmb", chance=.4)
         # Receptor do Neutrofilo: algum inimigo acabou de ficar visivel (vida < 50%).
         if me.hero == 'neutrophil' and now['lowhp'] and not prev['lowhp']:
             self.play("receptor", .4)
