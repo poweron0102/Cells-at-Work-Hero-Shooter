@@ -126,7 +126,7 @@ Não há mais Systemic Stress, fases cronometradas, núcleos fixos nem resposta 
 
 Mapa novo, com cerca de **124 × 186 m** de área jogável e um horizonte de prédios
 altos e vasos gigantes ao fundo. Foi construído do zero no Blender a partir das
-imagens de `referencias/`:
+imagens de `referencias/imagens/`:
 
 - Estação de serviço das células (sul), com duas saídas protegidas por anteparos.
 - Avenida arterial em madeira ocre, prédios com sacadas, passarelas a 4 m, arcos
@@ -156,14 +156,14 @@ personagens. Para editar e reexportar, veja
 
 ## Personagens
 
-Os personagens foram modelados no Blender a partir das imagens de `Assets/characters/`.
-A plaqueta é editável em `Assets/Characters3D/platelet.blend`. As ações `Idle`, `Walk`
+Os personagens foram modelados no Blender a partir das imagens de `referencias/personagens_oficiais/`.
+A plaqueta é editável em `referencias/blender/platelet.blend`. As ações `Idle`, `Walk`
 e `Repair` acompanham o esqueleto no GLB. Os oito heróis e a hemácia usam animação
-procedural por partes. Para reexportar, veja `scripts/build_characters.py`.
+procedural por partes. Para reexportar, veja `referencias/scripts/personagens/build_characters.py`.
 
 ## Armas e tiros
 
-Cada herói tem a arma descrita no GDD, modelada no Blender por `scripts/build_weapons.py`
+Cada herói tem a arma descrita no GDD, modelada no Blender por `referencias/scripts/personagens/build_weapons.py`
 (`Assets/Weapons/<herói>.glb` + `.json`): SMG citotóxica (Neutrophil), escopeta-machado
 (Macrophage), rifle de anticorpos (B Cell), fuzil de rajada (Killer T) e armas orgânicas
 para as bactérias (canhão de cápsula, lançador de cachos, fuzil de ácido e SMG de contas).
@@ -181,7 +181,7 @@ são malhas separadas, e o JSON guarda o cano, a janela de ejeção e a pose da 
 
 ```powershell
 & 'C:\Program Files\Blender Foundation\Blender 5.2\blender.exe' --background --factory-startup `
-    --python scripts\build_weapons.py                      # prévias em .scratch/weapons/
+    --python referencias\scripts\personagens\build_weapons.py                      # prévias em .scratch/weapons/
 .venv\Scripts\python.exe scripts/check_weapons.py           # capturas no jogo (--third: vista de outro jogador)
 ```
 
@@ -228,5 +228,5 @@ resultado, evitando gastos ou coletas duplicadas.
 O GDD original está em [docs/GDD_Cells_at_Work_Hero_Shooter_Prototype.html](docs/GDD_Cells_at_Work_Hero_Shooter_Prototype.html).
 O mapa anterior, Bairro dos Canais, seus atlas e suas ferramentas exclusivas
 foram removidos. O único mapa mantido é o Bairro Arterial. Veja
-[Assets/README.md](Assets/README.md) para a organização dos assets e os comandos
+[referencias/README.md](referencias/README.md) para a organização dos assets e os comandos
 de geração.

@@ -1,21 +1,21 @@
 """Exporta o Bairro Arterial do Blender para o jogo.
 
-Gera em Assets/Maps/BairroArterial/:
-  BairroArterial.blend   fonte editavel (salva antes de exportar)
+Salva a fonte editavel em referencias/blender/BairroArterial.blend e gera em
+Assets/Maps/BairroArterial/:
   BairroArterial.glb     arte (cores por vertice + padrao do shader em UV.x)
   runtime.json           colisao (triangulos), marcadores, rotas e metadados
 
 Uso no Blender aberto (depois de build_distrito.py ou abrindo o .blend):
-    exec(open(r'<repo>/scripts/export_distrito.py', encoding='utf-8').read(), {'REPO': r'<repo>'})
+    exec(open(r'<repo>/referencias/scripts/mapa/export_distrito.py', encoding='utf-8').read(), {'REPO': r'<repo>'})
 Em segundo plano:
-    blender --background Assets/Maps/BairroArterial/BairroArterial.blend --python scripts/export_distrito.py
+    blender --background referencias/blender/BairroArterial.blend --python referencias/scripts/mapa/export_distrito.py
 """
 import json
 import os
 
 import bpy
 
-REPO = globals().get('REPO') or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+REPO = globals().get('REPO') or os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 OUT = os.path.join(REPO, 'Assets', 'Maps', 'BairroArterial')
 
 
@@ -26,7 +26,7 @@ def to_game(v):
 def export(save_blend=True):
     os.makedirs(OUT, exist_ok=True)
     if save_blend:
-        bpy.ops.wm.save_as_mainfile(filepath=os.path.join(OUT, 'BairroArterial.blend'), copy=True)
+        bpy.ops.wm.save_as_mainfile(filepath=os.path.join(REPO, 'referencias', 'blender', 'BairroArterial.blend'), copy=True)
     art = bpy.data.collections['Arte']
     bpy.ops.object.select_all(action='DESELECT')
     for ob in art.objects:

@@ -3,7 +3,7 @@
 Uso (a partir da raiz do repositório):
 
     & 'C:\\Program Files\\Blender Foundation\\Blender 5.2\\blender.exe' --background --factory-startup `
-        --python scripts\\build_characters.py -- [--only neutrophil,b_cell] [--no-preview]
+        --python referencias\\scripts\\personagens\\build_characters.py -- [--only neutrophil,b_cell] [--no-preview]
 
 A plaqueta usa a cena de autoria platelet.blend, com esqueleto e ações. Os demais
 personagens são modelados com primitivas procedurais (lathe, tubos varridos,
@@ -27,7 +27,7 @@ from pathlib import Path
 import bpy
 from mathutils import Euler, Matrix, Vector
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[3]
 OUT = ROOT / 'Assets' / 'Characters3D'
 PREVIEW = ROOT / '.scratch' / 'characters'
 TAU = math.tau
@@ -1482,7 +1482,7 @@ def to_gltf(v):
 
 def build_platelet_from_blend():
     """Exporta a malha deformável e as ações da cena de autoria."""
-    with bpy.data.libraries.load(str(OUT / 'platelet.blend')) as (source, loaded):
+    with bpy.data.libraries.load(str(ROOT / 'referencias' / 'blender' / 'platelet.blend')) as (source, loaded):
         loaded.collections = ['Plaqueta']
         loaded.actions = list(source.actions)
     collection = loaded.collections[0]
@@ -1573,7 +1573,7 @@ def build(key):
             entry['action'] = p.action
         meta['parts'].append(entry)
     if mount:
-        # Arma (scripts/build_weapons.py) na mão: origem do espaço da arma no centro da mão e
+        # Arma (referencias/scripts/personagens/build_weapons.py) na mão: origem do espaço da arma no centro da mão e
         # cano para a frente do personagem; matriz 3x4 arma -> personagem (glTF).
         x, y, z = to_gltf(V(mount['pos']) - V(0, 0, minz))
         meta['mount'] = {'part': mount['part'], 'matrix': [[1.0, 0.0, 0.0, x], [0.0, 1.0, 0.0, y],

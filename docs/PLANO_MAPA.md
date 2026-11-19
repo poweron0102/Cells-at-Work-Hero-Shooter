@@ -180,7 +180,7 @@ Tempos de ativação e revelação continuam ajustáveis.
 
 ## 7. Direção visual
 
-Referências locais em `referencias/`:
+Referências locais em `referencias/imagens/`:
 
 | Arquivo | Aplicação |
 | --- | --- |

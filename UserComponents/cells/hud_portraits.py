@@ -7,7 +7,9 @@ from pathlib import Path
 import pyray as rl
 from .visuals import color
 
-ROOT = Path('Assets/characters/official/1st/assets/img/character')
+# Copies of the official ``<slug>/up.png`` sheets, installed per hero by
+# referencias/scripts/personagens/fetch_references.py. The slug is kept for provenance.
+ROOT = Path('Assets/characters/faces')
 # Rectangles: x, y, width, height. Keep each crop clear of adjacent faces.
 FACES = {
     'neutrophil': ('leukocyte', [(265, 48, 188, 260), (72, 310, 190, 252), (412, 330, 216, 270)],
@@ -28,10 +30,10 @@ FACES = {
 
 
 def draw_face(canvas, hero, state, x, y, size):
-    folder, regions, states = FACES[hero]
+    _, regions, states = FACES[hero]
     key = 'hud-face:' + hero
     if key not in canvas.textures:
-        path = ROOT / folder / 'up.png'
+        path = ROOT / f'{hero}.png'
         canvas.textures[key] = rl.load_texture(str(path)) if path.exists() else None
         if canvas.textures[key]:
             rl.set_texture_filter(canvas.textures[key], rl.TextureFilter.TEXTURE_FILTER_BILINEAR)

@@ -1,9 +1,9 @@
 """Monta o Bairro Arterial no Blender (cena nova, sem reaproveitar o mapa antigo).
 
 Executar no Blender aberto (MCP ou console Python):
-    exec(open(r'<repo>/scripts/build_distrito.py', encoding='utf-8').read(), {'REPO': r'<repo>'})
+    exec(open(r'<repo>/referencias/scripts/mapa/build_distrito.py', encoding='utf-8').read(), {'REPO': r'<repo>'})
 ou em segundo plano:
-    blender --background --factory-startup --python scripts/build_distrito.py
+    blender --background --factory-startup --python referencias/scripts/mapa/build_distrito.py
 
 Coordenadas: o layout e escrito no espaco do JOGO (x leste, y cima, z sul).
 No Blender: X = x, Y = -z, Z = y (norte = +Y). O exportador glTF (+Y up)
@@ -17,8 +17,8 @@ import sys
 
 import bpy
 
-REPO = globals().get('REPO') or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, os.path.join(REPO, 'scripts'))
+REPO = globals().get('REPO') or os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+sys.path.insert(0, os.path.join(REPO, 'referencias', 'scripts', 'mapa'))
 import distrito_geo as geo_module  # noqa: E402
 importlib.reload(geo_module)
 from distrito_geo import *  # noqa: E402,F401,F403

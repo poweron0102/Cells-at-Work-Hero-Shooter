@@ -2,12 +2,13 @@
 
 O mapa ativo é o **Bairro Arterial**. O Bairro dos Canais, seus atlas com bake
 e suas ferramentas exclusivas foram removidos. A organização de mapas,
-personagens, armas e áudio está em [Assets/README.md](../Assets/README.md).
+personagens, armas e áudio está em [referencias/README.md](../referencias/README.md).
 
 ## Fonte e exports
 
-`Assets/Maps/BairroArterial/BairroArterial.blend` é a fonte editável.
-O jogo carrega `BairroArterial.glb`, `runtime.json` e `nav.json` dessa pasta;
+`referencias/blender/BairroArterial.blend` é a fonte editável.
+O jogo carrega `BairroArterial.glb`, `runtime.json` e `nav.json` de
+`Assets/Maps/BairroArterial/`;
 Blender não é necessário para jogar.
 
 A cena separa as coleções `Arte`, `Colisao` e `Marcadores`. O exportador gera
@@ -24,11 +25,11 @@ em metros. `nav.json` é gerado a partir da colisão exportada.
 Após editar a fonte, exporte e regenere a navegação na raiz do projeto:
 
 ```powershell
-& 'C:\Program Files\Blender Foundation\Blender 5.2\blender.exe' --background Assets\Maps\BairroArterial\BairroArterial.blend --python scripts\export_distrito.py
-.venv\Scripts\python.exe scripts\build_navmesh.py
+& 'C:\Program Files\Blender Foundation\Blender 5.2\blender.exe' --background referencias\blender\BairroArterial.blend --python referencias\scripts\mapa\export_distrito.py
+.venv\Scripts\python.exe referencias\scripts\mapa\build_navmesh.py
 ```
 
-Para reconstruir a cena a partir dos scripts, use `scripts/rebuild_distrito.py`
+Para reconstruir a cena a partir dos scripts, use `referencias/scripts/mapa/rebuild_distrito.py`
 no Blender. Esse comando recria a fonte; preserve edições manuais antes de usá-lo.
 Veja [MAPA_BAIRRO_ARTERIAL.md](MAPA_BAIRRO_ARTERIAL.md) para o fluxo completo.
 

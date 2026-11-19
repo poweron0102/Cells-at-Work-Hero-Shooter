@@ -3,7 +3,7 @@
 Os arquivos ficam em ``Assets/audio/voice/<idioma>/<falante>/<evento>_<n>.ogg``; o evento
 é o nome sem o sufixo numérico, então basta soltar um novo ``kill_5.ogg`` na pasta para
 ele entrar no sorteio. Falantes = ids dos heróis + ``global`` (narração) + ``platelet``.
-Gerados por ``scripts/build_voices.py`` (veja ``Assets/audio/voice/SOURCES.md``).
+Gerados por ``referencias/scripts/audio/build_voices.py`` (veja ``referencias/audio/SOURCES.md``).
 
 Eventos usados pelo ``AudioFeedback``:
 ``spawn`` ``kill`` ``ult`` ``death`` ``q`` ``e`` ``rmb`` ``punch`` ``net`` ``heal``

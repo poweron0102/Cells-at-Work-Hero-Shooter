@@ -190,6 +190,10 @@ capturas/
 # Retired map: do not commit old exports or baked atlases again
 /Assets/Maps/BairroDosCanais/
 
+# Assets/ guarda só o que o jogo carrega; fontes e referências ficam em referencias/
+/Assets/**/*.blend
+/Assets/**/*.log
+
 # Logs de rede gerados com --rpc-log
 logs/
 

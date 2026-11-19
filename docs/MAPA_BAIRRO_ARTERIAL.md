@@ -1,6 +1,6 @@
 # Bairro Arterial — pipeline do mapa
 
-Mapa construído do zero no Blender (5.2) a partir de `referencias/` e de
+Mapa construído do zero no Blender (5.2) a partir de `referencias/imagens/` e de
 `docs/PLANO_MAPA.md`. Toda a geometria é gerada por script, então qualquer ajuste
 de layout é reprodutível.
 
@@ -8,16 +8,17 @@ de layout é reprodutível.
 
 | Arquivo | Função |
 | --- | --- |
-| `scripts/distrito_geo.py` | Primitivas e arquitetura (caixas, arcos, escadas com rampa de colisão, guarda-corpos, fachadas com sacadas, árvores, postes, barreiras). |
-| `scripts/distrito_layout.py` | Layout por zonas, marcadores (spawns, escolta, rotas das hemácias, destinos A/B/C, posto de reconhecimento, sugestões de colônia). |
-| `scripts/build_distrito.py` | Monta a cena no Blender: coleções **Arte**, **Colisao** e **Marcadores**. |
-| `scripts/export_distrito.py` | Salva o `.blend`, exporta o GLB e escreve `runtime.json`. |
-| `scripts/build_navmesh.py` | Gera `nav.json` (grade em camadas para os bots) a partir da colisão. |
-| `scripts/rebuild_distrito.py` | Monta e exporta em um único processo do Blender sem janela. |
+| `referencias/scripts/mapa/distrito_geo.py` | Primitivas e arquitetura (caixas, arcos, escadas com rampa de colisão, guarda-corpos, fachadas com sacadas, árvores, postes, barreiras). |
+| `referencias/scripts/mapa/distrito_layout.py` | Layout por zonas, marcadores (spawns, escolta, rotas das hemácias, destinos A/B/C, posto de reconhecimento, sugestões de colônia). |
+| `referencias/scripts/mapa/build_distrito.py` | Monta a cena no Blender: coleções **Arte**, **Colisao** e **Marcadores**. |
+| `referencias/scripts/mapa/export_distrito.py` | Salva o `.blend`, exporta o GLB e escreve `runtime.json`. |
+| `referencias/scripts/mapa/build_navmesh.py` | Gera `nav.json` (grade em camadas para os bots) a partir da colisão. |
+| `referencias/scripts/mapa/rebuild_distrito.py` | Monta e exporta em um único processo do Blender sem janela. |
 | `scripts/check_rbc_routes.py` | Confere se cada trecho das rotas das hemácias tem chão contínuo e corredor livre (também em `tests/test_traversal.py`). |
 | `scripts/check_map_overlaps.py` | Detecta faces coplanares sobrepostas (z-fight); também roda em `tests/test_map_geometry.py`. |
 | `scripts/render_district.py` | Vistas do mapa pelo motor do jogo, incluindo cada captura de `capturas/` (`cap00`, `cap01`...). |
-| `Assets/Maps/BairroArterial/` | `BairroArterial.blend`, `.glb`, `runtime.json`, `nav.json`. |
+| `referencias/blender/BairroArterial.blend` | Fonte editável do mapa. |
+| `Assets/Maps/BairroArterial/` | `BairroArterial.glb`, `runtime.json`, `nav.json` (carregados pelo jogo). |
 
 ## Coordenadas
 
@@ -38,9 +39,9 @@ exec(open(REPO + r'\scripts\export_distrito.py', encoding='utf-8').read(), {'REP
 Em segundo plano:
 
 ```powershell
-& 'C:\Program Files\Blender Foundation\Blender 5.2\blender.exe' --background --factory-startup --python scripts\build_distrito.py
-& 'C:\Program Files\Blender Foundation\Blender 5.2\blender.exe' --background Assets\Maps\BairroArterial\BairroArterial.blend --python scripts\export_distrito.py
-.venv\Scripts\python.exe scripts\build_navmesh.py
+& 'C:\Program Files\Blender Foundation\Blender 5.2\blender.exe' --background --factory-startup --python referencias\scripts\mapa\build_distrito.py
+& 'C:\Program Files\Blender Foundation\Blender 5.2\blender.exe' --background referencias\blender\BairroArterial.blend --python referencias\scripts\mapa\export_distrito.py
+.venv\Scripts\python.exe referencias\scripts\mapa\build_navmesh.py
 ```
 
 `nav.json` guarda o hash de `runtime.json`; se ficar desatualizado, o jogo

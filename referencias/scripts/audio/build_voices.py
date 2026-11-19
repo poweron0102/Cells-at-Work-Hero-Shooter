@@ -1,4 +1,4 @@
-"""Extrai as falas dos personagens dos episódios do anime (ver ``scripts/voice_clips.json``).
+"""Extrai as falas dos personagens dos episódios do anime (ver ``referencias/audio/voice_clips.json``).
 
 Para cada clipe e idioma (``ja`` = áudio original, ``en`` = dublagem):
 1. recorta o trecho do .mkv (faixa ``jpn``/``eng``) com folga;
@@ -12,11 +12,11 @@ Requer ffmpeg no PATH e um Python com ``demucs``, ``torch`` e ``soundfile``
     python -m venv .voice-env
     .voice-env/Scripts/python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
     .voice-env/Scripts/python -m pip install demucs soundfile
-    .voice-env/Scripts/python scripts/build_voices.py --episodes "D:/Series e Filmes/Cells at Work!"
+    .voice-env/Scripts/python referencias/scripts/audio/build_voices.py --episodes "D:/Series e Filmes/Cells at Work!"
 
 Opções: ``--lang ja|en`` (padrão: os dois), ``--only <id>`` (repetível), ``--work <pasta>``
 para guardar os intermediários (padrão: pasta temporária). ``--sources`` só reescreve
-``Assets/audio/voice/SOURCES.md`` a partir do manifesto (não precisa de Demucs nem dos episódios).
+``referencias/audio/SOURCES.md`` a partir do manifesto (não precisa de Demucs nem dos episódios).
 
 Manifesto: cada clipe tem ``episode``, ``use`` (arquivos gerados) e, por idioma, ``time``
 (início/fim em segundos no .mkv), ``text`` e opcionalmente ``trim`` ([início, fim] em s,
@@ -31,8 +31,9 @@ import tempfile
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parents[1]
-MANIFEST = ROOT/"scripts"/"voice_clips.json"
+ROOT = Path(__file__).resolve().parents[3]
+REFS = ROOT/"referencias"/"audio"
+MANIFEST = REFS/"voice_clips.json"
 OUT = ROOT/"Assets"/"audio"/"voice"
 TRACK = {"ja": "jpn", "en": "eng"}
 PAD = 1.0          # folga extraída antes/depois (contexto para o Demucs)
@@ -52,8 +53,8 @@ com a voz isolada da trilha e dos efeitos pelo Demucs. `ja/` usa o áudio origin
 (Akane Shimizu/Kodansha, Aniplex, David Production; dublagem: Crunchyroll/Funimation) e é usado
 aqui apenas neste protótipo de fã, sem fins comerciais.
 
-- Manifesto (episódio, tempos, textos, ajustes): [`scripts/voice_clips.json`](../../../scripts/voice_clips.json)
-- Geração: [`scripts/build_voices.py`](../../../scripts/build_voices.py) (instruções no topo do arquivo;
+- Manifesto (episódio, tempos, textos, ajustes): [`referencias/audio/voice_clips.json`](voice_clips.json)
+- Geração: [`referencias/scripts/audio/build_voices.py`](../scripts/audio/build_voices.py) (instruções no topo do arquivo;
   esta página sai de `build_voices.py --sources`)
 - Uso no jogo: `UserComponents/cells/voice.py` e `audio.py`; idioma em `saves/config.json`
   (`{"voice_language": "en"}`) ou `CELLS_VOICE=en`. Padrão: `ja`.
@@ -82,7 +83,7 @@ def write_sources(clips):
         event = target.split("/")[1].rsplit("_", 1)[0]
         lines.append(f"| `{target}.ogg` | {EVENTS.get(event, event)} | {clip['episode']} | "
                      f"{cell(clip.get('ja'))} | {cell(clip.get('en'))} |")
-    (OUT/"SOURCES.md").write_text(SOURCES_HEAD+"\n".join(lines)+"\n", encoding="utf-8")
+    (REFS/"SOURCES.md").write_text(SOURCES_HEAD+"\n".join(lines)+"\n", encoding="utf-8")
 
 
 def save_manifest(data):

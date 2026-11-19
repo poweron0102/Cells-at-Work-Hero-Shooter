@@ -2,15 +2,15 @@
 
 Gera ``Assets/audio/<nome>.wav`` (44,1 kHz, mono, 16 bits). Rodar de novo sobrescreve
 os arquivos com o mesmo resultado (semente fixa). As vozes dos personagens ficam em
-``Assets/audio/voice`` e são geradas por ``scripts/build_voices.py``.
+``Assets/audio/voice`` e são geradas por ``referencias/scripts/audio/build_voices.py``.
 
-    python scripts/build_audio.py
+    python referencias/scripts/audio/build_audio.py
 """
 from pathlib import Path
 import wave
 import numpy as np
 
-ROOT = Path(__file__).resolve().parents[1] / "Assets" / "audio"
+ROOT = Path(__file__).resolve().parents[3] / "Assets" / "audio"
 SR = 44100
 rng = np.random.default_rng(1146)
 

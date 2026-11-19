@@ -5,22 +5,24 @@ Acervo das páginas oficiais de personagens, arquivado em 13/09/2026:
 - [Primeira temporada](https://cellsatwork-anime.com/1st/character/)
 - [Segunda temporada](https://cellsatwork-anime.com/character/)
 
-Os arquivos originais ficam em `official/`. `manifest.json` registra as páginas
+Os arquivos originais ficam nesta pasta (`1st/` e `assets/`). `manifest.json` registra as páginas
 consultadas, a URL original, o tamanho e o SHA256 de cada imagem. O campo
 `portraits` identifica exatamente a origem de cada um dos dez retratos usados
-pelo jogo. As imagens são preservadas sem alterações; o jogo só ajusta sua
+pelo jogo. O jogo usa apenas cópias: `Assets/characters/<herói>.png` (retratos) e
+`Assets/characters/faces/<herói>.png` (folhas de expressão `up.png` recortadas pela HUD).
+As imagens são preservadas sem alterações; o jogo só ajusta sua
 filtragem durante a renderização.
 
 © Akane Shimizu / KODANSHA, Aniplex, davidproduction.
 Imagens de terceiros utilizadas como retratos e referências neste protótipo de fã.
-Reproduzir o acervo: `python scripts/fetch_references.py` (requer internet).
+Reproduzir o acervo: `python referencias/scripts/personagens/fetch_references.py` (requer internet).
 
 ## Modelos 3D (Blender)
 
 Os dez personagens 3D (`neutrophil`, `macrophage`, `b_cell`, `killer_t`, `pneumococcus`,
 `staphylococcus`, `pseudomonas`, `streptococcus`, `red_blood_cell`, `platelet`) são modelados do
-zero no Blender por `scripts/build_characters.py`, usando apenas as imagens desta pasta e de
-`referencias/` como referência visual. Não há malhas importadas nem código copiado de outro projeto.
+zero no Blender por `referencias/scripts/personagens/build_characters.py`, usando apenas as imagens desta pasta e de
+`referencias/imagens/` como referência visual. Não há malhas importadas nem código copiado de outro projeto.
 
 - Geometria: primitivas procedurais (lathe, tubos varridos, elipsoides, placas extrudadas) e
   modificadores do Blender (Bevel/Subdivision) aplicados antes da exportação.
@@ -40,7 +42,7 @@ Regenerar (Blender 5.2, sem interface), a partir da raiz do repositório:
 
 ```powershell
 & 'C:\Program Files\Blender Foundation\Blender 5.2\blender.exe' --background --factory-startup `
-    --python scripts\build_characters.py -- [--only neutrophil,b_cell] [--no-preview]
+    --python referencias\scripts\personagens\build_characters.py -- [--only neutrophil,b_cell] [--no-preview]
 ```
 
 Prévias do Blender (Workbench) vão para `.scratch/characters/`; a conferência no jogo é

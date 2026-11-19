@@ -6,8 +6,8 @@ com a voz isolada da trilha e dos efeitos pelo Demucs. `ja/` usa o áudio origin
 (Akane Shimizu/Kodansha, Aniplex, David Production; dublagem: Crunchyroll/Funimation) e é usado
 aqui apenas neste protótipo de fã, sem fins comerciais.
 
-- Manifesto (episódio, tempos, textos, ajustes): [`scripts/voice_clips.json`](../../../scripts/voice_clips.json)
-- Geração: [`scripts/build_voices.py`](../../../scripts/build_voices.py) (instruções no topo do arquivo;
+- Manifesto (episódio, tempos, textos, ajustes): [`referencias/audio/voice_clips.json`](voice_clips.json)
+- Geração: [`referencias/scripts/audio/build_voices.py`](../scripts/audio/build_voices.py) (instruções no topo do arquivo;
   esta página sai de `build_voices.py --sources`)
 - Uso no jogo: `UserComponents/cells/voice.py` e `audio.py`; idioma em `saves/config.json`
   (`{"voice_language": "en"}`) ou `CELLS_VOICE=en`. Padrão: `ja`.

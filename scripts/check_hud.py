@@ -100,8 +100,8 @@ def main():
     game = Game('menu', 'HUD verification', screen_resolution=(1280, 720), target_fps=60)
     try:
         assert set(FACES) == set(HEROES)
-        for folder, regions, states in FACES.values():
-            source = rl.load_image(str(FACE_ROOT/folder/'up.png'))
+        for hero, (_, regions, states) in FACES.items():
+            source = rl.load_image(str(FACE_ROOT/f'{hero}.png'))
             try:
                 assert source.width > 0
                 for x, y, w, h in regions:

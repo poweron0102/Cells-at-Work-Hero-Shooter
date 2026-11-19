@@ -1,13 +1,13 @@
 """Gera Assets/Maps/BairroArterial/nav.json a partir da colisao exportada.
 
-    .venv\Scripts\python.exe scripts\build_navmesh.py
+    .venv\Scripts\python.exe referencias\scripts\mapa\build_navmesh.py
 Rode depois de exportar o mapa (o hash de runtime.json invalida o cache).
 """
 import sys
 import time
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT))
 from EasyCells3D.PhysicsComponents3D import BulletPhysicsWorld, PhysicsBody3D, BodyType, TriangleMeshShape  # noqa: E402
 sys.path.insert(0, str(ROOT/"tests"))

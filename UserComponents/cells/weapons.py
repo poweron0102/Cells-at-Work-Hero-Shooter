@@ -1,4 +1,4 @@
-"""Armas dos heróis: GLBs de ``scripts/build_weapons.py`` + viewmodel animado em primeira pessoa.
+"""Armas dos heróis: GLBs de ``referencias/scripts/personagens/build_weapons.py`` + viewmodel animado em primeira pessoa.
 
 O viewmodel é desenhado num passe próprio, depois da cena: a profundidade é limpa (a arma
 nunca atravessa paredes), a câmera tem FOV fixo (a arma não deforma com o zoom/FOV do mundo)

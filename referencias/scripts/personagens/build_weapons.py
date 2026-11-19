@@ -3,9 +3,9 @@
 Uso (a partir da raiz do repositório):
 
     & 'C:\\Program Files\\Blender Foundation\\Blender 5.2\\blender.exe' --background --factory-startup `
-        --python scripts\\build_weapons.py -- [--only neutrophil,b_cell] [--no-preview]
+        --python referencias\\scripts\\personagens\\build_weapons.py -- [--only neutrophil,b_cell] [--no-preview]
 
-Mesma linguagem visual dos personagens (scripts/build_characters.py, de onde vêm os geradores
+Mesma linguagem visual dos personagens (referencias/scripts/personagens/build_characters.py, de onde vêm os geradores
 de geometria): primitivas procedurais, Bevel/Subsurf do Blender aplicados, cor por face e uma
 malha por parte animável.
 
@@ -31,7 +31,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import build_characters as bc  # noqa: E402  (geradores de geometria compartilhados)
 from build_characters import V, xform, tube, slab, lathe, ellipsoid, modifiers, claw  # noqa: E402
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[3]
 OUT = ROOT / 'Assets' / 'Weapons'
 PREVIEW = ROOT / '.scratch' / 'weapons'
 TAU = math.tau

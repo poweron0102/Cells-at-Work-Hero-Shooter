@@ -1,7 +1,7 @@
 """Navegacao em camadas (rua, canal, passarelas, pontes) para os bots.
 
 A grade e amostrada com raycasts na colisao exportada do Blender e salva em
-``nav.json`` ao lado do mapa (gerada por ``scripts/build_navmesh.py`` ou na
+``nav.json`` ao lado do mapa (gerada por ``referencias/scripts/mapa/build_navmesh.py`` ou na
 primeira execucao). Varias alturas podem dividir a mesma coluna X/Z, o que
 preserva passagens sob pontes e passarelas.
 """
