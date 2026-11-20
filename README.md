@@ -7,8 +7,8 @@ oxigênio e fogem de bactérias, colônias bacterianas construídas pelos jogado
 reconhecimento de antígenos e reconhecimento do mapa após o fechamento da ferida.
 
 As regras seguem `docs/PLANO_OBJETIVOS_E_HEROIS.md` e o mapa segue `docs/PLANO_MAPA.md`.
-Os valores de balanceamento estão centralizados em `UserComponents/cells/catalog.py`
-(`BALANCE`) e ainda não foram validados em partidas com pessoas.
+Os valores de balanceamento (atributos de cada herói e regras da partida) estão em `Assets/balance.json`
+e ainda não foram validados em partidas com pessoas.
 
 ## Jogar
 

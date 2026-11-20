@@ -161,7 +161,7 @@ class Weapon(Component):
 
     def reload(self):
         if not self.reload_time and self.ammo < HEROES[self.actor.hero].magazine:
-            self.reload_time = 1.6
+            self.reload_time = HEROES[self.actor.hero].reload
             if self.actor.hero == 'macrophage':
                 self.actor.reload_at = time.perf_counter()
                 self.actor.show_reload()
@@ -175,22 +175,23 @@ class Weapon(Component):
             return
         kit = HEROES[a.hero]
         self.timer = kit.interval*(.75 if a.hero == 'streptococcus' and a.ult > 0 else 1)
-        if a.hero == "killer_t":
-            self.burst = (self.burst+1) % 3
-            self.timer = .09 if self.burst else .4
+        if kit.burst > 1:
+            self.burst = (self.burst+1) % kit.burst
+            if self.burst:
+                self.timer = kit.burst_gap
         self.ammo -= 1
         a.shot += 1
-        pellets = 7 if a.hero == "macrophage" else 1
+        pellets = kit.pellets
         zoomed = a.hero == 'b_cell' and a.zoom
         for _ in range(pellets):
-            spread = .09 if pellets > 1 else (0 if zoomed else .008)
+            spread = 0 if zoomed else kit.spread
             aim = direction(a.yaw + self.rng.uniform(-spread, spread), a.pitch + self.rng.uniform(-spread, spread))
             origin = a.transform.position+Vec3(0, EYE, 0)
             if a.hero == "pseudomonas":
                 # Projétil real: dano e poça só quando ele acerta (Arena.step_spits).
                 a.arena.spit(origin.to_tuple, (aim*SPIT['speed']).to_tuple, a.slot)
                 continue
-            hits = cast(a, aim, 55 if pellets == 1 else 18)
+            hits = cast(a, aim, kit.range)
             endpoint = hits[0]['point'] if hits else origin+aim*45
             a.arena.tracer(origin.to_tuple, endpoint.to_tuple, 'shot', a.slot, impact_kind(hits))
             if not hits:

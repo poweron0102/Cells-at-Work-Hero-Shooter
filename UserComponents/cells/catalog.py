@@ -1,64 +1,122 @@
-"""Kits e parametros de balanceamento (centralizados para ajuste em testes).
+"""Kits e parametros de balanceamento.
 
-Nenhum valor aqui foi validado em partidas: sao pontos de partida do plano.
+Os NUMEROS (vida, dano, municao, recargas, regras da partida) ficam em ``Assets/balance.json``;
+aqui ficam so a identidade de cada heroi (nome, time, papel, cor, nomes das habilidades) e os textos.
+Nenhum valor foi validado em partidas: sao pontos de partida do plano.
 Cada heroi tem passiva, LMB (arma), RMB, Q, E e o especial F (ver ``KIT``).
 """
-from dataclasses import dataclass
+import json
+from dataclasses import dataclass, fields
+from pathlib import Path
 
 CELLS = "cells"
 BACTERIA = "bacteria"
 
+BALANCE_FILE = Path(__file__).resolve().parents[2]/"Assets"/"balance.json"
 
-@dataclass(frozen=True)
+
+@dataclass(frozen=True, kw_only=True)
 class Hero:
+    # Identidade (definida abaixo, em IDENTITY)
     name: str
     team: str
     role: str
-    health: int
-    speed: float
-    damage: int
-    interval: float
-    magazine: int
     color: tuple
     secondary: str
     ability: str
     ultimate: str
-    limit: int = 1
-    jump_height: float = 1.2
-    ability_cd: float = 8.0
-    secondary_cd: float = .8
     ability2: str = ""
-    ability2_cd: float = 10.0
     passive: str = ""
-    ult_time: float = 0.0      # segundos de camera em 3a pessoa ao ativar o especial
+    # Numeros (Assets/balance.json -> "heroes"); significado em "_leia_me" no proprio JSON
+    health: int
+    speed: float
+    jump_height: float
+    damage: float
+    interval: float
+    magazine: int
+    reload: float
+    pellets: int
+    spread: float
+    range: float
+    burst: int
+    burst_gap: float
+    secondary_cd: float
+    ability_cd: float
+    ability2_cd: float
+    ult_time: float
+    limit: int
 
 
-HEROES = {
-    "neutrophil": Hero("NEUTROPHIL 1146", CELLS, "COMBATENTE", 200, 6.2, 17, .105, 32, (221, 235, 230),
-                       "Faca", "Avanco cortante", "Quimiotaxia", 2, 2.0, 7, .7,
-                       ability2="Rede NET", ability2_cd=10, passive="Receptor"),
-    "macrophage": Hero("MACROPHAGE", CELLS, "TANQUE / ANTIGENOS", 450, 5.0, 12, .8, 8, (234, 190, 196),
-                       "Engolir", "Pseudopode", "Banquete", 1, 1.2, 8, 0,
-                       ability2="Machadada", ability2_cd=5, passive="Fagocitose", ult_time=6.0),
-    "b_cell": Hero("B CELL", CELLS, "PRECISAO / SUPORTE", 180, 5.8, 42, .38, 14, (111, 197, 244),
-                   "Mira", "Plasmocito", "Chuva de anticorpos", 1, 1.2, 12, 0,
-                   ability2="Granada de anticorpos", ability2_cd=9, passive="Opsonizacao", ult_time=4.0),
-    "killer_t": Hero("KILLER T", CELLS, "INVESTIDA", 250, 6.0, 24, .16, 27, (62, 79, 91),
-                     "Soco carregado", "Salto de impacto", "Ativacao total", 1, 3.6, 9, 1.2,
-                     ability2="Perforina", ability2_cd=10, passive="Licenca para matar", ult_time=8.0),
-    "pneumococcus": Hero("PNEUMOCOCCUS", BACTERIA, "TANQUE FRONTAL", 300, 5.1, 24, .22, 24, (173, 119, 213),
-                         "Barreira", "Investida", "Pneumonia", 1, 1.2, 9, 0,
-                         ability2="Capsula compartilhada", ability2_cd=12, passive="Capsula", ult_time=7.0),
-    "staphylococcus": Hero("STAPHYLOCOCCUS", BACTERIA, "COLONIZACAO", 230, 5.3, 25, .28, 24, (237, 184, 77),
-                           "Projetil aderente", "Coagulase", "Abscesso", 1, 1.2, 12, 1.6,
-                           ability2="Toxina", ability2_cd=9, passive="Cacho", ult_time=3.0),
-    "pseudomonas": Hero("PSEUDOMONAS", BACTERIA, "CONTROLE DE AREA", 210, 5.8, 21, .19, 28, (99, 195, 150),
-                        "Granada acida", "Biofilme", "Quorum sensing", 1, 3.6, 8, 2.2,
-                        ability2="Flagelo", ability2_cd=8, passive="Corrosao", ult_time=3.0),
-    "streptococcus": Hero("STREPTOCOCCUS", BACTERIA, "FLANQUEADOR", 180, 6.6, 10, .08, 36, (229, 115, 158),
-                          "Golpe", "Arrancada", "Divisao binaria", 1, 2.0, 5, .9,
-                          ability2="Corrente", ability2_cd=9, passive="Hemolise", ult_time=3.0),
+IDENTITY = {
+    "neutrophil": dict(name="NEUTROPHIL 1146", team=CELLS, role="COMBATENTE", color=(221, 235, 230),
+                       secondary="Faca", ability="Avanco cortante", ultimate="Quimiotaxia",
+                       ability2="Rede NET", passive="Receptor"),
+    "macrophage": dict(name="MACROPHAGE", team=CELLS, role="TANQUE / ANTIGENOS", color=(234, 190, 196),
+                       secondary="Engolir", ability="Pseudopode", ultimate="Banquete",
+                       ability2="Machadada", passive="Fagocitose"),
+    "b_cell": dict(name="B CELL", team=CELLS, role="PRECISAO / SUPORTE", color=(111, 197, 244),
+                   secondary="Mira", ability="Plasmocito", ultimate="Chuva de anticorpos",
+                   ability2="Granada de anticorpos", passive="Opsonizacao"),
+    "killer_t": dict(name="KILLER T", team=CELLS, role="INVESTIDA", color=(62, 79, 91),
+                     secondary="Soco carregado", ability="Salto de impacto", ultimate="Ativacao total",
+                     ability2="Perforina", passive="Licenca para matar"),
+    "pneumococcus": dict(name="PNEUMOCOCCUS", team=BACTERIA, role="TANQUE FRONTAL", color=(173, 119, 213),
+                         secondary="Barreira", ability="Investida", ultimate="Pneumonia",
+                         ability2="Capsula compartilhada", passive="Capsula"),
+    "staphylococcus": dict(name="STAPHYLOCOCCUS", team=BACTERIA, role="COLONIZACAO", color=(237, 184, 77),
+                           secondary="Projetil aderente", ability="Coagulase", ultimate="Abscesso",
+                           ability2="Toxina", passive="Cacho"),
+    "pseudomonas": dict(name="PSEUDOMONAS", team=BACTERIA, role="CONTROLE DE AREA", color=(99, 195, 150),
+                        secondary="Granada acida", ability="Biofilme", ultimate="Quorum sensing",
+                        ability2="Flagelo", passive="Corrosao"),
+    "streptococcus": dict(name="STREPTOCOCCUS", team=BACTERIA, role="FLANQUEADOR", color=(229, 115, 158),
+                          secondary="Golpe", ability="Arrancada", ultimate="Divisao binaria",
+                          ability2="Corrente", passive="Hemolise"),
 }
+
+_IDENTITY_FIELDS = {"name", "team", "role", "color", "secondary", "ability", "ultimate", "ability2", "passive"}
+_STATS = [f.name for f in fields(Hero) if f.name not in _IDENTITY_FIELDS]
+
+
+def _numbers(section, where):
+    """Tira as chaves de comentario (comecam com ``_``) e confere que o resto e numero."""
+    out = {}
+    for key, value in section.items():
+        if key.startswith("_"):
+            continue
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ValueError(f"{BALANCE_FILE.name}: {where}.{key} precisa ser um numero (veio {value!r})")
+        out[key] = value
+    return out
+
+
+def _load():
+    try:
+        data = json.loads(BALANCE_FILE.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as e:
+        raise ValueError(f"{BALANCE_FILE.name} esta com erro de sintaxe na linha {e.lineno}, coluna {e.colno}: {e.msg}") from None
+    heroes = {}
+    for key, identity in IDENTITY.items():
+        if key not in data.get("heroes", {}):
+            raise ValueError(f"{BALANCE_FILE.name}: falta o heroi \"{key}\" em \"heroes\"")
+        stats = _numbers(data["heroes"][key], f"heroes.{key}")
+        missing = [s for s in _STATS if s not in stats]
+        unknown = [s for s in stats if s not in _STATS]
+        if missing or unknown:
+            raise ValueError(f"{BALANCE_FILE.name}: heroes.{key} " +
+                             (f"sem {missing} " if missing else "") + (f"com chaves desconhecidas {unknown}" if unknown else ""))
+        for whole in ("magazine", "pellets", "burst", "limit"):
+            if stats[whole] < 1 or stats[whole] != int(stats[whole]):
+                raise ValueError(f"{BALANCE_FILE.name}: heroes.{key}.{whole} precisa ser inteiro >= 1")
+            stats[whole] = int(stats[whole])
+        heroes[key] = Hero(**identity, **stats)
+    unknown = set(data.get("heroes", {})) - set(IDENTITY)
+    if unknown:
+        raise ValueError(f"{BALANCE_FILE.name}: herois desconhecidos em \"heroes\": {sorted(unknown)}")
+    return heroes, _numbers(data.get("balance", {}), "balance")
+
+
+HEROES, BALANCE = _load()
 
 # Textos do cartao do kit (F1) e das dicas da HUD: (nome, descricao curta).
 KIT = {
@@ -143,68 +201,6 @@ ICONS = {
     "Hemolise": "drop", "Metralhadora": "rifle", "Golpe": "knife", "Arrancada": "dash", "Corrente": "chain",
     "Divisao binaria": "clone",
 }
-
-BALANCE = dict(
-    respawn_seconds=6.0,
-    # Escolta
-    escort_speed=.6,              # m/s das plaquetas
-    escort_block_distance=5.0,     # faixa a frente da escolta
-    escort_block_height=1.6,       # mesma passagem: diferenca vertical maxima
-    # Economia
-    rbc_count=9,
-    rbc_speed=3.2,
-    rbc_health=60,
-    rbc_resource=2,                # recurso deixado ao morrer
-    rbc_sight=16.0,
-    rbc_memory=3.5,                # segundos lembrando da ameaca
-    rbc_commit=1.2,                # intervalo minimo antes de trocar de rota
-    rbc_respawn=7.0,
-    drop_life=40.0,
-    pickup_radius=2.0,
-    # Colonias
-    colony_cost=5,
-    colony_build_time=3.0,
-    colony_build_radius=2.2,
-    colony_health=420,
-    colony_limit=3,
-    colony_base_infection=10,
-    colony_dev_per_resource=3,
-    colony_dev_cap=24,
-    colony_protection_each=.08,
-    colony_protection_cap=.4,
-    infection_goal=150,
-    # Reconhecimento (antigenos) e desbloqueios
-    antigen_per_sample=12,
-    antigen_macrophage=26,
-    unlock_b_cell=40,
-    unlock_killer_t=90,
-    antigen_life=30.0,
-    # Reconhecimento do mapa apos fechar a ferida
-    recon_channel=4.0,
-    recon_radius=3.0,
-    recon_reveal=14.0,
-    recon_cooldown=30.0,
-    # Especiais
-    charge_per_damage=.22,
-    charge_escort=1.2,             # por segundo perto da escolta
-    charge_collect=6,
-    charge_build=10,
-    charge_protect=.35,            # por dano causado perto de uma hemacia
-    charge_absorb=.3,              # Engolir: carga por dano engolido
-    # Kits
-    mark_bonus=.15,                # dano extra recebido por alvos marcados
-    engulf_time=3.0,               # barra do Engolir (s)
-    engulf_radius=1.3,
-    barrier_health=600,
-    barrier_radius=1.7,
-    turret_health=160,
-    turret_range=15.0,
-    turret_damage=11,
-    wall_life=5.0,
-    wall_width=6.0,
-    clone_health=60,
-    dome_radius=7.0,
-)
 
 UNLOCKS = {"b_cell": "unlock_b_cell", "killer_t": "unlock_killer_t"}
 
