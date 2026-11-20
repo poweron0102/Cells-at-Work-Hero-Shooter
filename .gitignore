@@ -202,3 +202,6 @@ logs/
 
 # Replays gravados no lobby (locais de cada computador)
 /replays/
+
+# Wheels pre-compiladas distribuidas com o jogo (Instalar.bat)
+!/wheels/

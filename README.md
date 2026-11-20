@@ -12,7 +12,9 @@ e ainda não foram validados em partidas com pessoas.
 
 ## Jogar
 
-O ambiente `.venv` deste workspace já está preparado. Execute:
+Em um computador novo, instale o **Python 3.14 64-bit** (python.org) e abra `Instalar.bat`:
+ele cria a `.venv` e instala as dependências. O pybullet vem pré-compilado em `wheels/`,
+então não é preciso compilador C++. Depois disso, execute:
 
 ```powershell
 .venv\Scripts\python.exe main.py
