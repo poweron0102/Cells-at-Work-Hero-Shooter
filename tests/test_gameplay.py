@@ -89,6 +89,18 @@ class GameplayTests(unittest.TestCase):
         hem.perceive(cell, [], hem.clock)
         self.assertEqual(cell.state, 'deliver')
 
+    def test_every_route_follows_the_streets_even_when_fleeing_mid_block(self):
+        hem, cell = self.first_rbc()
+        # Halfway down the street S -> SW, with a bacterium right ahead.
+        s, sw = RBC_NODES['S'], RBC_NODES['SW']
+        cell.pos = [(s[0]+sw[0])/2, 0, (s[2]+sw[2])/2]
+        cell.threats = {3: ((cell.pos[0]-4, 0, cell.pos[2]), hem.clock)}
+        hem.replan(cell, hem.clock)
+        self.assertIn(cell.path[0], ('S', 'SW'))  # first leg stays on the current street
+        for a, b in zip(cell.path, cell.path[1:]):
+            self.assertIn(b, npcs.GRAPH[a])
+        self.assertNotEqual(cell.path[0], 'SW')  # never runs through the bacterium
+
     def test_killing_a_red_blood_cell_drops_resources_for_bacteria(self):
         hem, cell = self.first_rbc()
         self.arena.hit_rbc(3, cell.id, 999)
