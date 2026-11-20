@@ -102,6 +102,22 @@ def shotgun_state(fire, reload=None):
     return {'bolt': k if reload is None else max(k, fp_arms.reload_parts('macrophage', reload).get('bolt', 0.0))}
 
 
+def third_person_state(hero, fire, reload=None):
+    """Peças da arma na mão do personagem (terceira pessoa): ``fire`` = segundos desde o disparo,
+    ``reload`` = progresso da recarga (0..1) ou None. Ferrolho recua no tiro; na recarga, as curvas da
+    primeira pessoa (``<herói>_fp_anim.json``), com o carregador saindo só um pouco do encaixe (em
+    primeira pessoa ele vai para fora da tela)."""
+    if hero == 'macrophage':
+        return shotgun_state(fire, reload)
+    st = {'bolt': bell(0, .03, .05, .16, fire)}
+    if reload is not None:
+        parts, _ = fp_arms.reload_state(hero, reload)
+        st['bolt'] = max(st['bolt'], parts.get('bolt', 0.0))
+        if 'mag' in parts:
+            st['mag'] = min(parts['mag'], 1.0)
+    return st
+
+
 def gun_matrix(rest, px, py, pz, pitch, yaw, roll):
     """Matriz arma->vista: pose de repouso ``rest`` (JSON 'fp') girada no cabo e deslocada."""
     return _compose(m_translate(px, py, pz), _compose(_about(rest[1], _rot(-pitch, yaw, roll)), rest))

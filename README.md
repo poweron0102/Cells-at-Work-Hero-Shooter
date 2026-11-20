@@ -157,9 +157,15 @@ personagens. Para editar e reexportar, veja
 ## Personagens
 
 Os personagens foram modelados no Blender a partir das imagens de `referencias/personagens_oficiais/`.
-A plaqueta é editável em `referencias/blender/platelet.blend`. As ações `Idle`, `Walk`
-e `Repair` acompanham o esqueleto no GLB. Os oito heróis e a hemácia usam animação
-procedural por partes. Para reexportar, veja `referencias/scripts/personagens/build_characters.py`.
+Macrófaga, Célula B, hemácia e plaqueta têm esqueleto e clipes no GLB; os demais heróis usam
+animação procedural por partes (`referencias/scripts/personagens/build_characters.py`).
+Célula B, hemácia e plaqueta vêm do Tripo, com animações CC0 do Mesh2Motion aplicadas por
+`referencias/scripts/personagens/tripo_characters.py` (fontes em `referencias/animacoes/`).
+
+No jogo, `UserComponents/cells/animation.py` dá a cada personagem com esqueleto um animador
+próprio: parado, andando e correndo se misturam pela velocidade, sem trocas secas; disparo,
+recarga e golpe mexem só no tronco, com as pernas seguindo a locomoção; a aterrissagem e um
+disparo reiniciado entram por cima do anterior. NPCs fora da câmera não são animados.
 
 ## Armas e tiros
 

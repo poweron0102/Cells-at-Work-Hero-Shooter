@@ -496,7 +496,7 @@ class HeroStage:
         from EasyCells3D.Geometry import Vec3
         m = model(hero)
         args = (Vec3(0, 0, 0), yaw, 0.0, False, 0, 0, 0.0, None, 0.0)
-        motion = {'time': now} if hero == 'macrophage' else None
+        motion = {'time': now}  # heróis com esqueleto: Idle no relógio da tela
         rl.begin_texture_mode(self.target)
         rl.clear_background(rl.BLANK)
         rl.begin_mode_3d(camera)

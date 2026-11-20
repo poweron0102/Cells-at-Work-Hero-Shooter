@@ -74,6 +74,34 @@ Depois de animar, gere os GLBs da personagem e da arma e seus metadados:
 & 'C:\Program Files\Blender Foundation\Blender 5.2\blender.exe' --background --python referencias\scripts\personagens\export_macrophage.py
 ```
 
+## Hemácia, plaqueta e Célula B (Tripo + Mesh2Motion)
+
+Os modelos de `referencias/Tripo 3D assets/` (`globulo vermelho.glb`, `plaqueta.glb`,
+`linfocito b.glb`) chegam com esqueleto Mixamo em T. `tripo_characters.py` renomeia os ossos
+para a convenção do projeto, escala até a altura do jogo e aplica os clipes CC0 de
+`referencias/animacoes/mesh2motion/` (esqueleto Unreal): cada osso copia a rotação que o osso
+correspondente fez a partir do repouso, e o quadril desloca na proporção das pernas. Depois:
+
+- Walk e Run começam com o pé esquerdo à frente e guardam a passada (`strides` no JSON), para
+  o jogo avançar o ciclo pela distância percorrida;
+- os Idles ganham respiração e um olhar ao redor (os clipes baixados deixam cabeça e tronco parados);
+- a Célula B tem o osso `socket_weapon` na mão direita, na pose do Rifle Idle, e a mão
+  esquerda volta ao guarda-mão por IK em todo clipe (menos no meio da recarga);
+- a hemácia tem a caixa de oxigênio (malha `box`, osso `box`) no clipe Carry: uma pose leve, com a
+  caixa na cintura e rente à barriga (`BOX_CENTER`/`BOX_TILT` no script), montada sobre o Idle com a
+  pegada das mãos do `walk-carry` (que, inteiro, parece carga pesada).
+
+O JSON também diz qual parte do corpo cada clipe controla (`layers`: `upper` = tronco,
+braços e cabeça; `lower` = quadril e pernas; `arms` = ombros, braços e caixa presos ao peito da
+caminhada), usado por `UserComponents/cells/animation.py`.
+Para trocar um clipe, edite `CHARACTERS` no script e rode:
+
+```powershell
+& 'C:\Program Files\Blender Foundation\Blender 5.2\blender.exe' --background --factory-startup --python referencias\scripts\personagens\tripo_characters.py -- --only red_blood_cell,platelet,b_cell
+```
+
+As cenas ficam em `referencias/blender/<chave>.blend`, com as ações no Editor de Ações.
+
 ## Braços de primeira pessoa
 
 Todos os heróis usam braços com esqueleto em primeira pessoa

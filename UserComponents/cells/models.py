@@ -21,6 +21,8 @@ CHARACTER_KEYS = ('neutrophil', 'macrophage', 'b_cell', 'killer_t', 'pneumococcu
 _ffi = _raw.ffi
 _DrawMesh = _raw.DrawMesh
 _WHITE = (255, 255, 255, 255)
+# Adereços do modelo (caixa da hemácia): só aparecem quando quem desenha pede (motion['props']).
+PROP_PARTS = {'box'}
 
 
 def read_glb(path):
@@ -162,6 +164,11 @@ class _Rig:
             if set(self.clips) != set(meta['clips']):
                 self.unload()
                 raise ValueError(f'{key}: clipes incompatíveis com o esqueleto')
+        self.anim = None
+        self.pose_key = None  # pose atualmente aplicada ao Model (evita refazer o skinning)
+        if self.clips:
+            from .animation import RigAnimation
+            self.anim = RigAnimation(self.model, self.clips, meta)
         parts = [_Part(e, self.model) for e in meta['parts']]
         # Pais antes dos filhos (a arma usa a matriz do braço direito).
         order = {p.name: i for i, p in enumerate(parts)}
@@ -229,19 +236,28 @@ class CharacterModel:
             _RIGS[self.hero] = rig
         return rig
 
+    @property
+    def skeletal(self):
+        """Tem esqueleto com clipes (usa ``animation.Animator`` para transições suaves)?"""
+        rig = self.rig
+        return rig is not None and rig.anim is not None
+
     def draw(self, position, yaw=0, phase=0, moving=False, reveal=0, shield=0, action=0.0, tint=None, kick=0.0,
              weapon=True, cull=None, animation=None, motion=None):
         """Desenha o personagem; ``kick`` (0..1) é o recuo do último disparo. Se o herói tem arma
         montada (e ``weapon``), desenha a arma na mão e devolve a posição do cano no mundo.
-        ``cull`` ('front'/'back') liga o descarte de faces, usado pelos passes de contorno/silhueta."""
+        ``cull`` ('front'/'back') liga o descarte de faces, usado pelos passes de contorno/silhueta.
+        ``motion['animator']`` (``animation.Animator``, atualizado por quem desenha) dá a pose com
+        transições suaves; sem ele, os clipes tocam direto (multidão, lobby)."""
         self.phase, self.moving, self.reveal, self.shield = phase, moving, reveal, shield
         rig = self.rig
         if rig is None:
             return None
         now = motion['time'] if motion and 'time' in motion else time.perf_counter()
         walk = 1.0 if moving else 0.0
-        # Defasagem pela posição: multidões (hemácias/plaquetas) não respiram em sincronia.
-        t = now + (position.x * 1.37 + position.z * 0.71) % math.tau
+        # Defasagem pela posição: multidões (hemácias/plaquetas) não respiram em sincronia, a não ser
+        # que quem desenha agrupe as poses (motion['sync'], para reaproveitar o skinning).
+        t = now if motion and motion.get('sync') else now + (position.x * 1.37 + position.z * 0.71) % math.tau
         material = rig.material
         material.shader = model_lighting.shader()
         c = _WHITE if tint is None else ((tint.r, tint.g, tint.b, tint.a) if hasattr(tint, 'r') else tuple(tint))
@@ -255,8 +271,19 @@ class CharacterModel:
             model_lighting.set_highlight(0.0, 0.0, 0.0, 0.0)
         bob = abs(math.sin(phase)) * 0.035 * walk + math.sin(t * 2.1) * 0.006 * (1 - walk)
         weapon_pose = None
+        animator = motion.get('animator') if motion else None
         if rig.clips:
-            if rig.mount_bone is not None:
+            if animator is not None and rig.anim is not None:
+                # O skinning do raylib é na CPU e o Model é compartilhado: o contorno (mesma pose,
+                # desenhada de novo) não refaz.
+                key = (id(animator), animator.now)
+                if rig.pose_key != key:
+                    animator.apply(rig)
+                    rig.pose_key = key
+                if rig.mount_bone is not None:
+                    weapon_pose = self._weapon_state(rig, motion)
+            elif rig.mount_bone is not None:
+                rig.pose_key = None
                 weapon_pose = self._animate_armed(rig, animation, motion, phase, moving, t)
             else:
                 name = animation or ('Walk' if moving else 'Idle')
@@ -264,12 +291,17 @@ class CharacterModel:
                 period = max(1, clip.keyframeCount - 1)
                 frame = (phase % math.tau) / math.tau * period if name == 'Walk' else (
                     (t if name == 'Idle' else phase) * 60) % period
-                if action > 0 and animation is None:
-                    work = rig.clips['Repair']
+                work = rig.clips['Repair'] if 'Repair' in rig.clips else rig.clips.get('Wave')
+                if action > 0 and animation is None and work is not None:
                     work_frame = (t * 60) % max(1, work.keyframeCount - 1)
-                    rl.update_model_animation_ex(rig.model, clip, frame, work, work_frame, min(1, action))
+                    key = (name, round(frame, 2), round(work_frame, 2), round(min(1, action), 3))
+                    if rig.pose_key != key:
+                        rl.update_model_animation_ex(rig.model, clip, frame, work, work_frame, min(1, action))
                 else:
-                    rl.update_model_animation(rig.model, clip, frame)
+                    key = (name, round(frame, 2))
+                    if rig.pose_key != key:
+                        rl.update_model_animation(rig.model, clip, frame)
+                rig.pose_key = key
             bob = 0.0
         rl.rl_push_matrix()
         rl.rl_translatef(position.x, position.y + bob, position.z)
@@ -283,7 +315,10 @@ class CharacterModel:
         mats = {}
         texture = material.maps[0].texture
         default_id = texture.id
+        props = bool(motion and motion.get('props'))
         for part in rig.parts:
+            if part.name in PROP_PARTS and not props:
+                continue
             texture.id = part.texture.id
             if rig.clips:
                 _DrawMesh(part.mesh, material, rig.identity[0])
@@ -309,8 +344,18 @@ class CharacterModel:
         return muzzle
 
     @staticmethod
+    def _weapon_state(rig, motion):
+        """Peças móveis da arma em terceira pessoa no tempo do disparo/recarga do ``motion``."""
+        from .weapons import third_person_state
+        reload = motion.get('Reload')
+        span = rig.anim.clips['Reload'].duration if 'Reload' in rig.anim.clips else 1.6
+        progress = reload / span if reload is not None and 0 <= reload < span else None
+        return third_person_state(rig.key, motion.get('Fire', 9.0), progress)
+
+    @staticmethod
     def _animate_armed(rig, animation, motion, phase, moving, time_now):
-        from .weapons import shotgun_state, smooth
+        """Sem animador (lobby, prévias): clipes direto do raylib."""
+        from .weapons import third_person_state, smooth
         motion = motion or {}
         name = 'Run' if motion.get('run', 0) >= .5 else 'Walk' if moving else 'Idle'
         clip = rig.clips[name]
@@ -348,7 +393,7 @@ class CharacterModel:
             rl.update_model_animation(rig.model, clip, frame)
         fire = seconds if event == 'Fire' else motion.get('Fire', 9.0)
         reload = seconds / 1.6 if event == 'Reload' else None
-        return shotgun_state(fire, reload)
+        return third_person_state(rig.key, fire, reload)
 
     def _draw_weapon(self, rig, mats, kick, position, bob, yaw, weapon_pose):
         from .weapons import asset, draw_parts, m_apply, m_translate

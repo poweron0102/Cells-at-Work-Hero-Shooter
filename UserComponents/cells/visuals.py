@@ -41,6 +41,7 @@ class CombatantVisual(Renderable3D):
         self.air_since = self.land_at = None
         self.pose_at = 0.0
         self.speed = 0.0
+        self.animator = None
 
     def on_destroy(self):
         from .model_lighting import release
@@ -62,7 +63,8 @@ class CombatantVisual(Renderable3D):
         distance = delta.magnitude()
         self.last_position = Vec3(p.x, p.y, p.z)
         horizontal = math.hypot(delta.x, delta.z)
-        self.phase += min(horizontal, .5)*2.3 if a.hero == 'macrophage' else min(distance, .5)*5
+        skeletal = model(a.hero).skeletal
+        self.phase += min(horizontal, .5)*2.3 if skeletal else min(distance, .5)*5
         revealed = a.reveal > 0 or a.marked > 0
         tint = None
         if a.hurt > 0:
@@ -71,7 +73,8 @@ class CombatantVisual(Renderable3D):
         since = now - a.fire_time
         kick = max(0.0, 1 - since / .14) ** 2 if since >= 0 else 0.0
         moving = distance > .002
-        if a.hero == 'macrophage':
+        if skeletal:
+            from .animation import Animator
             from .weapons import smooth
             dt, self.pose_at = now - self.pose_at, now
             if dt > .2 or distance > 1.4:
@@ -102,6 +105,16 @@ class CombatantVisual(Renderable3D):
                 self.motion['Jump'] = now - self.air_since
             elif self.land_at is not None:
                 self.motion['Land'] = now - self.land_at
+            # Transições suaves e ações só no tronco (animation.Animator): uma vez por quadro.
+            if self.animator is None:
+                self.animator = Animator(seed=a.slot * 1.7)
+            rig = model(a.hero).rig
+            self.animator.update(
+                rig, now, self.speed, walk=self.motion['walk'],
+                run=None if rig.anim.measured else self.motion['run'],
+                airborne=self.motion.get('Jump'),
+                events={k: self.motion[k] for k in ('Fire', 'Reload', 'Melee', 'Land') if k in self.motion})
+            self.motion['animator'] = self.animator
         else:
             self.motion = None
         self.args = (p-Vec3(0, .95, 0), a.yaw, self.phase, moving, 1 if revealed else 0,
@@ -131,6 +144,46 @@ class ArenaEffects(Renderable3D):
         self.arena = arena
         self.time = 0.0
         self.crowd = None
+        self.animators = {}   # (tipo, id) -> [Animator, última posição, instante] das hemácias e plaquetas
+        self.visible = lambda x, y, z: True
+
+    def view_cone(self):
+        """Teste "aparece na tela?" (cone da câmera com folga): o skinning dos personagens é na CPU, então
+        NPC fora da vista não anima nem desenha."""
+        cam = self.camera
+        if cam is None:
+            return lambda x, y, z: True
+        t = cam.global_transform
+        o, f = t.position, t.forward
+        aspect = rl.get_screen_width()/max(1, rl.get_screen_height())
+        tan_v = math.tan(math.radians(cam.vfov)/2)
+        limit = math.cos(min(math.pi*.49, math.atan(tan_v*math.hypot(1, aspect))+.12))
+
+        def visible(x, y, z, radius=1.3):
+            dx, dy, dz = x-o.x, y+.9-o.y, z-o.z
+            d = math.sqrt(dx*dx+dy*dy+dz*dz)
+            if d < radius*2:
+                return True
+            return (dx*f.x+dy*f.y+dz*f.z)/d > limit-radius/d
+        return visible
+
+    def animate(self, key, ident, kind, pos, now, cycle=0.0, **kw):
+        """Atualiza o animador do NPC (velocidade pela posição) e devolve o ``motion`` do draw.
+        ``cycle`` = fase inicial dos passos (grupos que andam juntos ficam defasados)."""
+        from .animation import Animator
+        rig = model(kind).rig
+        if rig is None or rig.anim is None:
+            return None
+        entry = self.animators.get((key, ident))
+        if entry is None:
+            entry = self.animators[(key, ident)] = [Animator(seed=(hash(ident) % 97) * .37), pos, now]
+            entry[0].cycle = cycle
+        animator, last, then = entry
+        dt = now - then
+        speed = math.dist(pos[0::2], last[0::2]) / dt if 1e-4 < dt < .25 else 0.0
+        entry[1], entry[2] = pos, now
+        animator.update(rig, now, speed, **kw)
+        return {'time': now, 'animator': animator, 'props': kw.get('layers', {}).get('Carry', 0) > 0}
 
     def draw_platelets(self):
         a, s = self.arena, self.arena.state
@@ -140,21 +193,38 @@ class ArenaEffects(Renderable3D):
         moving = not s.blocked_by and not s.wound_closed
         phase = s.escort * math.tau / .65  # Distância de um ciclo completo das duas botas.
         right = (-dz, dx)
+        now = time.perf_counter()
+        # Duas poses por equipe (pares e ímpares, meio ciclo defasadas): o skinning é feito uma vez por grupo.
         if s.wound_closed:
             # Repair crew spread along the closed wound.
-            for i in range(6):
-                x = -8+i*3.2
-                model('platelet').draw(Vec3(x, 0, -65.2), 0, self.time+i*.31, animation='Repair')
+            for group in (0, 1):
+                motion = None
+                for i in range(group, 6, 2):
+                    x = -8+i*3.2
+                    if not self.visible(x, 0, -65.2):
+                        continue
+                    if motion is None:
+                        motion = self.animate('wound', group, 'platelet', (0, 0, -65.2), now+group*.45,
+                                              layers={'Repair': 1.0})
+                    model('platelet').draw(Vec3(x, 0, -65.2), 0, self.time+i*.31, animation='Repair', motion=motion)
             return
         # A big crate of repair materials carried by the crew (references: platelets carrying loads).
         cx, cy, cz = head
         rl.draw_cube(rl.Vector3(cx, cy+.85, cz), 1.6, 1.0, 1.6, color((214, 168, 104)))
         rl.draw_cube_wires(rl.Vector3(cx, cy+.85, cz), 1.62, 1.02, 1.62, color((120, 84, 50)))
         rl.draw_cube(rl.Vector3(cx, cy+1.36, cz), 1.66, .04, .18, color((120, 84, 50)))
-        for i, (f, r) in enumerate(((1.1, -.6), (1.1, .6), (-1.1, -.6), (-1.1, .6), (0, 1.25), (0, -1.25))):
-            px = cx+dx*f+right[0]*r
-            pz = cz+dz*f+right[1]*r
-            model('platelet').draw(Vec3(px, cy, pz), yaw, phase+i*1.7, moving)
+        crew = ((1.1, -.6), (1.1, .6), (-1.1, -.6), (-1.1, .6), (0, 1.25), (0, -1.25))
+        for group in (0, 1):
+            motion = None
+            for i in range(group, len(crew), 2):
+                f, r = crew[i]
+                px = cx+dx*f+right[0]*r
+                pz = cz+dz*f+right[1]*r
+                if not self.visible(px, cy, pz):
+                    continue
+                if motion is None:  # velocidade da escolta, medida no centro do caixote
+                    motion = self.animate('escort', group, 'platelet', (cx, cy, cz), now, cycle=group*.5)
+                model('platelet').draw(Vec3(px, cy, pz), yaw, phase+i*1.7, moving, motion=motion)
         # Dotted route ahead of the escort.
         for k in range(1, 16):
             p = a.path.at(s.escort+k*1.6)
@@ -175,18 +245,25 @@ class ArenaEffects(Renderable3D):
             rl.draw_sphere(rl.Vector3(0, -3.2, -80), 3.5+pulse*.4, color((120, 40, 60), 120))
 
     def draw_rbcs(self):
+        now = time.perf_counter()
+        alive = set()
         for ident, cell in self.arena.rbc_view.cells.items():
             if cell['state'] in ('dead', 'inside'):
                 continue
             x, y, z = cell['pos']
+            alive.add(('rbc', ident))
+            if not self.visible(x, y, z):
+                continue
+            # Caixa de oxigênio nas mãos (camada Carry); na fuga, corre abraçada a ela.
+            motion = self.animate('rbc', ident, 'red_blood_cell', (x, y, z), now,
+                                  run=1.0 if cell['state'] == 'flee' else 0.0, layers={'Carry': 1.0})
             model('red_blood_cell').draw(Vec3(x, y, z), cell['yaw'], cell['phase'], cell['moving'],
-                                         0, 0, 0, rl.Color(255, 200, 200, 255) if cell['state'] in ('flee', 'hide') else None)
-            # Oxygen box carried in front.
-            fx, fz = math.sin(cell['yaw']), -math.cos(cell['yaw'])
-            rl.draw_cube(rl.Vector3(x+fx*.38, y+1.0, z+fz*.38), .42, .3, .32, rl.Color(240, 244, 248, 255))
-            rl.draw_cube(rl.Vector3(x+fx*.38, y+1.0, z+fz*.38), .43, .08, .33, rl.Color(130, 190, 230, 255))
+                                         0, 0, 0, rl.Color(255, 200, 200, 255) if cell['state'] in ('flee', 'hide') else None,
+                                         motion=motion)
             if cell['state'] in ('flee', 'hide'):
                 rl.draw_sphere(rl.Vector3(x, y+2.3+.08*math.sin(self.time*9), z), .12, rl.Color(255, 90, 80, 255))
+        for key in [k for k in self.animators if k[0] == 'rbc' and k not in alive]:
+            del self.animators[key]
 
     def draw_colonies(self):
         a, s = self.arena, self.arena.state
@@ -248,14 +325,20 @@ class ArenaEffects(Renderable3D):
             rnd = random.Random(5)
             spots = AMBIENT_SPOTS[:]
             rnd.shuffle(spots)
-            self.crowd = [(p, rnd.choice(('red_blood_cell', 'red_blood_cell', 'platelet')), rnd.uniform(0, math.tau), rnd.random())
-                          for p in spots[:40]]
-        for (x, y, z, yaw), key, phase, k in self.crowd:
-            sway = math.sin(self.time*(1+k)+phase)*.25
-            model(key).draw(Vec3(x, y, z), yaw+sway, phase+self.time, False, 0, 0, max(0, math.sin(self.time*.7+phase))*.3*k)
+            # Quatro grupos de pose por tipo: o skinning (CPU, no raylib) é feito uma vez por grupo.
+            self.crowd = sorted(((p, rnd.choice(('red_blood_cell', 'red_blood_cell', 'platelet')), rnd.randrange(4),
+                                  rnd.uniform(0, math.tau)) for p in spots[:40]), key=lambda c: (c[1], c[2]))
+        for (x, y, z, yaw), key, group, phase in self.crowd:
+            if not self.visible(x, y, z):
+                continue
+            offset = group*math.tau/4
+            sway = math.sin(self.time*(1+group*.2)+phase)*.25
+            model(key).draw(Vec3(x, y, z), yaw+sway, offset+self.time, False, 0, 0,
+                            max(0, math.sin(self.time*.7+offset))*.25, motion={'time': self.time+offset*1.3, 'sync': True})
 
     def render(self):
         self.time += rl.get_frame_time()
+        self.visible = self.view_cone()
         self.draw_wound()
         self.draw_platelets()
         self.draw_rbcs()

@@ -21,29 +21,49 @@ class CharacterAssetTests(unittest.TestCase):
             self.assertTrue((ASSET_DIR / f'{key}.glb').is_file(), key)
             self.assertTrue((ASSET_DIR / f'{key}.json').is_file(), key)
 
-    def test_platelet_skin_and_looping_gameplay_clips(self):
-        gltf, binary, meta = self.load('platelet')
-        for node in gltf['nodes']:
-            if 'mesh' in node:
-                self.assertIn('skin', node)
-                for prim in gltf['meshes'][node['mesh']]['primitives']:
-                    self.assertTrue({'JOINTS_0', 'WEIGHTS_0'} <= prim['attributes'].keys())
+    def rotations(self, gltf, binary, clip, bone):
+        channel = next(c for c in clip['channels'] if c['target']['path'] == 'rotation'
+                       and gltf['nodes'][c['target']['node']]['name'] == bone)
+        acc = gltf['accessors'][clip['samplers'][channel['sampler']]['output']]
+        view = gltf['bufferViews'][acc['bufferView']]
+        offset = view.get('byteOffset', 0) + acc.get('byteOffset', 0)
+        return [struct.unpack_from('<4f', binary, offset + i * view.get('byteStride', 16)) for i in range(acc['count'])]
 
-        clips = {a['name']: a for a in gltf['animations']}
-        self.assertEqual(set(meta['clips']), set(clips))
-        for name, bone in [('Idle', 'head'), ('Walk', 'thigh.L'), ('Repair', 'forearm.R')]:
-            with self.subTest(name=name):
-                clip = clips[name]
-                channel = next(c for c in clip['channels'] if c['target']['path'] == 'rotation'
-                               and gltf['nodes'][c['target']['node']]['name'] == bone)
-                acc = gltf['accessors'][clip['samplers'][channel['sampler']]['output']]
-                view = gltf['bufferViews'][acc['bufferView']]
-                offset = view.get('byteOffset', 0) + acc.get('byteOffset', 0)
-                rotations = [struct.unpack_from('<4f', binary, offset + i * view.get('byteStride', 16))
-                             for i in range(acc['count'])]
-                self.assertNotEqual(rotations[0], rotations[len(rotations) // 4])
-                for first, last in zip(rotations[0], rotations[-1]):
-                    self.assertAlmostEqual(first, last, places=5)
+    def test_tripo_characters_skin_and_looping_gameplay_clips(self):
+        """Hemácia, plaqueta e Célula B: malha com pele, clipes cíclicos fechados e camadas conhecidas."""
+        moving = {'Idle': 'head', 'Walk': 'thigh.L', 'Run': 'thigh.L', 'Repair': 'forearm.R', 'Carry': 'forearm.R',
+                  'Wave': 'forearm.R'}
+        for key, expected in (('platelet', {'Idle', 'Walk', 'Repair'}),
+                              ('red_blood_cell', {'Idle', 'Walk', 'Run', 'Carry', 'Wave'}),
+                              ('b_cell', {'Idle', 'Walk', 'Run', 'Jump', 'Land', 'Fire', 'Reload', 'Melee'})):
+            gltf, binary, meta = self.load(key)
+            for node in gltf['nodes']:
+                if 'mesh' in node:
+                    self.assertIn('skin', node)
+                    for prim in gltf['meshes'][node['mesh']]['primitives']:
+                        self.assertTrue({'JOINTS_0', 'WEIGHTS_0'} <= prim['attributes'].keys())
+            clips = {a['name']: a for a in gltf['animations']}
+            self.assertEqual(set(clips), expected, key)
+            self.assertEqual(set(meta['clips']), expected)
+            self.assertLessEqual(set(meta['layers'].values()), {'upper', 'lower', 'arms', 'full'})
+            self.assertIn('Walk', meta['strides'])
+            for name in meta['loops']:
+                with self.subTest(key=key, clip=name):
+                    rotations = self.rotations(gltf, binary, clips[name], moving.get(name, 'hips'))
+                    if name in moving:
+                        self.assertNotEqual(rotations[0], rotations[len(rotations) // 4])
+                    for first, last in zip(rotations[0], rotations[-1]):
+                        self.assertAlmostEqual(first, last, places=5)
+
+    def test_b_cell_weapon_socket_and_red_blood_cell_box(self):
+        gltf, _, meta = self.load('b_cell')
+        joints = {gltf['nodes'][j]['name'] for j in gltf['skins'][0]['joints']}
+        self.assertEqual(meta['mount']['bone'], 'socket_weapon')
+        self.assertIn('socket_weapon', joints)
+        gltf, _, meta = self.load('red_blood_cell')
+        self.assertEqual({p['name'] for p in meta['parts']}, {'body', 'box'})
+        self.assertIn('box', {gltf['nodes'][j]['name'] for j in gltf['skins'][0]['joints']})
+        self.assertEqual(meta['layers']['Carry'], 'arms')  # pose leve: só braços e caixa sobre a caminhada
 
     def test_mesh_indices_match_raylib_order(self):
         for key in CHARACTER_KEYS:

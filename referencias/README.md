@@ -8,7 +8,7 @@ buscar ou editar esses arquivos fica aqui em `referencias/`.
 | Pasta | Conteúdo | Gerado por |
 | --- | --- | --- |
 | `Maps/BairroArterial/` | `BairroArterial.glb`, colisão e marcadores em `runtime.json`, navegação em `nav.json`. | `scripts/mapa/` ([detalhes](../docs/MAPA_BAIRRO_ARTERIAL.md)) |
-| `Characters3D/` | Modelos `.glb` dos heróis e NPCs + metadados `.json`. | `scripts/personagens/build_characters.py` |
+| `Characters3D/` | Modelos `.glb` dos heróis e NPCs + metadados `.json`. | `scripts/personagens/build_characters.py`, `export_macrophage.py` e `tripo_characters.py` |
 | `Weapons/` | Modelos `.glb` das armas + metadados `.json`. | `scripts/personagens/build_weapons.py` |
 | `characters/` | Retratos 2D (`<herói>.png`) dos menus. | `scripts/personagens/fetch_references.py` |
 | `characters/faces/` | Folhas de expressão (`<herói>.png`) recortadas pela HUD (`hud_portraits.py`). | `scripts/personagens/fetch_references.py` |
@@ -23,7 +23,9 @@ buscar ou editar esses arquivos fica aqui em `referencias/`.
 | `imagens/` | Capturas do anime e key visual usados como referência visual do mapa e da arte. |
 | `personagens_oficiais/` | Acervo das páginas oficiais de personagens (`1st/`, `assets/`), `manifest.json` e [SOURCES.md](personagens_oficiais/SOURCES.md). |
 | `audio/` | `voice_clips.json` (episódio, tempos e textos de cada fala) e [SOURCES.md](audio/SOURCES.md). |
-| `blender/` | Fontes editáveis: `BairroArterial.blend` (mapa) e `platelet.blend` (plaqueta com esqueleto e ações). |
+| `blender/` | Fontes editáveis: `BairroArterial.blend` (mapa), `macrophage.blend` e as cenas geradas de `b_cell`, `red_blood_cell` e `platelet` (esqueleto e ações). |
+| `Tripo 3D assets/` | Modelos do Tripo com esqueleto Mixamo (hemácia, plaqueta, Célula B, Macrófaga e a escopeta). |
+| `animacoes/mesh2motion/` | Clipes CC0 do Mesh2Motion usados nos modelos do Tripo ([SOURCES.md](animacoes/mesh2motion/SOURCES.md)). |
 | `scripts/mapa/` | Montagem do mapa no Blender (`build_distrito`, `distrito_geo`, `distrito_layout`), exportação (`export_distrito`, `rebuild_distrito`) e navegação (`build_navmesh`). |
 | `scripts/personagens/` | Modelagem dos personagens e armas no Blender e download do acervo oficial. |
 | `scripts/audio/` | Síntese dos efeitos sonoros e recorte das falas. |
@@ -40,6 +42,7 @@ $blender = 'C:\Program Files\Blender Foundation\Blender 5.2\blender.exe'
 .venv\Scripts\python.exe referencias\scripts\mapa\build_navmesh.py
 # Personagens e armas
 & $blender --background --factory-startup --python referencias\scripts\personagens\build_characters.py
+& $blender --background --factory-startup --python referencias\scripts\personagens\tripo_characters.py
 & $blender --background --factory-startup --python referencias\scripts\personagens\build_weapons.py
 # Retratos e faces (requer internet)
 .venv\Scripts\python.exe referencias\scripts\personagens\fetch_references.py
