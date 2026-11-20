@@ -190,6 +190,7 @@ class NetworkComponent(Component):
         if send_to == SendTo.ALL or send_to == SendTo.CLIENTS:
             nm.broadcast(packet, protocol)
         elif send_to == SendTo.NOT_ME:
+            nm.tap(packet, protocol)  # um espectador também é "outro" que não o remetente
             # Broadcast manual excluindo o sender
             clients = nm.transports[protocol].clients
             for cid in range(1, len(clients)):
@@ -245,6 +246,7 @@ class NetworkVariable[T]:
 
                 self._value = new_val
                 packet = (OP_VAR, self.var_id, VAR_SET, (new_val,))
+                nm.tap(packet, Protocol.TCP)
 
                 # Relay via TCP para garantir entrega
                 clients = nm.transports[Protocol.TCP].clients
@@ -280,6 +282,9 @@ class NetworkManager(Component):
         self.port = port
         self.id = 0 if is_server else -1
 
+        # Observadores do que um cliente espectador receberia (broadcasts e repasses a "todos menos
+        # o remetente"); envios privados a um cliente não passam por aqui. Usado pelo gravador de replay.
+        self.taps: list[Callable[[tuple, Protocol], None]] = []
         self.connect_callbacks: list[Callable[[int], None]] = []
         self.disconnect_callbacks = [] if disconnect_callback is None else [disconnect_callback]
         self._connected_peers = set()
@@ -361,11 +366,16 @@ class NetworkManager(Component):
             return
 
         transport = self.transports[protocol]
+        self.tap(packet, protocol)
         if RpcLog.enabled:
             clients = transport.clients
             recipients = sum(clients[cid] is not None for cid in range(1, len(clients)))
             RpcLog.log_send(self, packet, protocol, "broadcast", recipients)
         transport.broadcast(packet)
+
+    def tap(self, packet: tuple, protocol: Protocol):
+        for observer in self.taps:
+            observer(packet, protocol)
 
     # --- Loop ---
 

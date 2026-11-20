@@ -6,7 +6,7 @@ servidor, que valida e replica pelo snapshot da Arena.
 """
 import math
 import time
-from EasyCells3D.NetworkComponents import NetworkComponent, NetworkTransform, NetworkVariable, Rpc, SendTo
+from EasyCells3D.NetworkComponents import NetworkComponent, NetworkTransform, NetworkVariable, Rpc, SendTo, Protocol
 from EasyCells3D.Geometry import Vec3, Quaternion
 from EasyCells3D.PhysicsComponents3D import PhysicsBody3D, CharacterController3D, CapsuleShape, BodyType
 from .catalog import HEROES, CELLS, BALANCE
@@ -277,6 +277,12 @@ class Combatant(NetworkComponent, KitMixin):
         if melee and not self.local:
             self.melee_at = time.perf_counter()
 
+    @Rpc(send_to=SendTo.SERVER, protocol=Protocol.UDP)
+    def report_aim(self, pitch):
+        """Replay: o anfitrião não simula a mira dos clientes (o NetworkTransform só leva o yaw).
+        Enquanto a partida é gravada, cada dono informa o pitch a 10 Hz só para o anfitrião."""
+        self.pitch = float(pitch)
+
     @Rpc(send_to=SendTo.NOT_ME)
     def show_reload(self):
         self.reload_at = time.perf_counter()
@@ -339,6 +345,11 @@ class Combatant(NetworkComponent, KitMixin):
         player = self.game.session.roster.value[self.slot]
         cmd = self.arena.brain.command(self) if player["bot"] else self.controls
         self.yaw, self.pitch = cmd.get("yaw", self.yaw), cmd.get("pitch", self.pitch)
+        if not self.arena.server and self.game.session.recording.value:
+            self.aim_clock = getattr(self, "aim_clock", 0.0)+dt
+            if self.aim_clock >= .1:
+                self.aim_clock = 0.0
+                self.report_aim(round(self.pitch, 3))
         self.transform.rotation = Quaternion.from_euler_angles(Vec3(0, self.yaw, 0))
         forward = direction(self.yaw)
         right = Vec3(math.cos(self.yaw), 0, math.sin(self.yaw))

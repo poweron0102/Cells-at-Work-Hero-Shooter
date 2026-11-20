@@ -86,6 +86,7 @@ class Game:
         self.last_time = rl.get_time() * 1000
         self.delta_time = 0
         self.run_time = 0
+        self.time_scale = 1.0  # multiplica delta_time (0 pausa a simulação; replays usam 0.25x..4x)
         self.scheduler = Scheduler(self)
         self.current_level = "Name"
         self.cameras: list[Camera] = []
@@ -139,7 +140,7 @@ class Game:
     def update(self):
         self.last_time = self.time
         self.time = rl.get_time() * 1000
-        self.delta_time = rl.get_frame_time()
+        self.delta_time = rl.get_frame_time() * self.time_scale
         self.run_time += self.delta_time
 
         if self.show_fps and self.render_target is None:

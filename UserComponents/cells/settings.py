@@ -12,7 +12,7 @@ from pathlib import Path
 
 PATH = Path("saves/config.json")
 VOICE_LANGUAGES = {"ja": "Japonês (original)", "en": "Inglês (dublagem)"}
-DEFAULTS = {"voice_language": "ja", "voice_volume": 1.0, "sfx_volume": 1.0}
+DEFAULTS = {"voice_language": "ja", "voice_volume": 1.0, "sfx_volume": 1.0, "record_replay": False}
 
 _cache = None
 revision = 0  # muda a cada set_value(); quem depende das preferências compara

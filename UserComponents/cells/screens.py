@@ -24,6 +24,12 @@ def leave(game):
     game.new_game("menu")
 
 
+def open_replays(game):
+    """Menu -> estante de replays (a cena "replay" sem replay carregado mostra a lista)."""
+    game.replay = None
+    game.new_game("replay")
+
+
 def lan_ip():
     """IPv4 desta máquina na rede local (o connect UDP não envia pacotes)."""
     try:
@@ -192,6 +198,8 @@ class MenuScreen(MangaCanvas):
         tag = "PRIMEIRA LINHA DE DEFESA"
         self.box(left + 40, bottom - 44, self.measure(tag, 14) + 22, 26, WHITE, 3, 3)
         self.t(tag, left + 51, bottom - 40, 14)
+        self.button("ASSISTIR REPLAYS", right - 278, bottom - 82, 252, lambda: open_replays(self.game), h=58,
+                    size=27, arrow=True)
 
     def draw(self):
         now = time.perf_counter()
@@ -325,6 +333,36 @@ class LobbyScreen(MangaCanvas):
         self.t(label, 52, 360 - w / 2, 30, WHITE, "title", angle=90)
         self.panel(10, 664, 52, 34, YELLOW)
         self.t(f"{count}/6", 36, 669, 24, INK, "title", "c")
+
+    def record_toggle(self, right, y):
+        """Anfitrião: caixa "Gravar replay"; clientes veem só o aviso de que a partida será gravada."""
+        net = self.net
+        on = bool(net.recording.value)
+        pulse = .5 + .5 * math.sin(time.perf_counter() * 5)
+        if not net.manager.is_server:
+            if on:
+                label = "PARTIDA SERÁ GRAVADA"
+                w = self.measure(label, 13) + 40
+                self.panel(right - w, y + 2, w, 28, RED)
+                self.circle(right - w + 15, y + 16, 5, WHITE, int(140 + 115 * pulse))
+                self.t(label, right - w + 27, y + 8, 13, WHITE)
+            return
+        label = "GRAVAR REPLAY"
+        w = 44 + self.measure(label, 21, "title") + (46 if on else 14)
+        x = right - w
+        hover = self.hovered(x, y, w, 34)
+        self.box(x, y, w, 34, YELLOW if on or hover else WHITE, 3, 3)
+        self.box(x + 9, y + 7, 20, 20, WHITE, 2, 0)
+        if on:
+            self.seg(x + 12, y + 17, x + 18, y + 23, 4, RED)
+            self.seg(x + 17, y + 23, x + 27, y + 9, 4, RED)
+        self.t(label, x + 38, y + 5, 21, INK, "title")
+        if on:
+            cx = x + w - 22
+            self.circle(cx, y + 17, 9, INK)
+            self.circle(cx, y + 17, 6, RED)
+            self.ring(cx, y + 17, 9, 9 + 4 * pulse, 0, 360, RED, int(200 * (1 - pulse)))
+        self.click(x, y, w, 34, lambda: net.set_recording(not on))
 
     def card(self, slot, x, y, w, h, picking):
         net = self.net
@@ -580,6 +618,7 @@ class LobbyScreen(MangaCanvas):
         tw = self.measure(tag, 13) + 22
         self.panel(self.R - tw, 16, tw, 28, INK)
         self.t(tag, self.R - tw + 11, 21, 13, WHITE)
+        self.record_toggle(self.R - tw - 14, 14)
         count = len(roster)
         if self.picking:
             story = f"{local['name']} está escolhendo um herói…"
@@ -652,3 +691,11 @@ class ResultScreen(MangaCanvas):
             self.t(tag, R - 451, y + 12, 14, TEAM_TINT[team])
             self.t(f"{a.get('kills', 0)} K  /  {a.get('deaths', 0)} D", R - 18, y + 6, 30, INK, "title", "r")
         self.button("VOLTAR AO MENU", 46, 640, 300, lambda: leave(self.game), True, h=54, size=26)
+        saved = getattr(self.game, "last_replay", None)
+        if saved is not None and net.manager.is_server:
+            from .replay_screens import open_from_file
+            self.button("ASSISTIR REPLAY", 362, 640, 270, lambda: open_from_file(self.game, saved), h=54, size=26,
+                        arrow=True)
+            note = "Replay salvo na pasta replays/"
+            self.rbox(648, 652, self.measure(note, 15, "body") + 24, 30, YELLOW, -1)
+            self.t(note, 660, 657, 15, font="body", angle=-1)

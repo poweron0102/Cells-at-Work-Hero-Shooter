@@ -35,15 +35,21 @@ def main():
     parser.add_argument("--rpc-log", nargs="?", const="", metavar="ARQUIVO",
                         help="Grava todas as chamadas de rede (RPC/variáveis) em JSON Lines; "
                              "sem ARQUIVO usa logs/rpc/rpc_<data>_<pid>.jsonl. Veja 'Visualizador RPC.html'.")
+    parser.add_argument("--record", action="store_true", help="Grava o replay da partida (anfitriao)")
+    parser.add_argument("--replay", nargs="?", const="", metavar="ARQUIVO",
+                        help="Abre a sala de replays (ou reproduz ARQUIVO .replay direto)")
     parser.add_argument("--frames", type=int, default=0, help=argparse.SUPPRESS)
     parser.add_argument("--screenshot", help=argparse.SUPPRESS)
     parser.add_argument("--hidden", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
     if args.training and args.join:
         parser.error("--training cannot be combined with --join")
+    if args.replay is not None and (args.host or args.join or args.training):
+        parser.error("--replay cannot be combined with --host/--join/--training")
     if not 1 <= args.port <= 65535:
         parser.error("port must be between 1 and 65535")
     rpc_log = Path(args.rpc_log).resolve() if args.rpc_log else args.rpc_log  # antes do chdir
+    replay_file = Path(args.replay).resolve() if args.replay else None
     os.chdir(Path(__file__).resolve().parent)
     if rpc_log is not None:
         RpcLog.enable(rpc_log or None)
@@ -55,9 +61,17 @@ def main():
     try:
         if args.host or args.join or args.training:
             connect(game, args.join or "0.0.0.0", args.port, not bool(args.join), args.name)
+            if args.record and not args.join:
+                game.session.recording.value = True
             if args.training:
                 game.session.start(True)
             game.new_game("lobby", supress=True)
+        elif args.replay is not None:
+            game.replay = None
+            if replay_file is not None:
+                from UserComponents.cells.replay import load_replay, open_replay
+                open_replay(game, load_replay(replay_file))
+            game.new_game("replay", supress=True)
         if args.frames:
             probe = game.CreateItem()
             probe.destroy_on_load = False

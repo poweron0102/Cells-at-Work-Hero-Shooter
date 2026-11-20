@@ -54,6 +54,35 @@ ou `--rpc-log arquivo.jsonl` para escolher o arquivo. A variável de ambiente `E
 flag nada é gravado. Abra os arquivos em **`Visualizador RPC.html`** (vários peers podem ser
 combinados; no Chrome/Edge a opção *Ao vivo* acompanha o jogo rodando).
 
+### Replays
+
+No lobby, o anfitrião marca **Gravar replay** (a escolha fica salva em `saves/config.json`;
+os clientes veem o aviso *Partida será gravada*). A partida vira um arquivo
+`replays/<data>_<hora>.replay` com um resumo `.json` ao lado. Uma partida 3v3 ocupa cerca de 3 KB por
+segundo de jogo. No menu, **Assistir replays** abre a estante com as partidas
+gravadas; os resultados também oferecem **Assistir replay** logo após a partida. Na linha de comando,
+`--record` grava a partida de `--host`/`--training` e `--replay [arquivo]` abre a estante (ou o replay
+indicado).
+
+A reprodução é em 3ª pessoa, sem HUD de combate. Os controles são:
+
+| Tecla | Ação |
+|---|---|
+| Espaço | pausa / continua (no fim, recomeça) |
+| ← / → (Shift: 15 s) | volta / avança 5 s; dá para arrastar na linha do tempo (as marcas são abates) |
+| ↑ / ↓ | velocidade de 0,25x a 4x |
+| 1–6, Tab | segue um jogador (ou clique no quadro dele) |
+| C | câmera livre: botão direito gira, WASD move, Q/E desce e sobe, Shift acelera |
+| H | esconde / mostra os controles |
+| Esc | volta à estante |
+
+O arquivo guarda o que um espectador receberia do anfitrião (posições, tiros, projéteis, zonas,
+habilidades, vida, abates e o snapshot dos objetivos). Também guarda a mira vertical de cada herói,
+que a rede normal não replica: os clientes a enviam só ao anfitrião, a 10 Hz, enquanto a partida é
+gravada. Voltar no tempo remonta a cena e avança rapidamente até o ponto pedido. Os arquivos podem ser
+enviados a outra pessoa. A leitura não executa código do arquivo (unpickler restrito). Um replay
+gravado com outro `balance.json` abre normalmente, mas avisa que granadas e zonas podem divergir.
+
 ## Controles
 
 | Entrada | Ação |
@@ -213,6 +242,8 @@ Regras, física, combate, rede, interface e fábricas ficam em `UserComponents/c
 - `npcs.py`: hemácias (rotas, percepção, fuga, retomada).
 - `actors.py` / `combat.py`: heróis, kits, construção e respawn.
 - `bots.py`, `navigation.py`, `hud.py`, `visuals.py`, `player.py`, `scenery.py`.
+- `replay.py` / `replay_screens.py`: gravação no anfitrião, leitura e reprodução dos replays
+  (cena `Levels/replay.py`: estante e controles no estilo Mangá).
 - `audio.py` / `voice.py`: efeitos sonoros posicionados e falas dos personagens (dublagem
   japonesa ou inglesa, escolhida em `saves/config.json` via `settings.py`, ou por `CELLS_VOICE=en`).
 

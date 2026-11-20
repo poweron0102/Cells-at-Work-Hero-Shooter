@@ -9,6 +9,7 @@ import pyray as rl
 from EasyCells3D import Game
 from EasyCells3D.Components import Component
 from UserComponents.cells.session import connect, disconnect
+from UserComponents.cells import replay
 
 
 class SceneProbe(Component):
@@ -31,6 +32,7 @@ class SceneProbe(Component):
             game.new_game("selection")
         elif f == 24:
             self.capture("selection")
+            game.session.recording.value = True  # grava o replay desta partida
             game.session.start(True)
             game.new_game("abrasion")
         elif f == 150:
@@ -49,18 +51,44 @@ class SceneProbe(Component):
             if game.current_level != "results":
                 raise SystemExit("FAIL: results scene not reached")
             self.capture("results")
-            disconnect(game)
+            saved = getattr(game, "last_replay", None)
+            if saved is None or not saved.exists():
+                raise SystemExit("FAIL: match replay was not saved")
+            from UserComponents.cells.replay_screens import open_from_file
+            error = open_from_file(game, saved)
+            raise SystemExit(f"FAIL: replay did not open: {error}")
+        elif f == 440:
+            if game.current_level != "replay" or game.replay is None:
+                raise SystemExit("FAIL: replay scene not reached")
+            self.capture("replay")
+            self.director().seek(game.replay.data.duration)
+        elif f == 448:
+            self.capture("replay_end")
+            self.director().seek(1.0)  # voltar no tempo remonta a cena
+        elif f == 456:
+            if abs(self.director().clock - 1.0) > .2:
+                raise SystemExit("FAIL: backward seek did not rebuild the replay")
+            self.capture("replay_rewind")
+            replay.close_replay(game)
+        elif f == 464:
+            self.capture("replay_library")
+            if game.session is not None or game.time_scale != 1.0:
+                raise SystemExit("FAIL: replay session left behind")
             game.new_game("menu")
-        elif f == 430:
+        elif f == 472:
             self.capture("menu_after_match")
             if len(game.cameras) != 1 or game.physics_world is not None:
                 raise SystemExit("FAIL: stale scene resources")
             game.running = False
 
+    def director(self):
+        return next(d for d in (item.GetComponent(replay.ReplayDirector) for item in self.game.item_list) if d)
+
 
 def main():
     os.chdir(ROOT)
     (ROOT/".scratch/scenes").mkdir(parents=True, exist_ok=True)
+    replay.REPLAY_DIR = ROOT/".scratch/scenes/replays"  # não suja a pasta replays/ do jogador
     rl.set_trace_log_level(rl.TraceLogLevel.LOG_WARNING)
     rl.set_config_flags(rl.ConfigFlags.FLAG_WINDOW_HIDDEN)
     game = Game("menu", "Scene verification", screen_resolution=(1280, 720), target_fps=60)
@@ -71,7 +99,8 @@ def main():
         game.run()
     finally:
         game.close()
-    print("PASS: all scenes, respawn, results, return to menu, physics and camera cleanup")
+    print("PASS: all scenes, respawn, results, replay (play, seek, rewind, library), return to menu, "
+          "physics and camera cleanup")
 
 
 if __name__ == "__main__":

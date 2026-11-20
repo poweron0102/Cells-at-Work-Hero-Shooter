@@ -7,6 +7,7 @@ from UserComponents.cells.audio import AudioFeedback
 from UserComponents.cells.actors import load_combatant
 from UserComponents.cells.hud import CombatHUD
 from UserComponents.cells.player import PlayerInput
+from UserComponents.cells.replay import ReplayRecorder
 from UserComponents.cells.ui_base import load_ui
 from UserComponents.cells.shots import ShotEffects
 from UserComponents.cells.ability_fx import AbilityEffects
@@ -25,6 +26,10 @@ def init(game):
     inputs = game.CreateItem().AddComponent(PlayerInput(arena, camera))
     for slot, player in sorted(game.session.roster.value.items()):
         arena.actors[slot] = load_combatant(game, arena, slot, player)
+    session = game.session
+    game.last_replay = None
+    if session.manager.is_server and session.recording.value:
+        game.CreateItem().AddComponent(ReplayRecorder(session, arena))
     game.CreateItem().AddComponent(ArenaEffects(arena))
     game.CreateItem().AddComponent(SilhouettePass(arena))
     game.CreateItem().AddComponent(AbilityEffects(arena))

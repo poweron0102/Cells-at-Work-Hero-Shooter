@@ -103,7 +103,9 @@ class AudioFeedback(Component):
     def listener(self):
         me = self.arena.actors.get(self.game.session.local_slot)
         if me is None:
-            return None
+            # Sem herói local (replay): quem quiser ouvir de outro ponto registra ``game.audio_listener``.
+            hook = getattr(self.game, "audio_listener", None)
+            return hook() if hook else None
         return me.eye.to_tuple, me.yaw
 
     def spatial(self, position, reach=HEARING):

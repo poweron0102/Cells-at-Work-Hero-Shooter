@@ -1,6 +1,7 @@
 """Lobby membership, hero selection and match transitions using engine RPCs."""
 from EasyCells3D.NetworkComponents import NetworkComponent, NetworkManager, NetworkVariable, Rpc, SendTo
 from .catalog import HEROES, CELLS, BACTERIA, can_select
+from . import settings
 
 
 class Session(NetworkComponent):
@@ -9,6 +10,9 @@ class Session(NetworkComponent):
         self.manager, self.name = manager, name[:20]
         roster = {0: dict(owner=0, hero="neutrophil", team=CELLS, name=self.name, bot=False)} if manager.is_server else {}
         self.roster = NetworkVariable(roster, identifier=101, owner=0)
+        # Replay: o anfitrião decide no lobby; os clientes leem para mandar a própria mira (pitch).
+        self.recording = NetworkVariable(bool(manager.is_server and settings.get("record_replay")),
+                                         identifier=102, owner=0)
         self.status = "lobby"
         self.result = None
         self.arena = None
@@ -39,6 +43,12 @@ class Session(NetworkComponent):
         hero = next(h for h in HEROES if can_select(h, team, roster))
         roster[slot] = dict(owner=peer_id, hero=hero, team=team, name=str(name)[:20], bot=False)
         self.roster.value = roster
+
+    def set_recording(self, value):
+        """Anfitrião: liga/desliga a gravação do replay da próxima partida (lembrado entre sessões)."""
+        if self.manager.is_server and self.status == "lobby":
+            self.recording.value = bool(value)
+            settings.set_value("record_replay", bool(value))
 
     @Rpc(send_to=SendTo.CLIENTS)
     def show_error(self, message):

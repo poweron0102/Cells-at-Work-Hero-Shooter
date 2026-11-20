@@ -199,3 +199,6 @@ logs/
 
 # Nomes e IPs recentes do menu (locais de cada computador)
 /saves/
+
+# Replays gravados no lobby (locais de cada computador)
+/replays/
