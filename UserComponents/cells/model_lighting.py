@@ -3,7 +3,7 @@
 Usa os nomes padrão do raylib (vertexPosition/vertexNormal/vertexColor, mvp, matModel,
 matNormal, matView, colDiffuse) para funcionar direto com ``rl.draw_mesh``.
 
-* cor = vertexColor (linear no GLB, convertido para sRGB aqui) x colDiffuse (tint);
+* cor = vertexColor (linear no GLB, convertido para sRGB aqui) x texture0 x colDiffuse;
 * luz direcional fixa no mundo com três faixas suaves;
 * sombra do cenário (``lighting.py``): na sombra de um prédio o corpo inteiro vai para a faixa
   escura, e em túneis/sob pontes o céu ocluído escurece e os postes aquecem;
@@ -19,6 +19,7 @@ from . import lighting
 VERTEX = '''#version 330
 in vec3 vertexPosition;
 in vec3 vertexNormal;
+in vec2 vertexTexCoord;
 in vec4 vertexColor;
 uniform mat4 mvp;
 uniform mat4 matModel;
@@ -29,6 +30,7 @@ out vec3 fragViewNormal;
 out vec3 fragViewPos;
 out vec3 fragWorld;
 out vec4 fragColor;
+out vec2 fragUV;
 void main() {
     vec3 n = normalize(mat3(matNormal) * vertexNormal);
     fragNormal = n;
@@ -36,6 +38,7 @@ void main() {
     fragViewNormal = mat3(matView) * n;
     fragViewPos = (matView * matModel * vec4(vertexPosition, 1.0)).xyz;
     fragColor = vertexColor;
+    fragUV = vertexTexCoord;
     gl_Position = mvp * vec4(vertexPosition, 1.0);
 }
 '''
@@ -46,6 +49,8 @@ in vec3 fragViewNormal;
 in vec3 fragViewPos;
 in vec3 fragWorld;
 in vec4 fragColor;
+in vec2 fragUV;
+uniform sampler2D texture0;
 uniform vec4 colDiffuse;
 uniform vec4 highlight;
 uniform vec3 lightDir;
@@ -59,7 +64,8 @@ void main() {
     vec3 vn = normalize(fragViewNormal);
     if (!gl_FrontFacing) { n = -n; vn = -vn; }
     // Cores do GLB são lineares (spec glTF): volta para sRGB para manter a paleta anime.
-    vec3 base = pow(max(fragColor.rgb, vec3(0.0)), vec3(1.0/2.2)) * colDiffuse.rgb;
+    vec4 texel = texture(texture0, fragUV);
+    vec3 base = pow(max(fragColor.rgb, vec3(0.0)), vec3(1.0/2.2)) * texel.rgb * colDiffuse.rgb;
     // Luz do cenário: no mundo usa o próprio fragmento; a arma em 1ª pessoa usa ``probe`` (olho).
     bool atProbe = probe.w > 0.5;
     vec3 P = atProbe ? probe.xyz : fragWorld;
@@ -80,7 +86,7 @@ void main() {
     col *= mix(vec3(0.6, 0.56, 0.66), vec3(1.0), open);
     col += base * lampLight(P, N, sky) * 0.6;
     col = mix(col, highlight.rgb, clamp(rimBand * highlight.a * 1.2 + highlight.a * 0.18, 0.0, 1.0));
-    finalColor = vec4(col, fragColor.a * colDiffuse.a);
+    finalColor = vec4(col, fragColor.a * texel.a * colDiffuse.a);
 }
 '''
 

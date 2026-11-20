@@ -2,8 +2,8 @@
  "key": "neutrophil",
  "kind": "smg",
  "convention": "glTF/raylib: Y para cima, cano para +Z, esquerda da arma em +X. Espaço \"gun\": origem na mão direita sobre o cabo. Espaço \"view\": câmera do viewmodel na origem olhando +Z. \"fp\" = matriz 3x4 gun->view da pose de repouso. \"anim\": static|bolt|mag|pulse|spin|melee. \"pivot\"/\"axis\" no espaço da parte; \"amount\" em metros (bolt/mag), escala (pulse) ou radianos (spin).",
- "mesh_count": 6,
- "triangles": 7440,
+ "mesh_count": 4,
+ "triangles": 4504,
  "fp": [
   [
    0.996101,
@@ -37,14 +37,14 @@
  "parts": [
   {
    "name": "body",
-   "mesh": 2,
+   "mesh": 0,
    "anim": "static",
    "space": "gun",
    "fp_only": false
   },
   {
    "name": "bolt",
-   "mesh": 3,
+   "mesh": 1,
    "anim": "bolt",
    "space": "gun",
    "fp_only": false,
@@ -62,7 +62,7 @@
   },
   {
    "name": "mag",
-   "mesh": 4,
+   "mesh": 2,
    "anim": "mag",
    "space": "gun",
    "fp_only": false,
@@ -79,33 +79,8 @@
    "amount": 0.2
   },
   {
-   "name": "arm_r",
-   "mesh": 1,
-   "anim": "static",
-   "space": "gun",
-   "fp_only": true
-  },
-  {
-   "name": "arm_l",
-   "mesh": 0,
-   "anim": "support",
-   "space": "gun",
-   "fp_only": true,
-   "pivot": [
-    0.40665,
-    -0.19217,
-    -0.43664
-   ],
-   "axis": [
-    0.0,
-    0.0,
-    -1.0
-   ],
-   "amount": 0.0
-  },
-  {
    "name": "melee",
-   "mesh": 5,
+   "mesh": 3,
    "anim": "melee",
    "space": "view",
    "fp_only": true,

@@ -49,3 +49,50 @@ inferiores no jogo ao alterar arte ou colisão.
 Mantenha fonte, export e metadados coerentes. Backups `.blend1`, `.blend2`, logs
 e capturas ficam fora do versionamento. Não adicione novamente exports ou
 atlas do mapa retirado.
+
+## Macrófaga
+
+`referencias/blender/macrophage.blend` contém a malha texturizada, o esqueleto
+do corpo (com dois ossos por dedo nas duas mãos), a cadeia de quatro ossos da
+trança e a escopeta. No Editor de Ações, selecione `macrophage.rig` para ver
+`Idle`, `Walk`, `Run`, `Jump`, `Land`, `Fire`, `Reload` e `Melee`. A trança
+acompanha a cabeça com atraso progressivo da raiz até a ponta, gravado nessas ações.
+
+As ações são geradas por `animate_macrophage.py`: a mão direita fecha no cabo
+com o indicador no gatilho, a esquerda segura a bomba por baixo e, na recarga,
+a arma desce para a cintura enquanto a mão esquerda busca dois cartuchos na
+cintura, empurra cada um na janela de carga e bombeia. Os ossos dos dedos e os
+pesos da mão vêm de `macrophage_fingers.py` (criados só uma vez).
+
+A coleção `macrophage.weapon_preview` exibe a escopeta no osso
+`socket_weapon`. Para conferir o disparo ou a recarga, selecione também as
+ações correspondentes do objeto `pump` no Editor de Ações.
+Depois de animar, gere os GLBs da personagem e da arma e seus metadados:
+
+```powershell
+& 'C:\Program Files\Blender Foundation\Blender 5.2\blender.exe' --background referencias\blender\macrophage.blend --python referencias\scripts\personagens\animate_macrophage.py
+& 'C:\Program Files\Blender Foundation\Blender 5.2\blender.exe' --background --python referencias\scripts\personagens\export_macrophage.py
+```
+
+## Braços de primeira pessoa
+
+Todos os heróis usam braços com esqueleto em primeira pessoa
+(`Assets/Weapons/<herói>_arms.glb`): palma, quatro dedos de três falanges e
+polegar. `build_fp_arms.py` gera a malha e os ossos; a pose é feita no jogo por
+`UserComponents/cells/fp_arms.py`, que leva cada mão até uma empunhadura da
+arma (cabo, bomba, guarda-mão, carregador), fecha os dedos falange por falange
+até tocá-la e resolve ombro e cotovelo fora da tela. As armas desses heróis
+não trazem mais braços rígidos.
+
+As empunhaduras, as chaves de cada mão na recarga, a inclinação da arma e as
+curvas das peças (bomba/ferrolho, carregador, solavanco) ficam em
+`Assets/Weapons/<herói>_fp_anim.json`. Para editar visualmente, abra
+`Editor Animacao 1a Pessoa.bat` (formato e uso em
+[EDITOR_ANIMACAO_1A_PESSOA.md](EDITOR_ANIMACAO_1A_PESSOA.md)). O jogo relê o
+arquivo quando ele muda.
+
+```powershell
+& 'C:\Program Files\Blender Foundation\Blender 5.2\blender.exe' --background --factory-startup --python referencias\scripts\personagens\build_fp_arms.py
+& 'C:\Program Files\Blender Foundation\Blender 5.2\blender.exe' --background --factory-startup --python referencias\scripts\personagens\build_weapons.py -- --only neutrophil,killer_t,pneumococcus,staphylococcus,pseudomonas,streptococcus --no-preview
+.venv\Scripts\python.exe scripts\check_weapons.py
+```

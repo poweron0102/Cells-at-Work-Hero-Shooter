@@ -5,7 +5,7 @@ import time
 import pyray as rl
 from EasyCells3D.Components.Camera3D import Renderable3D
 from EasyCells3D.Geometry import Vec3
-from .catalog import CELLS, BALANCE
+from .catalog import CELLS, BALANCE, HEROES
 
 def color(rgb, alpha=255):
     return rl.Color(int(rgb[0]), int(rgb[1]), int(rgb[2]), int(alpha))
@@ -37,6 +37,10 @@ class CombatantVisual(Renderable3D):
         self.last_position = None
         self.phase = 0
         self.args = None  # pose deste quadro (calculada uma vez, usada tambem pela silhueta)
+        self.motion = None
+        self.air_since = self.land_at = None
+        self.pose_at = 0.0
+        self.speed = 0.0
 
     def on_destroy(self):
         from .model_lighting import release
@@ -54,16 +58,53 @@ class CombatantVisual(Renderable3D):
             return self.args
         a = self.actor
         p = a.transform.position
-        distance = (p-self.last_position).magnitude() if self.last_position else 0
+        delta = p-self.last_position if self.last_position else Vec3(0, 0, 0)
+        distance = delta.magnitude()
         self.last_position = Vec3(p.x, p.y, p.z)
-        self.phase += min(distance, .5)*5
+        horizontal = math.hypot(delta.x, delta.z)
+        self.phase += min(horizontal, .5)*2.3 if a.hero == 'macrophage' else min(distance, .5)*5
         revealed = a.reveal > 0 or a.marked > 0
         tint = None
         if a.hurt > 0:
             tint = rl.Color(255, 170, 170, 255)
-        since = time.perf_counter() - a.fire_time
+        now = time.perf_counter()
+        since = now - a.fire_time
         kick = max(0.0, 1 - since / .14) ** 2 if since >= 0 else 0.0
-        self.args = (p-Vec3(0, .95, 0), a.yaw, self.phase, distance > .002, 1 if revealed else 0,
+        moving = distance > .002
+        if a.hero == 'macrophage':
+            from .weapons import smooth
+            dt, self.pose_at = now - self.pose_at, now
+            if dt > .2 or distance > 1.4:
+                self.air_since = self.land_at = None
+                self.speed = 0.0
+            else:
+                speed = horizontal / max(dt, 1e-4)
+                self.speed += (speed - self.speed) * min(1.0, dt * 10)
+            if a.local:
+                airborne = not a.controller.is_grounded
+            else:
+                airborne = (self.air_since is None and delta.y > .055
+                            and delta.y > horizontal * .6
+                            or self.air_since is not None and now - self.air_since < .55)
+            if airborne and self.air_since is None:
+                self.air_since = now
+            elif not airborne and self.air_since is not None:
+                self.land_at, self.air_since = now, None
+            moving = self.speed > .3
+            speed = HEROES[a.hero].speed
+            reload = now - a.reload_at
+            if a.local:
+                reload = 1.6 - a.weapon.reload_time
+            self.motion = {'time': now, 'walk': smooth(.3, 1.5, self.speed),
+                           'run': smooth(speed * 1.05, speed * 1.25, self.speed),
+                           'Fire': since, 'Reload': reload, 'Melee': now - a.melee_at}
+            if self.air_since is not None:
+                self.motion['Jump'] = now - self.air_since
+            elif self.land_at is not None:
+                self.motion['Land'] = now - self.land_at
+        else:
+            self.motion = None
+        self.args = (p-Vec3(0, .95, 0), a.yaw, self.phase, moving, 1 if revealed else 0,
                      a.shield.value, a.action, tint, kick)
         return self.args
 
@@ -76,11 +117,11 @@ class CombatantVisual(Renderable3D):
             return
         args = self.prepare()
         self.args = None
-        a.tp_muzzle = model(a.hero).draw(*args)
+        a.tp_muzzle = model(a.hero).draw(*args, motion=self.motion)
         me = a.arena.actors.get(session.local_slot)
         if me is not None and me.team != a.team:
             from .outline import ENEMY, draw_outline
-            draw_outline(model(a.hero), args, ENEMY)
+            draw_outline(model(a.hero), args, ENEMY, motion=self.motion)
 
 
 class ArenaEffects(Renderable3D):

@@ -1,6 +1,7 @@
 """Arma principal e resolucao de acertos (jogadores, colonias e hemacias)."""
 import math
 import random
+import time
 from EasyCells3D.Components import Component
 from EasyCells3D.Geometry import Vec3
 from .catalog import HEROES, CELLS
@@ -161,6 +162,9 @@ class Weapon(Component):
     def reload(self):
         if not self.reload_time and self.ammo < HEROES[self.actor.hero].magazine:
             self.reload_time = 1.6
+            if self.actor.hero == 'macrophage':
+                self.actor.reload_at = time.perf_counter()
+                self.actor.show_reload()
 
     def fire(self):
         a = self.actor

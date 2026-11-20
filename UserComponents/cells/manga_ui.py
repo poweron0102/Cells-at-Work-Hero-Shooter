@@ -496,11 +496,12 @@ class HeroStage:
         from EasyCells3D.Geometry import Vec3
         m = model(hero)
         args = (Vec3(0, 0, 0), yaw, 0.0, False, 0, 0, 0.0, None, 0.0)
+        motion = {'time': now} if hero == 'macrophage' else None
         rl.begin_texture_mode(self.target)
         rl.clear_background(rl.BLANK)
         rl.begin_mode_3d(camera)
-        m.draw(*args)
-        draw_outline(m, args, (INK[0] / 255, INK[1] / 255, INK[2] / 255), width=2.6)
+        m.draw(*args, motion=motion)
+        draw_outline(m, args, (INK[0] / 255, INK[1] / 255, INK[2] / 255), width=2.6, motion=motion)
         rl.end_mode_3d()
         rl.end_texture_mode()
 

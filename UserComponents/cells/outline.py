@@ -122,7 +122,7 @@ def _set(shader, loc, value, kind):
                         getattr(rl.ShaderUniformDataType, f'SHADER_UNIFORM_VEC{size}'))
 
 
-def draw_outline(model, args, rgb, width=2.4):
+def draw_outline(model, args, rgb, width=2.4, motion=None):
     """Redesenha ``model.draw(*args)`` como casca invertida (só faces de trás) na cor ``rgb``."""
     shader, locs = _shader('outline')
     w, h = rl.get_render_width(), rl.get_render_height()
@@ -131,12 +131,12 @@ def draw_outline(model, args, rgb, width=2.4):
     _set(shader, locs['color'], (*rgb, 1.0), 'vec')
     model_lighting.override = shader
     try:
-        model.draw(*args, cull='front')
+        model.draw(*args, cull='front', motion=motion)
     finally:
         model_lighting.override = None
 
 
-def draw_silhouette(model, args, rgb, alpha=.8, occluded_only=True):
+def draw_silhouette(model, args, rgb, alpha=.8, occluded_only=True, motion=None):
     shader, locs = _shader('silhouette')
     _set(shader, locs['color'], (*rgb, alpha), 'vec')
     depth = _depth_func() if occluded_only else None
@@ -148,7 +148,7 @@ def draw_silhouette(model, args, rgb, alpha=.8, occluded_only=True):
         rl.rl_disable_depth_test()
     model_lighting.override = shader
     try:
-        model.draw(*args, cull='back')
+        model.draw(*args, cull='back', motion=motion)
     finally:
         model_lighting.override = None
         rl.rl_draw_render_batch_active()
@@ -198,7 +198,7 @@ class SilhouettePass(Renderable3D):
                 if cam is None or a.clear_line(cam.to_tuple, chest):
                     continue
             draw_silhouette(model(target.hero), visual.prepare(), ALLY if ally else ENEMY,
-                            .75 if ally else .9, True if exact else None)
+                            .75 if ally else .9, True if exact else None, motion=visual.motion)
 
     def on_destroy(self):
         super().on_destroy()

@@ -1,10 +1,8 @@
 """Personagens 3D do Blender com clipes esqueléticos ou animação por partes.
 
-Cada personagem é um GLB com uma malha por parte (body, arm_l, arm_r, leg_l, leg_r, weapon,
-tail, tentacles_*, ...) e um JSON com o índice da malha no raylib, o pivô da articulação e a
-família de animação.  Nada é carregado na importação: o Model é carregado na primeira vez que
-um personagem é desenhado (precisa de contexto OpenGL) e fica em cache por chave, compartilhado
-por todas as instâncias.
+Cada personagem é um GLB e um JSON com os índices das malhas e os pivôs ou clipes do esqueleto.
+O Model é carregado na primeira vez que um personagem é desenhado (precisa de contexto
+OpenGL) e fica em cache por chave, compartilhado por todas as instâncias.
 """
 import json
 import math
@@ -99,6 +97,10 @@ def _to_matrix(m):
     return p
 
 
+def _matrix_rows(m):
+    return ((m.m0, m.m4, m.m8), (m.m1, m.m5, m.m9), (m.m2, m.m6, m.m10)), (m.m12, m.m13, m.m14)
+
+
 _IDENTITY = (((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0)), (0.0, 0.0, 0.0))
 
 
@@ -121,11 +123,13 @@ def _slash(a):
 # --------------------------------------------------------------------------------------
 
 class _Part:
-    __slots__ = ('name', 'mesh', 'swing', 'pivot', 'parent', 'phase', 'amp', 'action', 'side')
+    __slots__ = ('name', 'mesh', 'texture', 'swing', 'pivot', 'parent', 'phase', 'amp', 'action', 'side')
 
-    def __init__(self, entry, mesh):
+    def __init__(self, entry, model):
         self.name = entry['name']
-        self.mesh = mesh
+        index = entry['mesh']
+        self.mesh = model.meshes[index]
+        self.texture = model.materials[model.meshMaterial[index]].maps[0].texture
         self.swing = entry.get('swing', 'static')
         self.pivot = tuple(entry.get('pivot', (0.0, 0.0, 0.0)))
         self.parent = entry.get('parent', 'body')
@@ -158,7 +162,7 @@ class _Rig:
             if set(self.clips) != set(meta['clips']):
                 self.unload()
                 raise ValueError(f'{key}: clipes incompatíveis com o esqueleto')
-        parts = [_Part(e, self.model.meshes[e['mesh']]) for e in meta['parts']]
+        parts = [_Part(e, self.model) for e in meta['parts']]
         # Pais antes dos filhos (a arma usa a matriz do braço direito).
         order = {p.name: i for i, p in enumerate(parts)}
         parts.sort(key=lambda p: (p.parent != 'body' and p.parent in order, order[p.name]))
@@ -168,7 +172,17 @@ class _Rig:
         # Arma do herói (Assets/Weapons) presa a uma parte: matriz arma -> personagem.
         mount = meta.get('mount')
         self.mount_part = mount['part'] if mount else None
-        self.mount = (tuple(tuple(r[:3]) for r in mount['matrix']), tuple(r[3] for r in mount['matrix']))             if mount else None
+        self.mount = None
+        self.mount_bone = None
+        if mount:
+            rows = mount['matrix']
+            self.mount = tuple(tuple(row[:3]) for row in rows), tuple(row[3] for row in rows)
+        if mount and 'bone' in mount:
+            self.mount_bone = next((i for i in range(self.model.skeleton.boneCount)
+                                    if _ffi.string(self.model.skeleton.bones[i].name).decode() == mount['bone']), None)
+            if self.mount_bone is None:
+                self.unload()
+                raise ValueError(f'{key}: ponto de montagem ausente do esqueleto')
 
     def unload(self):
         if self.animations:
@@ -216,7 +230,7 @@ class CharacterModel:
         return rig
 
     def draw(self, position, yaw=0, phase=0, moving=False, reveal=0, shield=0, action=0.0, tint=None, kick=0.0,
-             weapon=True, cull=None, animation=None):
+             weapon=True, cull=None, animation=None, motion=None):
         """Desenha o personagem; ``kick`` (0..1) é o recuo do último disparo. Se o herói tem arma
         montada (e ``weapon``), desenha a arma na mão e devolve a posição do cano no mundo.
         ``cull`` ('front'/'back') liga o descarte de faces, usado pelos passes de contorno/silhueta."""
@@ -224,7 +238,7 @@ class CharacterModel:
         rig = self.rig
         if rig is None:
             return None
-        now = time.perf_counter()
+        now = motion['time'] if motion and 'time' in motion else time.perf_counter()
         walk = 1.0 if moving else 0.0
         # Defasagem pela posição: multidões (hemácias/plaquetas) não respiram em sincronia.
         t = now + (position.x * 1.37 + position.z * 0.71) % math.tau
@@ -240,21 +254,22 @@ class CharacterModel:
         else:
             model_lighting.set_highlight(0.0, 0.0, 0.0, 0.0)
         bob = abs(math.sin(phase)) * 0.035 * walk + math.sin(t * 2.1) * 0.006 * (1 - walk)
+        weapon_pose = None
         if rig.clips:
-            name = animation or ('Walk' if moving else 'Idle')
-            clip = rig.clips[name]
-            # Raylib reamostra o glTF a 60 Hz. A passada acompanha a distância da escolta.
-            period = max(1, clip.keyframeCount - 1)
-            if name == 'Walk':
-                frame = (phase % math.tau) / math.tau * period
+            if rig.mount_bone is not None:
+                weapon_pose = self._animate_armed(rig, animation, motion, phase, moving, t)
             else:
-                frame = ((t if name == 'Idle' else phase) * 60) % period
-            if action > 0 and animation is None:
-                work = rig.clips['Repair']
-                work_frame = (t * 60) % max(1, work.keyframeCount - 1)
-                rl.update_model_animation_ex(rig.model, clip, frame, work, work_frame, min(1, action))
-            else:
-                rl.update_model_animation(rig.model, clip, frame)
+                name = animation or ('Walk' if moving else 'Idle')
+                clip = rig.clips[name]
+                period = max(1, clip.keyframeCount - 1)
+                frame = (phase % math.tau) / math.tau * period if name == 'Walk' else (
+                    (t if name == 'Idle' else phase) * 60) % period
+                if action > 0 and animation is None:
+                    work = rig.clips['Repair']
+                    work_frame = (t * 60) % max(1, work.keyframeCount - 1)
+                    rl.update_model_animation_ex(rig.model, clip, frame, work, work_frame, min(1, action))
+                else:
+                    rl.update_model_animation(rig.model, clip, frame)
             bob = 0.0
         rl.rl_push_matrix()
         rl.rl_translatef(position.x, position.y + bob, position.z)
@@ -266,7 +281,10 @@ class CharacterModel:
         else:
             rl.rl_disable_backface_culling()
         mats = {}
+        texture = material.maps[0].texture
+        default_id = texture.id
         for part in rig.parts:
+            texture.id = part.texture.id
             if rig.clips:
                 _DrawMesh(part.mesh, material, rig.identity[0])
                 continue
@@ -280,27 +298,73 @@ class CharacterModel:
             else:
                 p = _to_matrix(m)
                 _DrawMesh(part.mesh, material, p[0])
+        texture.id = default_id
         muzzle = None
         if weapon and rig.mount is not None:
-            muzzle = self._draw_weapon(rig, mats, kick, position, bob, yaw)
+            muzzle = self._draw_weapon(rig, mats, kick, position, bob, yaw, weapon_pose)
         if cull:
             rl.rl_set_cull_face(rl.RL_CULL_FACE_BACK)
         rl.rl_enable_backface_culling()
         rl.rl_pop_matrix()
         return muzzle
 
-    def _draw_weapon(self, rig, mats, kick, position, bob, yaw):
+    @staticmethod
+    def _animate_armed(rig, animation, motion, phase, moving, time_now):
+        from .weapons import shotgun_state, smooth
+        motion = motion or {}
+        name = 'Run' if motion.get('run', 0) >= .5 else 'Walk' if moving else 'Idle'
+        clip = rig.clips[name]
+        period = max(1, clip.keyframeCount - 1)
+        cycle = (phase % math.tau) / math.tau
+        frame = (time_now * 60) % period if name == 'Idle' else cycle * period
+        event, seconds, blend = animation, phase, 1.0
+        duration = None
+        if event is None:
+            for key, span, fade in (('Melee', .42, .07), ('Reload', 1.6, .16),
+                                    ('Fire', .5, .11), ('Land', .28, .09)):
+                seconds = motion.get(key, span)
+                if 0 <= seconds < span:
+                    event = key
+                    duration = span
+                    blend = smooth(0, .035, seconds) * (1 - smooth(span - fade, span, seconds))
+                    break
+            if event is None and 'Jump' in motion:
+                event, seconds = 'Jump', motion['Jump']
+                blend = smooth(0, .10, seconds)
+        if event:
+            overlay = rig.clips[event]
+            last = overlay.keyframeCount - 1
+            at = max(0.0, min(last, seconds * (last / duration if duration else 60)))
+            rl.update_model_animation_ex(rig.model, clip, frame, overlay, at, blend)
+        elif moving and motion.get('walk', 1.0) < 1.0:
+            idle = rig.clips['Idle']
+            at = (time_now * 60) % max(1, idle.keyframeCount - 1)
+            rl.update_model_animation_ex(rig.model, idle, at, clip, frame, motion['walk'])
+        elif moving and 0.0 < motion.get('run', 0.0) < 1.0:
+            walk, run = rig.clips['Walk'], rig.clips['Run']
+            rl.update_model_animation_ex(rig.model, walk, cycle * (walk.keyframeCount - 1),
+                                         run, cycle * (run.keyframeCount - 1), motion['run'])
+        else:
+            rl.update_model_animation(rig.model, clip, frame)
+        fire = seconds if event == 'Fire' else motion.get('Fire', 9.0)
+        reload = seconds / 1.6 if event == 'Reload' else None
+        return shotgun_state(fire, reload)
+
+    def _draw_weapon(self, rig, mats, kick, position, bob, yaw, weapon_pose):
         from .weapons import asset, draw_parts, m_apply, m_translate
         a = asset(self.hero)
         if a is None:
             return None
-        parent = mats.get(rig.mount_part) if rig.mount_part != 'body' else None
+        if rig.mount_bone is not None:
+            parent = _matrix_rows(rig.model.boneMatrices[rig.mount_bone])
+        else:
+            parent = mats.get(rig.mount_part) if rig.mount_part != 'body' else None
         base = rig.mount if parent is None else _compose(parent, rig.mount)
-        if kick > 0:
+        if kick > 0 and weapon_pose is None:
             # Recuo: arma desliza para trás e o cano sobe, girando na mão.
             base = _compose(base, _compose(m_translate(0.0, 0.0, -0.05 * kick), _about((0.0, 0.0, 0.0),
                                                                                          _rot(-0.3 * kick, 0, 0))))
-        st = {'bolt': kick, 'pulse': 1 - .15 * kick}
+        st = weapon_pose if weapon_pose is not None else {'bolt': kick, 'pulse': 1 - .15 * kick}
         draw_parts(a, base, st, first_person=False)
         # Cano no mundo: mesma transformação do rlTranslatef/rlRotatef acima.
         x, y, z = m_apply(base, a.muzzle)

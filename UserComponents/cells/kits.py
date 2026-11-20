@@ -11,6 +11,7 @@ Mecanicas compartilhadas:
 * ``ult``: janela do especial ativo; ``ult_cam``: camera em 3a pessoa (player.py).
 """
 import math
+import time
 from EasyCells3D.Geometry import Vec3
 from .catalog import HEROES, CELLS, BALANCE
 from .combat import direction, cast, melee_targets, impact_kind, EYE
@@ -271,9 +272,11 @@ class KitMixin:
         elif held:
             self.secondary()
 
-    def mark_action(self, value=1.0):
+    def mark_action(self, value=1.0, melee=False):
         self.action = value
-        self.show_action(value)
+        if melee:
+            self.melee_at = time.perf_counter()
+        self.show_action(value, melee)
 
     # ------------------------------------------------------------------ corpo a corpo
     def melee(self, reach, amount, arc=.3, rbc_factor=1.0, execute=None, cooldown=.8, knock=0.0,
@@ -282,7 +285,7 @@ class KitMixin:
             return
         setattr(self, cd_attr, cooldown)
         self.swing += 1
-        self.mark_action()
+        self.mark_action(melee=True)
         for kind, target in melee_targets(self, reach, arc, include_rbc=rbc_factor > 1):
             dmg = amount
             if kind == 'actor':

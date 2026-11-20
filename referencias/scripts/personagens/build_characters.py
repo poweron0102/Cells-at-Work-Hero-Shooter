@@ -5,7 +5,7 @@ Uso (a partir da raiz do repositório):
     & 'C:\\Program Files\\Blender Foundation\\Blender 5.2\\blender.exe' --background --factory-startup `
         --python referencias\\scripts\\personagens\\build_characters.py -- [--only neutrophil,b_cell] [--no-preview]
 
-A plaqueta usa a cena de autoria platelet.blend, com esqueleto e ações. Os demais
+A Plaqueta e a Macrófaga usam cenas de autoria com esqueleto e ações. Os demais
 personagens são modelados com primitivas procedurais (lathe, tubos varridos,
 elipsoides, placas extrudadas) e algumas passagens de modificadores do Blender
 (Subdivision/Bevel), aplicados antes da exportação. As cores ficam num atributo de cor
@@ -27,6 +27,7 @@ from pathlib import Path
 import bpy
 from mathutils import Euler, Matrix, Vector
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 ROOT = Path(__file__).resolve().parents[3]
 OUT = ROOT / 'Assets' / 'Characters3D'
 PREVIEW = ROOT / '.scratch' / 'characters'
@@ -1529,6 +1530,9 @@ def build_platelet_from_blend():
 def build(key):
     if key == 'platelet':
         return build_platelet_from_blend()
+    if key == 'macrophage':
+        from export_macrophage import character
+        return character()
     spec = BUILDERS[key]()
     parts = spec['parts']
     # Pés exatamente em z=0 (o menor vértice de qualquer parte).
@@ -1592,12 +1596,12 @@ def build(key):
 # Prévias (Workbench) para conferência visual
 # ---------------------------------------------------------------------------------------
 
-def render_previews(groups, name, yaw_deg, spacing=1.6, res_y=900):
+def render_previews(groups, name, yaw_deg, spacing=1.6, res_y=900, textures=False):
     scene = bpy.context.scene
     scene.render.engine = 'BLENDER_WORKBENCH'
     sh = scene.display.shading
     sh.light = 'STUDIO'
-    sh.color_type = 'VERTEX'
+    sh.color_type = 'TEXTURE' if textures else 'VERTEX'
     sh.show_object_outline = True
     sh.object_outline_color = (0.08, 0.08, 0.1)
     sh.show_cavity = False
@@ -1653,12 +1657,15 @@ def main():
         bpy.data.objects.remove(ob)
     groups = {k: build(k) for k in keys}
     if preview:
-        for start in range(0, len(keys), 5):
-            chunk = keys[start:start + 5]
+        vertex_colored = [key for key in keys if key != 'macrophage']
+        chunks = [vertex_colored[i:i + 5] for i in range(0, len(vertex_colored), 5)]
+        if 'macrophage' in groups:
+            chunks.append(['macrophage'])
+        for chunk in chunks:
             sel = [groups[k] for k in chunk]
             tag = '_'.join(k.split('_')[0][:6] for k in chunk)
             for view, yaw in (('front', 0), ('34', -35), ('back', 180)):
-                render_previews(sel, f'blender_{tag}_{view}', yaw)
+                render_previews(sel, f'blender_{tag}_{view}', yaw, textures=chunk == ['macrophage'])
 
 
 if __name__ == '__main__':

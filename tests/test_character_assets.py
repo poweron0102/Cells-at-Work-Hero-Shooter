@@ -63,6 +63,44 @@ class CharacterAssetTests(unittest.TestCase):
                     self.assertEqual(len(part['pivot']), 3)
                     self.assertTrue(part['parent'] == 'body' or part['parent'] in names)
 
+    def test_macrophage_braid_has_weighted_joints_and_action_curves(self):
+        gltf, binary, meta = self.load('macrophage')
+        joints = gltf['skins'][0]['joints']
+        braid = [next(i for i, node in enumerate(gltf['nodes']) if node['name'] == f'braid.{n}')
+                 for n in range(4)]
+        for parent, child in zip(braid, braid[1:]):
+            self.assertIn(child, gltf['nodes'][parent]['children'])
+        self.assertTrue(set(braid) <= set(joints))
+        clips = {a['name']: a for a in gltf['animations']}
+        self.assertEqual(set(clips), {'Idle', 'Walk', 'Run', 'Jump', 'Land', 'Fire', 'Reload', 'Melee'})
+        self.assertEqual(set(meta['clips']), set(clips))
+
+        attrs = gltf['meshes'][0]['primitives'][0]['attributes']
+        self.assertIn('TEXCOORD_0', attrs)
+        self.assertIn('baseColorTexture', gltf['materials'][0]['pbrMetallicRoughness'])
+        ids = gltf['accessors'][attrs['JOINTS_0']]
+        weights = gltf['accessors'][attrs['WEIGHTS_0']]
+        iv = gltf['bufferViews'][ids['bufferView']]
+        wv = gltf['bufferViews'][weights['bufferView']]
+        fmt = '<4B' if ids['componentType'] == 5121 else '<4H'
+        weighted = set()
+        for i in range(ids['count']):
+            indices = struct.unpack_from(fmt, binary, iv.get('byteOffset', 0) + ids.get('byteOffset', 0)
+                                         + i * iv.get('byteStride', struct.calcsize(fmt)))
+            values = struct.unpack_from('<4f', binary, wv.get('byteOffset', 0) + weights.get('byteOffset', 0)
+                                        + i * wv.get('byteStride', 16))
+            self.assertAlmostEqual(sum(values), 1.0, places=5)
+            weighted.update(joints[j] for j, w in zip(indices, values) if w > .01)
+        self.assertTrue(set(braid) <= weighted)
+        for name in ('Walk', 'Run', 'Melee'):
+            clip = clips[name]
+            rotations = {c['target']['node']: c['sampler'] for c in clip['channels']
+                         if c['target']['path'] == 'rotation'}
+            for joint in braid:
+                acc = gltf['accessors'][clip['samplers'][rotations[joint]]['output']]
+                self.assertGreater(acc['count'], 2)
+        self.assertIn(meta['mount']['bone'], {gltf['nodes'][j]['name'] for j in joints})
+
     def test_primitives_have_colors_normals_and_fit_u16(self):
         for key in CHARACTER_KEYS:
             with self.subTest(key=key):
@@ -95,6 +133,24 @@ class CharacterAssetTests(unittest.TestCase):
                 gltf, binc, meta = self.load(key)
                 mapping, _ = raylib_mesh_indices(gltf)
                 legs = [p for p in meta['parts'] if p['swing'] in ('leg', 'head')]
+                if not legs and gltf.get('skins'):
+                    # Uma malha contínua inclui as botas. Compare a dianteira e o calcanhar
+                    # perto do chão com a origem do osso do tornozelo na pose de repouso.
+                    skin = gltf['skins'][0]
+                    foot = next(j for j, n in enumerate(skin['joints']) if gltf['nodes'][n]['name'] == 'foot.L')
+                    inv = gltf['accessors'][skin['inverseBindMatrices']]
+                    view = gltf['bufferViews'][inv['bufferView']]
+                    m = struct.unpack_from('<16f', binc, view.get('byteOffset', 0)
+                                           + inv.get('byteOffset', 0) + foot * 64)
+                    ankle_z = -sum(m[8+i] * m[12+i] for i in range(3))
+                    prim = gltf['meshes'][0]['primitives'][0]
+                    pos = gltf['accessors'][prim['attributes']['POSITION']]
+                    view = gltf['bufferViews'][pos['bufferView']]
+                    start = view.get('byteOffset', 0) + pos.get('byteOffset', 0)
+                    feet = [z for x, y, z in (struct.unpack_from('<3f', binc, start + i * view.get('byteStride', 12))
+                                               for i in range(pos['count'])) if x > 0 and y < .09]
+                    self.assertGreater(max(feet) - ankle_z, ankle_z - min(feet))
+                    continue
                 self.assertTrue(legs)
                 node_mesh = {n['name']: n['mesh'] for n in gltf['nodes'] if 'mesh' in n}
                 zs = []

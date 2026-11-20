@@ -7,7 +7,8 @@ from UserComponents.cells.catalog import HEROES
 from UserComponents.cells.combat import impact_kind
 from UserComponents.cells.models import ASSET_DIR as CHAR_DIR, raylib_mesh_indices, read_glb
 from UserComponents.cells.shots import STYLES, style_for, tracer_life
-from UserComponents.cells.weapons import ASSET_DIR, WEAPON_KEYS
+from UserComponents.cells import fp_arms
+from UserComponents.cells.weapons import ASSET_DIR, WEAPON_KEYS, shotgun_state
 
 ANIMS = {'static', 'bolt', 'mag', 'pulse', 'spin', 'support', 'melee'}
 
@@ -29,7 +30,11 @@ class WeaponAssetTests(unittest.TestCase):
                 self.assertEqual(meta['mesh_count'], count)
                 names = {p['name'] for p in meta['parts']}
                 self.assertIn('body', names)
-                self.assertIn('arm_r', names)
+                if key in fp_arms.HEROES:
+                    # Braços com esqueleto (fp_arms): a arma não traz braços rígidos.
+                    self.assertFalse({n for n in names if n.startswith('arm_')})
+                else:
+                    self.assertIn('arm_r', names)
                 for part in meta['parts']:
                     self.assertEqual(mapping[f"w_{key}.{part['name']}"], [part['mesh']])
                     self.assertIn(part['anim'], ANIMS)
@@ -59,6 +64,27 @@ class WeaponAssetTests(unittest.TestCase):
                 # Rotação ortonormal (sem escala nem cisalhamento).
                 for i in range(3):
                     self.assertAlmostEqual(math.hypot(*fp[i][:3]), 1.0, places=4)
+
+    def test_macrophage_shotgun_parts_follow_their_action(self):
+        gltf, meta = self.load('macrophage')
+        parts = {part['name']: part for part in meta['parts']}
+        self.assertEqual(parts['pump']['anim'], 'bolt')
+        self.assertLess(parts['pump']['axis'][2] * parts['pump']['amount'], 0)
+        self.assertEqual(parts['mag']['anim'], 'mag')
+        for node in gltf['nodes']:
+            if node['name'] not in ('w_macrophage.pump', 'w_macrophage.mag', 'w_macrophage.body'):
+                continue
+            prim = gltf['meshes'][node['mesh']]['primitives'][0]
+            self.assertIn('TEXCOORD_0', prim['attributes'])
+            self.assertIn('baseColorTexture', gltf['materials'][prim['material']]['pbrMetallicRoughness'])
+        self.assertEqual(shotgun_state(.0)['bolt'], 0)
+        self.assertEqual(shotgun_state(.28)['bolt'], 1)
+        self.assertEqual(shotgun_state(.5)['bolt'], 0)
+        # Recarga: cartuchos na janela de carga primeiro, bomba só no fim (igual à primeira pessoa).
+        self.assertEqual(shotgun_state(9, .50), {'bolt': 0.0})
+        self.assertEqual(shotgun_state(9, .90), {'bolt': 1.0})
+        self.assertEqual(shotgun_state(9, 1.0), {'bolt': 0.0})
+        self.assertEqual(shotgun_state(9, .90)['bolt'], fp_arms.reload_parts('macrophage', .90)['bolt'])
 
     def test_characters_mount_their_weapon(self):
         for key in WEAPON_KEYS:

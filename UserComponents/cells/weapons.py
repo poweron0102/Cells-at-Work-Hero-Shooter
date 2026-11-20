@@ -10,7 +10,8 @@ e a luz vem de cima/atrás do ombro. A animação é procedural:
 * pose de corrida, recarga com troca de carregador, golpe (faca/garra/cutelo) e saque.
 
 As mesmas peças (sem os braços de primeira pessoa) são desenhadas na mão dos personagens
-por ``models.CharacterModel`` em terceira pessoa.
+por ``models.CharacterModel`` em terceira pessoa. Heróis com braços de esqueleto (``fp_arms``) não
+usam as peças ``arm_*``: as mãos são posadas a cada quadro nas empunhaduras da arma.
 """
 import ctypes
 import ctypes.util
@@ -26,7 +27,7 @@ import raylib as _raw
 
 from EasyCells3D.Components.Camera3D import Renderable3D
 from EasyCells3D.Geometry import Vec3
-from . import model_lighting
+from . import fp_arms, model_lighting
 from .models import _rot, _about, _compose, _to_matrix, _IDENTITY
 from . import shots
 
@@ -93,15 +94,30 @@ def bell(a, b, c, d, x):
     return smooth(a, b, x) * (1 - smooth(c, d, x))
 
 
+def shotgun_state(fire, reload=None):
+    """Curso da bomba da Macrófaga (0..1) em terceira pessoa: depois de cada disparo e no fim da
+    recarga, no mesmo tempo das ações do esqueleto (animate_macrophage.py) e da primeira pessoa
+    (fp_arms.reload_parts)."""
+    k = bell(.16, .26, .30, .42, fire)
+    return {'bolt': k if reload is None else max(k, fp_arms.reload_parts('macrophage', reload).get('bolt', 0.0))}
+
+
+def gun_matrix(rest, px, py, pz, pitch, yaw, roll):
+    """Matriz arma->vista: pose de repouso ``rest`` (JSON 'fp') girada no cabo e deslocada."""
+    return _compose(m_translate(px, py, pz), _compose(_about(rest[1], _rot(-pitch, yaw, roll)), rest))
+
+
 # --------------------------------------------------------------------------------------
 # Assets
 # --------------------------------------------------------------------------------------
 
 class _WPart:
-    __slots__ = ('name', 'mesh', 'anim', 'pivot', 'axis', 'amount', 'space', 'fp_only', 'tip')
+    __slots__ = ('name', 'mesh', 'texture', 'anim', 'pivot', 'axis', 'amount', 'space', 'fp_only', 'tip')
 
-    def __init__(self, e, mesh):
-        self.name, self.mesh, self.anim = e['name'], mesh, e.get('anim', 'static')
+    def __init__(self, e, model):
+        index = e['mesh']
+        self.name, self.mesh, self.anim = e['name'], model.meshes[index], e.get('anim', 'static')
+        self.texture = model.materials[model.meshMaterial[index]].maps[0].texture
         self.pivot = tuple(e.get('pivot', (0.0, 0.0, 0.0)))
         self.axis = tuple(e.get('axis', (0.0, 0.0, 1.0)))
         self.amount = float(e.get('amount', 0.0))
@@ -117,7 +133,7 @@ class WeaponAsset:
         if self.model.meshCount != meta['mesh_count']:
             raise RuntimeError(f'arma {key}: GLB tem {self.model.meshCount} malhas, JSON espera {meta["mesh_count"]}')
         self.material = rl.load_material_default()
-        self.parts = [_WPart(e, self.model.meshes[e['mesh']]) for e in meta['parts']]
+        self.parts = [_WPart(e, self.model) for e in meta['parts']]
         self.by_name = {p.name: p for p in self.parts}
         self.fp = m_rows(meta['fp'])
         self.muzzle = tuple(meta['muzzle'])
@@ -180,14 +196,17 @@ def part_local(part, st):
     return None
 
 
-def draw_parts(a, base, st, first_person, view=None):
-    """Desenha as peças com a matriz ``base`` (arma -> mundo/vista)."""
+def draw_parts(a, base, st, first_person, view=None, skip_arms=False):
+    """Desenha as peças com a matriz ``base`` (arma -> mundo/vista). ``skip_arms``: os braços rígidos
+    da arma ficam de fora (o herói tem braços com esqueleto, ``fp_arms``)."""
     material = a.material
     material.shader = model_lighting.shader()
     c = material.maps[0].color
     c.r = c.g = c.b = c.a = 255
+    texture = material.maps[0].texture
+    default_id = texture.id
     for part in a.parts:
-        if part.fp_only and not first_person:
+        if part.fp_only and not first_person or skip_arms and part.name.startswith('arm_'):
             continue
         if part.space == 'view':
             if view is None:
@@ -198,7 +217,18 @@ def draw_parts(a, base, st, first_person, view=None):
         else:
             local = part_local(part, st)
             m = base if local is None else _compose(base, local)
+        texture.id = part.texture.id
         _DrawMesh(part.mesh, material, _to_matrix(m)[0])
+    texture.id = default_id
+
+
+def draw_shell(base, axis, length=.064, radius=.0105):
+    """Cartucho de escopeta (corpo vermelho, base de latão) da base até ``base + axis * length``."""
+    tip = tuple(base[i] + axis[i] * length for i in range(3))
+    brass = tuple(base[i] + axis[i] * length * .24 for i in range(3))
+    rl.draw_cylinder_ex(rl.Vector3(*brass), rl.Vector3(*tip), radius, radius, 12, rl.Color(178, 46, 52, 255))
+    rl.draw_cylinder_ex(rl.Vector3(*base), rl.Vector3(*brass), radius * 1.06, radius * 1.06, 12,
+                        rl.Color(214, 176, 92, 255))
 
 
 # --------------------------------------------------------------------------------------
@@ -311,6 +341,8 @@ class ViewModel(Renderable3D):
         self.pending_shell = None
         self.gun_view = _IDENTITY
         self.swoosh = []  # [(ponta, idade)] do golpe
+        self.arms_hero, self.arms_rig = None, None  # braços com esqueleto (fp_arms), se o herói tiver
+        self.reload_p = None
 
     # -- eventos ---------------------------------------------------------------------------
     def on_fire(self, actor, a, kind):
@@ -434,8 +466,23 @@ class ViewModel(Renderable3D):
         py -= .035 * s
         pz -= .02 * s
         # Recarga.
-        if sim['reloading']:
-            p = 1 - actor.weapon.reload_time / 1.6
+        arms = fp_arms.config(actor.hero) if fp_arms.asset(actor.hero) is not None else None
+        self.reload_p = 1 - actor.weapon.reload_time / 1.6 if sim['reloading'] else None
+        if arms is not None and sim['reloading']:
+            # Braços com esqueleto: a arma inclina e as peças seguem a coreografia da mão (fp_arms).
+            p = self.reload_p
+            r0, p0, y0, x0, y1, z0 = fp_arms.reload_offsets(actor.hero, p, arms)
+            roll += r0
+            pitch += p0
+            yaw += y0
+            px += x0
+            py += y1
+            pz += z0
+            parts, bump = fp_arms.reload_state(actor.hero, p, arms)
+            py += bump
+            st.update(parts)
+        elif sim['reloading']:
+            p = self.reload_p
             w = bell(0.0, .14, .84, 1.0, p)
             roll += .5 * w
             pitch += .16 * w
@@ -502,10 +549,7 @@ class ViewModel(Renderable3D):
         py -= (1 - ee) * .22
         pitch -= (1 - ee) * .8
         roll += (1 - ee) * .3
-        rest = a.fp
-        g = rest[1]
-        gun_view = _compose(m_translate(px, py, pz), _compose(_about(g, _rot(-pitch, yaw, roll)), rest))
-        return gun_view, st
+        return gun_matrix(a.fp, px, py, pz, pitch, yaw, roll), st
 
     def melee_matrix(self, part):
         mt = self.melee_t
@@ -562,7 +606,10 @@ class ViewModel(Renderable3D):
         if hurt:
             model_lighting.set_highlight(1.0, .35, .3, .25 * min(1.0, actor.hurt * 4))
         rl.rl_disable_backface_culling()
-        draw_parts(a, self.gun_view, st, True, view=self.melee_matrix)
+        arms = fp_arms.asset(actor.hero)
+        draw_parts(a, self.gun_view, st, True, view=self.melee_matrix, skip_arms=arms is not None)
+        if arms is not None:
+            self.draw_arms(actor, a, arms, st)
         rl.rl_enable_backface_culling()
         self.update_swoosh(a, dt)
         model_lighting.set_light(*model_lighting.WORLD_LIGHT)
@@ -576,6 +623,23 @@ class ViewModel(Renderable3D):
         rl.end_mode_3d()
         rl.rl_set_clip_planes(near, far)
         rl.begin_mode_3d(self.cam.rl_camera)
+
+    def draw_arms(self, actor, a, arms, st):
+        """Braços com esqueleto: mãos presas às empunhaduras da arma (e ao cartucho na recarga)."""
+        if self.arms_hero != actor.hero:
+            self.arms_hero, self.arms_rig = actor.hero, fp_arms.Arms(actor.hero)
+        gun_view = self.gun_view
+
+        def space(name):
+            part = a.by_name.get(name) if name else None
+            local = part_local(part, st) if part is not None else None
+            return gun_view if local is None else _compose(gun_view, local)
+
+        rig = self.arms_rig
+        arms.set_pose(rig.pose(arms.hands, space, self.reload_p))
+        arms.draw(model_lighting.shader())
+        if rig.shell is not None:
+            draw_shell(*rig.shell)
 
     def update_swoosh(self, a, dt):
         """Rastro claro da ponta da faca/garra durante o golpe."""
@@ -652,3 +716,4 @@ class ViewModel(Renderable3D):
     def on_destroy(self):
         super().on_destroy()
         release_assets()
+        fp_arms.release_assets()

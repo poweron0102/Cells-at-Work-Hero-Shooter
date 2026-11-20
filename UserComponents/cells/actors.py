@@ -45,6 +45,7 @@ class Combatant(NetworkComponent, KitMixin):
         self.action = 0.0
         self.third_person = 0.0  # 0..1, camera em 3a pessoa (player.py)
         self.fire_serial, self.fire_time, self.fire_kind = 0, -1.0, 'shot'
+        self.reload_at = self.melee_at = -math.inf
         self.vm_muzzle = None   # cano no espaço do viewmodel (jogador local em 1ª pessoa)
         self.tp_muzzle = None   # cano da arma na mão do personagem (mundo)
 
@@ -248,6 +249,7 @@ class Combatant(NetworkComponent, KitMixin):
         self.killer = None
         self.weapon.ammo = HEROES[self.hero].magazine
         self.weapon.timer = self.weapon.reload_time = 0
+        self.reload_at = self.melee_at = -math.inf
         self.body.enable = True
         self.body.teleport(position)
         self.spawned(self.hero)
@@ -257,6 +259,7 @@ class Combatant(NetworkComponent, KitMixin):
         self.hero = hero
         self.front, self.front_radius = None, 0.0
         self.fx = {}
+        self.reload_at = self.melee_at = -math.inf
 
     @Rpc(send_to=SendTo.ALL, require_owner=False)
     def reveal_enemies(self, seconds):
@@ -269,8 +272,14 @@ class Combatant(NetworkComponent, KitMixin):
         self.fx[kind] = max(self.fx.get(kind, 0), seconds)
 
     @Rpc(send_to=SendTo.ALL, require_owner=False)
-    def show_action(self, value):
+    def show_action(self, value, melee=False):
         self.action = value
+        if melee and not self.local:
+            self.melee_at = time.perf_counter()
+
+    @Rpc(send_to=SendTo.NOT_ME)
+    def show_reload(self):
+        self.reload_at = time.perf_counter()
 
     def fired(self, kind='shot'):
         """Evento visual de disparo (local ou recebido): recuo em 3ª pessoa e clarão.

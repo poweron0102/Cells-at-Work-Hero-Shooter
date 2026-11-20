@@ -7,7 +7,7 @@ Uso (a partir da raiz do repositório):
 
 Mesma linguagem visual dos personagens (referencias/scripts/personagens/build_characters.py, de onde vêm os geradores
 de geometria): primitivas procedurais, Bevel/Subsurf do Blender aplicados, cor por face e uma
-malha por parte animável.
+malha por parte animável. A escopeta texturizada da Macrófaga vem da cena macrophage.blend.
 
 Espaços (no Blender: Z para cima, frente em -Y, esquerda em +X; no GLB: Y para cima, frente +Z):
 
@@ -398,10 +398,8 @@ def build_b_cell():
     mag = WPart('mag', 'mag', axis=P(0, 0.1, -1), amount=0.2)
     mag.profile([(0.112, 0.05), (0.152, 0.05), (0.158, -0.09), (0.118, -0.092)], 0.032, DK, bevel=0.004)
     mag.profile([(0.114, -0.02), (0.154, -0.02), (0.156, -0.05), (0.116, -0.05)], 0.034, BL, bevel=0.0)
-    arm_r, arm_l = human_arms(fp, sleeve='#7097bf', hand_col='#bfc2c6', cuff='#8fb2d6', skin='#f2d2b6',
-                              sleeve_from=0.45, r_grip=(0, -0.012, -0.022), l_grip=(0, 0.33, 0.09), l_under=True,
-                              l_R=(0.03, 0.034))
-    return dict(parts=[body, bolt, mag, arm_r, arm_l], fp=fp, muzzle=P(0, 0.635, 0.092),
+    # Braços de primeira pessoa com esqueleto: build_fp_arms.py (UserComponents/cells/fp_arms.py).
+    return dict(parts=[body, bolt, mag], fp=fp, muzzle=P(0, 0.635, 0.092),
                 eject=P(-0.03, 0.06, 0.11), kind='rifle')
 
 
@@ -656,8 +654,14 @@ def gl_matrix(m):
 
 
 def build(key):
+    if key == 'macrophage':
+        from export_macrophage import weapon
+        return weapon()
     spec = BUILDERS[key]()
-    parts = [p for p in spec['parts'] if p.faces]
+    from build_fp_arms import STYLES as FP_ARMS
+    # Heróis com braços de esqueleto (build_fp_arms.py) não levam os braços rígidos na arma: as funções
+    # human_arms/organic_arm ficam como referência da pose original, mas as peças arm_* não são exportadas.
+    parts = [p for p in spec['parts'] if p.faces and not (key in FP_ARMS and p.name.startswith('arm_'))]
     coll = bpy.data.collections.new(f'w_{key}')
     bpy.context.scene.collection.children.link(coll)
     objs = [bc.make_object(f'w_{key}', p, coll) for p in parts]
@@ -699,7 +703,7 @@ def render_fp_preview(key, objs, spec, parts, fov_deg=50.0):
     scene.render.engine = 'BLENDER_WORKBENCH'
     sh = scene.display.shading
     sh.light = 'STUDIO'
-    sh.color_type = 'VERTEX'
+    sh.color_type = 'TEXTURE' if key == 'macrophage' else 'VERTEX'
     sh.show_object_outline = True
     sh.object_outline_color = (0.08, 0.08, 0.1)
     sh.show_shadows = False
