@@ -21,7 +21,7 @@ então não é preciso compilador C++. Depois disso, execute:
 ```
 
 Também pode abrir `Jogar.bat`. No menu, informe seu nome e escolha **Criar sala**.
-Os outros jogadores informam o IPv4 do anfitrião em **IP do servidor** e clicam em
+Os outros jogadores informam o IPv6 do anfitrião (ou o IPv4, na mesma rede) em **IP do servidor** e clicam em
 **Entrar na rede**. Use `127.0.0.1` para vários processos no mesmo computador.
 Os nomes e IPs usados ficam como etiquetas abaixo de cada campo (clique para
 preencher, **×** para apagar); eles são salvos só neste computador, em
@@ -37,14 +37,14 @@ completa as vagas restantes com combatentes de treino identificados como BOT.
 # Anfitrião
 .venv\Scripts\python.exe main.py --host --name "Neutrophil"
 
-# Cada um dos outros cinco jogadores, usando o IPv4 do anfitrião
+# Cada um dos outros cinco jogadores, usando o IPv6 (ou IPv4 na mesma rede) do anfitrião
 .venv\Scripts\python.exe main.py --join 192.168.1.100 --name "Macrophage"
 
 # Partida imediata com cinco bots
 .venv\Scripts\python.exe main.py --training
 ```
 
-A sala usa **TCP e UDP na porta 25765**; permita o Python na rede privada se o Windows solicitar.
+A sala usa **TCP e UDP na porta 25765**; o anfitrião escuta em `::` (IPv6 e IPv4 juntos). Permita o Python nas redes privada e pública se o Windows solicitar, e libere a porta 25765 no roteador se o acesso for pela internet.
 O argumento `--port` permite outra porta, que deve ser a mesma em todos os processos.
 
 ### Log de rede (RPC)

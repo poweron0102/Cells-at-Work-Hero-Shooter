@@ -89,7 +89,7 @@ class MenuScreen(MangaCanvas):
             self.error = "Digite um nome antes de entrar."
             return
         try:
-            connect(self.game, "0.0.0.0" if host else self.ip.strip(), 25765, host, self.name.strip())
+            connect(self.game, "::" if host else self.ip.strip(), 25765, host, self.name.strip())
         except (OSError, ValueError):
             self.error = "Não foi possível abrir a sala. Confira o IP e a porta 25765."
             return

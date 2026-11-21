@@ -30,6 +30,7 @@ class NetworkServerUDP:
 
         if ip_version == 6:
             self.server_socket = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
+            self.server_socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)  # dual-stack, como no TCP
         elif ip_version == 4:
             self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         else:

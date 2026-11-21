@@ -65,6 +65,9 @@ class NetworkServerTCP:
         self.connect_callback = connect_callback
         self.scheduler = Scheduler.instance
         self.server_socket = socket.socket(socket.AF_INET6 if ip_version == 6 else socket.AF_INET, socket.SOCK_STREAM)
+        if ip_version == 6:
+            # Dual-stack: "::" também aceita clientes IPv4 (o Windows pode usar só-IPv6 por padrão).
+            self.server_socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
         self.server_socket.bind((ip, port))
         self.server_socket.listen(8)
         self.accept_thread = threading.Thread(target=self.accept_clients, daemon=True)

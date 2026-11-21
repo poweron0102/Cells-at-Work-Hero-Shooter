@@ -147,6 +147,9 @@ def connect(game, ip, port, host, name):
         game.session = item.AddComponent(Session(manager, name))
     except OSError:
         item.Destroy()
+        if host and ip == "::":
+            # Windows sem IPv6: abre a sala só em IPv4.
+            return connect(game, "0.0.0.0", port, host, name)
         raise
     return game.session
 

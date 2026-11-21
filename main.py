@@ -60,7 +60,7 @@ def main():
                 dynamic_resolution=not args.hidden, target_fps=60)
     try:
         if args.host or args.join or args.training:
-            connect(game, args.join or "0.0.0.0", args.port, not bool(args.join), args.name)
+            connect(game, args.join or "::", args.port, not bool(args.join), args.name)
             if args.record and not args.join:
                 game.session.recording.value = True
             if args.training:
