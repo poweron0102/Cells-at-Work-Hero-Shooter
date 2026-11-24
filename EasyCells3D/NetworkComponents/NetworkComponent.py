@@ -1,4 +1,5 @@
 import ipaddress
+import socket
 from enum import Enum, auto
 from functools import wraps
 from typing import Callable
@@ -298,7 +299,9 @@ class NetworkManager(Component):
             try:
                 ip_version = ipaddress.ip_address(ip).version
             except ValueError:
-                ip_version = 4
+                # Nome de domínio: resolve pelo DNS (A ou AAAA) e usa o primeiro endereço.
+                family, *_, address = socket.getaddrinfo(ip, port, type=socket.SOCK_STREAM)[0]
+                ip, ip_version = address[0], 6 if family == socket.AF_INET6 else 4
 
         # Inicializa AMBOS os protocolos atrás da interface Transport
         self._tcp_connected = False
