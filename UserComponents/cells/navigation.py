@@ -10,18 +10,21 @@ import heapq
 import json
 import math
 from EasyCells3D.Geometry import Vec3
-from .layout import X0, X1, Z0, Z1, NAV_CEILINGS, MAP_FOLDER
+from . import layout
 
 STEP = 2
-NAV_FILE = MAP_FOLDER/'nav.json'
+
+
+def nav_file():
+    return layout.MAP_FOLDER/'nav.json'
 
 
 def map_hash():
-    return hashlib.sha1((MAP_FOLDER/'runtime.json').read_bytes()).hexdigest()[:16]
+    return hashlib.sha1((layout.MAP_FOLDER/'runtime.json').read_bytes()).hexdigest()[:16]
 
 
 class Navigator:
-    _cached = None
+    _cached = {}  # mapa -> (colunas, arestas)
 
     def __init__(self, world):
         self.world = world
@@ -38,7 +41,8 @@ class Navigator:
         probe = bullet.createMultiBody(baseMass=0, baseCollisionShapeIndex=shape, basePosition=[0, -100, 0],
                                        physicsClientId=world.client)
         bullet.setCollisionFilterGroupMask(probe, -1, 0, 0, physicsClientId=world.client)
-        bodies = [b.uid for b in world.bodies if b.enable and b.collision_group & 1]
+        bodies = [b.uid for b in world.bodies if b.enable and b.collision_group & (1 | 16)  # 16: alambrados
+                  and not getattr(b, 'nav_ignore', False)]  # valvas do coracao: o vao e caminho
 
         def clear(x, y, z):
             bullet.resetBasePositionAndOrientation(probe, [x, y+1.2, z], [0, 0, 0, 1], physicsClientId=world.client)
@@ -69,13 +73,15 @@ class Navigator:
             bullet.removeBody(probe, physicsClientId=world.client)
         self.columns, self.edges = columns, edges
 
-    def save(self, path=NAV_FILE):
+    def save(self, path=None):
+        path = path or nav_file()
         data = dict(hash=map_hash(), step=STEP,
                     nodes=[[x, y, z, [list(e) for e in self.edges.get((x, y, z), ())]]
                            for (x, z), ys in self.columns.items() for y in ys])
         path.write_text(json.dumps(data, separators=(',', ':')), encoding='utf-8')
 
-    def load(self, path=NAV_FILE):
+    def load(self, path=None):
+        path = path or nav_file()
         if not path.exists():
             return False
         data = json.loads(path.read_text(encoding='utf-8'))
@@ -91,8 +97,9 @@ class Navigator:
     def ensure(self):
         if self.edges:
             return
-        if Navigator._cached is not None:
-            self.columns, self.edges = Navigator._cached
+        cached = Navigator._cached.get(layout.MAP_KEY)
+        if cached is not None:
+            self.columns, self.edges = cached
             return
         if not self.load():
             self.build()
@@ -100,10 +107,11 @@ class Navigator:
                 self.save()
             except OSError:
                 pass
-        Navigator._cached = self.columns, self.edges
+        Navigator._cached[layout.MAP_KEY] = self.columns, self.edges
 
     # -- consulta ---------------------------------------------------------
     def nearest(self, p):
+        X0, Z0 = layout.X0, layout.Z0
         cx = int(round((p.x-X0-1)/STEP))*STEP+int(X0)+1
         cz = int(round((p.z-Z0-1)/STEP))*STEP+int(Z0)+1
         best, score = None, math.inf
@@ -153,10 +161,9 @@ def walkable_heights():
     Reads the exported triangles directly (their winding is outward), so solid
     slabs never produce phantom floors under the street.
     """
-    from .layout import MAP_DATA
-    verts, idx = MAP_DATA['vertices'], MAP_DATA['indices']
-    xs = range(int(X0)+1, int(X1), STEP)
-    zs = range(int(Z0)+1, int(Z1), STEP)
+    verts, idx = layout.MAP_DATA['vertices'], layout.MAP_DATA['indices']
+    xs = range(int(layout.X0)+1, int(layout.X1), STEP)
+    zs = range(int(layout.Z0)+1, int(layout.Z1), STEP)
     out = {}
     for t in range(0, len(idx), 3):
         a, b, c = verts[idx[t]], verts[idx[t+1]], verts[idx[t+2]]

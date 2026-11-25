@@ -20,6 +20,8 @@ import math
 
 import pyray as rl
 
+from . import settings
+
 # Direção PARA o sol (mundo do jogo: x leste, y cima, z sul). Sol alto vindo do sudoeste:
 # a avenida (norte-sul) recebe luz ao longo do eixo e as fachadas leste/oeste ficam em tons
 # diferentes; quem olha para o sul (bactérias) vê o contraluz enevoado da referência.
@@ -31,7 +33,8 @@ SHADE_COLOR = (0.72, 0.69, 0.86)
 DEEP_COLOR = (0.42, 0.35, 0.44)
 LAMP_COLOR = (1.0, 0.72, 0.38)
 
-SUN_RES = 4096           # lado maior do mapa de sombra (~5 cm por texel)
+SUN_RES = 4096           # lado maior do mapa de sombra (~5 cm por texel) na qualidade alta
+SUN_QUALITY = {'high': SUN_RES, 'medium': 2048, 'low': 1024}  # Configurações > Vídeo > Sombras
 SKY_TILE = 512           # cada direção do domo, só durante o bake
 VOXEL = 0.5              # volume do céu: 0,5 m em x/z e em y
 MAX_LAMPS = 12
@@ -260,6 +263,12 @@ void main() {
     if (pat == 12) {
         vec2 g = fract(vec2(wPos.x + wPos.y * 0.3, wPos.z + wPos.y * 0.3) * 1.4);
         if (min(min(g.x, 1.0 - g.x), min(g.y, 1.0 - g.y)) > 0.12) discard;
+    }
+    // Alambrado (padrão 18): sombra rendada de losangos.
+    if (pat == 18) {
+        vec2 q = vec2(wPos.x + wPos.z, wPos.y) * 5.0;
+        vec2 f = fract(vec2(q.x + q.y, q.x - q.y) * 0.7071);
+        if (min(min(f.x, 1.0 - f.x), min(f.y, 1.0 - f.y)) > 0.1) discard;
     }
     finalColor = vec4(towardLight, 0.0, 0.0, 1.0);
 }
@@ -517,7 +526,7 @@ def bake(model, area):
         sun_lo = (x0 - SUN_PAD, BOTTOM, z0 - SUN_PAD)
         sun_hi = (x1 + SUN_PAD, SUN_TOP, z1 + SUN_PAD)
         su, sv, sz, sw, (fu, fv) = frame(SUN, sun_lo, sun_hi, model_lo, model_hi)
-        scale = SUN_RES / max(fu, fv)
+        scale = SUN_QUALITY.get(settings.get('shadow_quality'), SUN_RES) / max(fu, fv)
         w, h = max(256, int(fu * scale)), max(256, int(fv * scale))
         target = _target(w, h, rl.PixelFormat.PIXELFORMAT_UNCOMPRESSED_R32, True)
         _begin_depth(target)

@@ -8,6 +8,7 @@ import pyray as rl
 from EasyCells3D.Components import Camera3D
 from EasyCells3D.Geometry import Quaternion, Vec3
 from .cursor import set_cursor_captured
+from . import layout
 
 
 def xyz(vector):
@@ -33,8 +34,13 @@ class ReferenceCamera(Camera3D):
         set_cursor_captured(True)
 
     def reset_pose(self):
-        self.transform.position = Vec3(19, 5.3, 12)
-        self.yaw, self.pitch = math.radians(-55), math.radians(-4.5)
+        if layout.MAP_KEY == 'bairro':
+            self.transform.position = Vec3(19, 5.3, 12)
+            self.yaw, self.pitch = math.radians(-55), math.radians(-4.5)
+        else:  # ao lado da base das celulas, olhando para o norte
+            x, y, z = layout.CELL_SPAWNS[0]
+            self.transform.position = Vec3(x+2, y+6, z-6)
+            self.yaw, self.pitch = 0.0, math.radians(-8)
         self.vfov = 60
         self.update_rotation()
 
@@ -137,8 +143,8 @@ class ReferenceCamera(Camera3D):
         data = {
             "schema_version": 1,
             "created_at": stamp.isoformat(),
-            "map": "BairroArterial",
-            "model": "Assets/Maps/BairroArterial/BairroArterial.glb",
+            "map": layout.MAP_INFO.folder,
+            "model": f"Assets/Maps/{layout.MAP_INFO.folder}/{layout.MAP_FILE}",
             "image": "print.png",
             "coordinate_system": "World metres; +Y up; forward at zero yaw is -Z. Blender: (x, -z, y).",
             "position": xyz(camera.position),

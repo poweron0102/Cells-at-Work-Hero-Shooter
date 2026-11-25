@@ -6,9 +6,55 @@ import pyray as rl
 from EasyCells3D.Components.Camera3D import Renderable3D
 from EasyCells3D.Geometry import Vec3
 from .catalog import CELLS, BALANCE, HEROES
+from . import layout
 
 def color(rgb, alpha=255):
     return rl.Color(int(rgb[0]), int(rgb[1]), int(rgb[2]), int(alpha))
+
+
+def wound_frame():
+    """Eixos da ferida: ``u`` aponta da borda reparada (fim da escolta) para o centro da cratera,
+    ``p`` e o perpendicular; devolve (u, p, distancia)."""
+    wx, _, wz = layout.WOUND
+    rx, _, rz = layout.WOUND_REPAIR
+    length = math.hypot(wx-rx, wz-rz)
+    if length < .5:
+        return (0.0, -1.0), (1.0, 0.0), 13.5
+    ux, uz = (wx-rx)/length, (wz-rz)/length
+    return (ux, uz), (-uz, ux), length
+
+
+def shaded_box(center, size, yaw, rgb, ink=(40, 34, 40)):
+    """Caixa girada em Y com sombreamento de duas cores (sol x sombra lavanda, a mesma paleta do
+    cenario) e contorno de nanquim: portas das valvas e a carreta do comboio."""
+    from .lighting import SUN, SUN_COLOR, SHADE_COLOR
+    cx, cy, cz = center
+    hx, hy, hz = size[0]/2, size[1]/2, size[2]/2
+    c, s = math.cos(yaw), math.sin(yaw)
+
+    def P(x, y, z):
+        return rl.Vector3(cx+x*c+z*s, cy+y, cz-x*s+z*c)
+
+    def D(x, y, z):
+        return (x*c+z*s, y, -x*s+z*c)
+    faces = (((-hx, hy, -hz), (-hx, hy, hz), (hx, hy, hz), (hx, hy, -hz), D(0, 1, 0)),
+             ((-hx, -hy, hz), (hx, -hy, hz), (hx, hy, hz), (-hx, hy, hz), D(0, 0, 1)),
+             ((hx, -hy, -hz), (-hx, -hy, -hz), (-hx, hy, -hz), (hx, hy, -hz), D(0, 0, -1)),
+             ((hx, -hy, hz), (hx, -hy, -hz), (hx, hy, -hz), (hx, hy, hz), D(1, 0, 0)),
+             ((-hx, -hy, -hz), (-hx, -hy, hz), (-hx, hy, hz), (-hx, hy, -hz), D(-1, 0, 0)))
+    for a, b, cc, d, n in faces:
+        lit = n[0]*SUN[0]+n[1]*SUN[1]+n[2]*SUN[2] > .05
+        k = SUN_COLOR if lit else SHADE_COLOR
+        col = color(tuple(min(255, v*kk) for v, kk in zip(rgb, k)))
+        pa, pb, pc, pd = P(*a), P(*b), P(*cc), P(*d)
+        rl.draw_triangle_3d(pa, pb, pc, col)
+        rl.draw_triangle_3d(pa, pc, pd, col)
+    line = color(ink)
+    corners = [P(x, y, z) for x in (-hx, hx) for y in (-hy, hy) for z in (-hz, hz)]
+    for i in range(8):
+        for j in range(i+1, 8):
+            if bin(i ^ j).count('1') == 1:
+                rl.draw_line_3d(corners[i], corners[j], line)
 
 
 def model(key):
@@ -150,6 +196,7 @@ class ArenaEffects(Renderable3D):
         self.crowd = None
         self.animators = {}   # (tipo, id) -> [Animator, última posição, instante] das hemácias e plaquetas
         self.visible = lambda x, y, z: True
+        self.valve_swing = {}  # coracao: abertura animada de cada valva (0 fechada .. 1 aberta)
 
     def view_cone(self):
         """Teste "aparece na tela?" (cone da câmera com folga): o skinning dos personagens é na CPU, então
@@ -189,6 +236,109 @@ class ArenaEffects(Renderable3D):
         animator.update(rig, now, speed, **kw)
         return {'time': now, 'animator': animator, 'props': kw.get('layers', {}).get('Carry', 0) > 0}
 
+    def draw_escort(self):
+        if self.arena.mode == 'escort':
+            self.draw_platelets()
+        elif self.arena.mode == 'convoy':
+            self.draw_convoy()
+            self.draw_valves()
+
+    def draw_convoy(self):
+        """Comboio de hemacias (S01E08): uma carreta com caixas de CO2 puxada e empurrada por
+        hemacias; ao chegar ao pulmao, a equipe fica descarregando ao lado da carreta."""
+        a, s = self.arena, self.arena.state
+        head = a.path.at(s.escort)
+        dx, dz = a.path.direction(max(0.0, min(s.escort, s.escort_total-.6)))
+        yaw = math.atan2(dx, -dz)
+        moving = not s.blocked_by and s.blocked_valve < 0 and not s.wound_closed
+        phase = s.escort*math.tau/.65
+        right = (-dz, dx)
+        now = time.perf_counter()
+        cx, cy, cz = head
+        cart_yaw = math.atan2(dx, dz)
+        # Carreta: plataforma, rodas e a pilha de caixas de papelao com a faixa do CO2.
+        if self.visible(cx, cy, cz):
+            shaded_box((cx, cy+.55, cz), (1.5, .14, 2.4), cart_yaw, (150, 156, 166))
+            for f in (-.8, .8):
+                for r in (-.7, .7):
+                    rl.draw_cylinder_ex(rl.Vector3(cx+dx*f+right[0]*r, cy+.22, cz+dz*f+right[1]*r),
+                                        rl.Vector3(cx+dx*f+right[0]*(r*1.15), cy+.22, cz+dz*f+right[1]*(r*1.15)),
+                                        .22, .22, 8, rl.Color(50, 48, 54, 255))
+            for k, (f, r, h) in enumerate(((-.55, -.35, 0), (-.55, .35, 0), (.45, -.35, 0), (.45, .35, 0),
+                                           (-.05, 0, 1))):
+                bx, bz = cx+dx*f+right[0]*r, cz+dz*f+right[1]*r
+                by = cy+.62+.32+h*.62
+                shaded_box((bx, by, bz), (.66, .62, .62), cart_yaw+k*.08, (206, 168, 116))
+                shaded_box((bx, by+.05, bz), (.68, .1, .64), cart_yaw+k*.08, (70, 70, 80))
+        crew = ((1.65, -.55), (1.65, .55), (-1.65, -.5), (-1.65, .5), (0, 1.25), (0, -1.25))
+        if s.wound_closed:
+            moving = False
+        for group in (0, 1):
+            motion = None
+            for i in range(group, len(crew), 2):
+                f, r = crew[i]
+                px = cx+dx*f+right[0]*r
+                pz = cz+dz*f+right[1]*r
+                if not self.visible(px, cy, pz):
+                    continue
+                if motion is None:
+                    motion = self.animate('convoy', group, 'red_blood_cell', (cx, cy, cz), now, cycle=group*.5,
+                                          layers={'Carry': 1.0 if i >= 4 else 0.0})
+                model('red_blood_cell').draw(Vec3(px, cy, pz), yaw, phase+i*1.7, moving, motion=motion)
+        if not s.wound_closed:
+            for k in range(1, 16):
+                p = a.path.at(s.escort+k*1.6)
+                rl.draw_cube(rl.Vector3(p[0], p[1]+.06, p[2]), .26, .04, .26, color((255, 255, 255), 200))
+
+    def draw_valves(self):
+        """Portoes das valvas: duas folhas de madeira laqueada com tachas douradas que giram nas
+        dobradicas; a valva emperrada pela colonia fica coberta de vegetacao (endocardite)."""
+        a, s = self.arena, self.arena.state
+        dt = min(.05, rl.get_frame_time())
+        for v in a.valves:
+            target = 1.0 if a.valve_open.get(v['id'], True) else 0.0
+            k = self.valve_swing.get(v['id'], target)
+            k += max(-dt*3.2, min(dt*3.2, target-k))
+            self.valve_swing[v['id']] = k
+            x, y, z = v['pos']
+            if not self.visible(x, y+2, z):
+                continue
+            w, h = v['width'], v.get('height', 6.0)
+            half = w/2
+            leaf = half-.05
+            # Folhas abrem para o lado do fluxo (para onde o comboio vai).
+            flow = v.get('flow', 1)
+            for side in (-1, 1):
+                ang = side*flow*k*math.radians(86)
+                if v['axis'] == 'x':
+                    hx, hz = x+side*half, z
+                    base = 0.0 if side < 0 else math.pi
+                    yaw = base+ang
+                    mx, mz = hx+math.cos(yaw)*leaf/2, hz-math.sin(yaw)*leaf/2
+                else:
+                    hx, hz = x, z+side*half
+                    base = -math.pi/2 if side < 0 else math.pi/2
+                    yaw = base-ang
+                    mx, mz = hx+math.cos(yaw)*leaf/2, hz-math.sin(yaw)*leaf/2
+                shaded_box((mx, y+h/2, mz), (leaf, h, .22), yaw, (190, 52, 46))
+                for row in (.25, .5, .75):
+                    for col_ in (.25, .75):
+                        off = (col_-.5)*leaf
+                        px, pz = mx+math.cos(yaw)*off, mz-math.sin(yaw)*off
+                        nx, nz = math.sin(yaw), math.cos(yaw)
+                        for sgn in (-1, 1):
+                            rl.draw_sphere(rl.Vector3(px+nx*.13*sgn, y+h*row, pz+nz*.13*sgn), .07,
+                                           rl.Color(236, 196, 80, 255))
+            if v['id'] in s.jammed:
+                rnd = random.Random(v['id'])
+                pulse = math.sin(self.time*2.6)*.05
+                for _ in range(9):
+                    ox = rnd.uniform(-half, half)
+                    oy = rnd.uniform(.4, h*.8)
+                    px, pz = (x+ox, z) if v['axis'] == 'x' else (x, z+ox)
+                    rl.draw_sphere(rl.Vector3(px, y+oy, pz), rnd.uniform(.35, .7)*(1+pulse),
+                                   color((120, 160, 90) if rnd.random() < .5 else (150, 90, 160)))
+
     def draw_platelets(self):
         a, s = self.arena, self.arena.state
         head = a.path.at(s.escort)
@@ -201,16 +351,20 @@ class ArenaEffects(Renderable3D):
         # Duas poses por equipe (pares e ímpares, meio ciclo defasadas): o skinning é feito uma vez por grupo.
         if s.wound_closed:
             # Repair crew spread along the closed wound.
+            (ux, uz), (px, pz), _ = wound_frame()
+            rx, ry, rz = layout.WOUND_REPAIR
+            facing = math.atan2(ux, -uz)
             for group in (0, 1):
                 motion = None
                 for i in range(group, 6, 2):
-                    x = -8+i*3.2
-                    if not self.visible(x, 0, -65.2):
+                    k = -8+i*3.2
+                    x, z = rx+ux*.7+px*k, rz+uz*.7+pz*k
+                    if not self.visible(x, ry, z):
                         continue
                     if motion is None:
-                        motion = self.animate('wound', group, 'platelet', (0, 0, -65.2), now+group*.45,
+                        motion = self.animate('wound', group, 'platelet', (rx, ry, rz), now+group*.45,
                                               layers={'Repair': 1.0})
-                    model('platelet').draw(Vec3(x, 0, -65.2), 0, self.time+i*.31, animation='Repair', motion=motion)
+                    model('platelet').draw(Vec3(x, ry, z), facing, self.time+i*.31, animation='Repair', motion=motion)
             return
         # A big crate of repair materials carried by the crew (references: platelets carrying loads).
         cx, cy, cz = head
@@ -235,18 +389,31 @@ class ArenaEffects(Renderable3D):
             rl.draw_cube(rl.Vector3(p[0], p[1]+.06, p[2]), .26, .04, .26, color((255, 255, 255), 200))
 
     def draw_wound(self):
+        if layout.MODE == 'training':
+            return
         s = self.arena.state
+        (ux, uz), (px, pz), length = wound_frame()
+        wx, wy, wz = layout.WOUND
+        rx, ry, rz = layout.WOUND_REPAIR
+        radius = layout.EXTRA.get('wound_radius', 9.0)
         if s.wound_closed:
-            for i in range(-9, 10, 2):
-                rl.draw_line_3d(rl.Vector3(i, .1, -66), rl.Vector3(i*.8, -2.3, -88), color((236, 172, 196)))
+            # Rede de coagulo da borda (perto da escolta) ate o fundo da cratera.
+            lip = (rx+ux*1.5, ry+.1, rz+uz*1.5)
+            far = (wx+ux*length*.75, wy+.2, wz+uz*length*.75)
+            net = color((236, 172, 196))
+            k = -radius
+            while k <= radius+1e-6:
+                rl.draw_line_3d(rl.Vector3(lip[0]+px*k, lip[1], lip[2]+pz*k),
+                                rl.Vector3(far[0]+px*k*.8, far[1], far[2]+pz*k*.8), net)
+                k += 2
             for j in range(9):
-                z = -66-j*2.6
-                y = .1-2.4*j/8
-                rl.draw_line_3d(rl.Vector3(-9, y, z), rl.Vector3(9, y, z), color((236, 172, 196)))
-            rl.draw_plane(rl.Vector3(0, -2.3, -78), rl.Vector2(19, 19), color((236, 172, 196), 120))
+                t = j/8
+                cx, cy, cz = (lip[0]+(far[0]-lip[0])*t, lip[1]+(far[1]-lip[1])*t, lip[2]+(far[2]-lip[2])*t)
+                rl.draw_line_3d(rl.Vector3(cx-px*radius, cy, cz-pz*radius), rl.Vector3(cx+px*radius, cy, cz+pz*radius), net)
+            rl.draw_plane(rl.Vector3(wx, wy+.2, wz), rl.Vector2(radius*2+1, radius*2+1), color((236, 172, 196), 120))
         else:
             pulse = .5+.5*math.sin(self.time*2.2)
-            rl.draw_sphere(rl.Vector3(0, -3.2, -80), 3.5+pulse*.4, color((120, 40, 60), 120))
+            rl.draw_sphere(rl.Vector3(wx+ux*2, wy-.7, wz+uz*2), 3.5+pulse*.4, color((120, 40, 60), 120))
 
     def draw_rbcs(self):
         now = time.perf_counter()
@@ -258,14 +425,25 @@ class ArenaEffects(Renderable3D):
             alive.add(('rbc', ident))
             if not self.visible(x, y, z):
                 continue
-            # Caixa de oxigênio nas mãos (camada Carry); na fuga, corre abraçada a ela.
+            scale = cell.get('scale', 1.0)
+            crying = cell['state'] == 'cry'
+            # Caixa de oxigênio nas mãos (camada Carry); na fuga, corre abraçada a ela. A criança que
+            # largou a caixa de treino volta correndo de mãos vazias.
             motion = self.animate('rbc', ident, 'red_blood_cell', (x, y, z), now,
-                                  run=1.0 if cell['state'] == 'flee' else 0.0, layers={'Carry': 1.0})
+                                  run=1.0 if cell['state'] in ('flee', 'cry') else 0.0,
+                                  layers={'Carry': 0.0 if crying else 1.0})
+            scared = cell['state'] in ('flee', 'hide', 'cry')
             model('red_blood_cell').draw(Vec3(x, y, z), cell['yaw'], cell['phase'], cell['moving'],
-                                         0, 0, 0, rl.Color(255, 200, 200, 255) if cell['state'] in ('flee', 'hide') else None,
-                                         motion=motion)
-            if cell['state'] in ('flee', 'hide'):
-                rl.draw_sphere(rl.Vector3(x, y+2.3+.08*math.sin(self.time*9), z), .12, rl.Color(255, 90, 80, 255))
+                                         0, 0, 0, rl.Color(255, 200, 200, 255) if scared else None,
+                                         motion=motion, scale=scale)
+            top = y+2.3*scale
+            if crying:
+                # Lagrimas saltando (choro de anime) acima da cabeca.
+                for k in (-1, 1):
+                    t = (self.time*2.6+(k+1)*.25) % 1.0
+                    rl.draw_sphere(rl.Vector3(x+k*(.18+.25*t), top-.2+.5*t-.9*t*t, z), .07, rl.Color(120, 190, 255, 255))
+            elif cell['state'] in ('flee', 'hide'):
+                rl.draw_sphere(rl.Vector3(x, top+.08*math.sin(self.time*9), z), .12, rl.Color(255, 90, 80, 255))
         for key in [k for k in self.animators if k[0] == 'rbc' and k not in alive]:
             del self.animators[key]
 
@@ -307,9 +485,8 @@ class ArenaEffects(Renderable3D):
                 rl.draw_cube_wires(rl.Vector3(x, y+.5+bob, z), .44, .44, .44, rl.Color(240, 255, 250, 255))
 
     def draw_recon(self):
-        from .layout import RECON
         s = self.arena.state
-        x, y, z = RECON
+        x, y, z = layout.RECON
         if s.recon_available():
             rl.draw_cylinder_wires(rl.Vector3(x, y+.05, z), BALANCE['recon_radius'], BALANCE['recon_radius'], .05, 32,
                                    color((111, 197, 244)))
@@ -320,14 +497,13 @@ class ArenaEffects(Renderable3D):
         # The antenna light spins faster while revealing.
         speed = 6 if s.reveal > 0 else 1.5
         ang = self.time*speed
-        rl.draw_sphere(rl.Vector3(x+math.cos(ang)*.9, 31.2, z+math.sin(ang)*.9), .25,
+        rl.draw_sphere(rl.Vector3(x+math.cos(ang)*.9, layout.EXTRA.get('recon_light', 31.2), z+math.sin(ang)*.9), .25,
                        color((255, 90, 80) if s.reveal > 0 else (255, 220, 120)))
 
     def draw_crowd(self):
         if self.crowd is None:
-            from .layout import AMBIENT_SPOTS
             rnd = random.Random(5)
-            spots = AMBIENT_SPOTS[:]
+            spots = layout.AMBIENT_SPOTS[:]
             rnd.shuffle(spots)
             # Quatro grupos de pose por tipo: o skinning (CPU, no raylib) é feito uma vez por grupo.
             self.crowd = sorted(((p, rnd.choice(('red_blood_cell', 'red_blood_cell', 'platelet')), rnd.randrange(4),
@@ -344,7 +520,7 @@ class ArenaEffects(Renderable3D):
         self.time += rl.get_frame_time()
         self.visible = self.view_cone()
         self.draw_wound()
-        self.draw_platelets()
+        self.draw_escort()
         self.draw_rbcs()
         self.draw_colonies()
         self.draw_drops()

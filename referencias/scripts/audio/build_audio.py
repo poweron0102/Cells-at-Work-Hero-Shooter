@@ -319,6 +319,13 @@ def hurt():
     return mix(thud, grit)
 
 
+def heartbeat():
+    """Batimento do coracao (mapa Coracao): "tum-tum" grave, o segundo mais fraco."""
+    def thump(f0, f1, seconds):
+        return sweep(f0, f1, seconds, 1.6)*decay(seconds, 7, .004)+sweep(f0*2, f1*2, seconds, 1.6)*decay(seconds, 10)*.25
+    return mix(at(thump(70, 38, .26), 0, .7), at(thump(62, 34, .22)*.7, .27, .7))
+
+
 def event():
     return mix(bell(590, .65, (1, 2, 3.01), 5), at(bell(885, .5, (1, 2), 5)*.5, .08, .65))
 
@@ -329,7 +336,7 @@ SOUNDS = dict(
     dash=dash, explosion=explosion, splash=splash, net=net, chain=chain, needle=needle, ult=ult,
     ult_ready=ult_ready, kill=kill, death=death, respawn=respawn, heal=heal, shield=shield, absorb=absorb,
     receptor=receptor, turret=turret, wall=wall, crumble=crumble, pop=pop, ui_click=ui_click, hiss=hiss,
-    rain=rain, hit=hit, hurt=hurt, event=event,
+    rain=rain, hit=hit, hurt=hurt, event=event, heartbeat=heartbeat,
 )
 
 

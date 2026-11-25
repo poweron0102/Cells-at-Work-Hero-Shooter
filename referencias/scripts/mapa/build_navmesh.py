@@ -1,6 +1,6 @@
-"""Gera Assets/Maps/BairroArterial/nav.json a partir da colisao exportada.
+"""Gera Assets/Maps/<mapa>/nav.json a partir da colisao exportada.
 
-    .venv\Scripts\python.exe referencias\scripts\mapa\build_navmesh.py
+    .venv\Scripts\python.exe referencias\scripts\mapa\build_navmesh.py [--map timo]
 Rode depois de exportar o mapa (o hash de runtime.json invalida o cache).
 """
 import sys
@@ -12,11 +12,16 @@ sys.path.insert(0, str(ROOT))
 from EasyCells3D.PhysicsComponents3D import BulletPhysicsWorld, PhysicsBody3D, BodyType, TriangleMeshShape  # noqa: E402
 sys.path.insert(0, str(ROOT/"tests"))
 from simulation_support import headless_game  # noqa: E402
-from UserComponents.cells.layout import MAP_DATA  # noqa: E402
+from UserComponents.cells import layout  # noqa: E402
 from UserComponents.cells.navigation import Navigator  # noqa: E402
 
 
 def main():
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--map', default=None, help='bairro, timo, medula, coracao (padrao: bairro)')
+    layout.select(parser.parse_args().map)
+    MAP_DATA = layout.MAP_DATA
     game = headless_game()
     game.physics_world = BulletPhysicsWorld()
     item = game.CreateItem()

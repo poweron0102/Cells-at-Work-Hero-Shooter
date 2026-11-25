@@ -14,11 +14,12 @@ from EasyCells3D.Geometry import Vec3
 from .ui_base import Canvas
 from .catalog import HEROES, KIT, ICONS, CELLS, BALANCE, can_select, unlocked
 from .screens import leave
+from .options import open_settings
 from .cursor import set_cursor_captured
 from .hud_portraits import draw_face
 from .hud_icons import draw_icon
 from .visuals import color
-from .layout import X0, X1, Z0, Z1, RECON, RBC_NODES, DESTINATIONS
+from . import layout
 
 INK = (24, 37, 49)
 PAPER = (240, 244, 247)
@@ -44,6 +45,12 @@ EFFECTS = (('haste', 'VELOZ', TEAL), ('frenzy', 'FURIA', TEAL), ('guard', 'PROTE
            ('marked', 'MARCADO', (70, 140, 210)), ('antiheal', 'SEM CURA', PURPLE))
 STATUS_ICONS = (('marked', 'mark', SKY), ('root', 'net', WHITE), ('perforin', 'drop', RED_L),
                 ('antiheal', 'toxin', PURPLE), ('ult', 'burst', GOLD))
+
+
+def ascii_upper(text):
+    """Maiusculas sem acento: a fonte da HUD so tem ASCII."""
+    import unicodedata
+    return unicodedata.normalize('NFKD', text).encode('ascii', 'ignore').decode().upper()
 
 
 class CombatHUD(Canvas):
@@ -191,9 +198,11 @@ class CombatHUD(Canvas):
     def build_minimap(self):
         from .scenery import draw_district, prepare
         prepare()
+        X0, Z0, X1, Z1 = layout.X0, layout.Z0, layout.X1, layout.Z1
         w, h = 496, int(496*(Z1-Z0)/(X1-X0))
         target = rl.load_render_texture(w, h)
-        cam = rl.Camera3D(rl.Vector3(0, 300, (Z0+Z1)/2), rl.Vector3(0, 0, (Z0+Z1)/2), rl.Vector3(0, 0, -1),
+        cx = (X0+X1)/2
+        cam = rl.Camera3D(rl.Vector3(cx, 300, (Z0+Z1)/2), rl.Vector3(cx, 0, (Z0+Z1)/2), rl.Vector3(0, 0, -1),
                           Z1-Z0, rl.CameraProjection.CAMERA_ORTHOGRAPHIC)
         rl.begin_texture_mode(target)
         rl.clear_background(rl.Color(60, 70, 74, 255))
@@ -217,11 +226,13 @@ class CombatHUD(Canvas):
         x, y, size = 16, 16, 176
         self.rect(x-2, y-2, size+4, size+4, PANEL, 200)
         cx, cy = x+size/2, y+size/2
-        p = actor.transform.position if actor.alive else Vec3(*self.arena.path.at(s.escort))
+        p = actor.transform.position if actor.alive else Vec3(*(self.arena.path.at(s.escort) if self.arena.path.points
+                                                                   else layout.RECON))
         center = (p.x, p.z)
         span = 80.0
         scale = size/span
         if self.minimap:
+            X0, Z0, X1, Z1 = layout.X0, layout.Z0, layout.X1, layout.Z1
             texture, w, h = self.minimap
             u = (center[0]-span/2-X0)/(X1-X0)*w
             v = (center[1]-span/2-Z0)/(Z1-Z0)*h
@@ -234,13 +245,17 @@ class CombatHUD(Canvas):
             if x+3 < px < x+size-3 and y+3 < py < y+size-3:
                 self.circle(px, py, r, tint)
         path = self.arena.path
-        for k in range(0, int(s.escort_total), 3):
-            q = path.at(k)
-            dot(q[0], q[2], 1.2, TEAL_L if k < s.escort else (230, 230, 230))
-        head = path.at(s.escort)
-        dot(head[0], head[2], 5, RED_L if s.blocked_by else GOLD)
-        for letter, doors in DESTINATIONS.items():
-            n = RBC_NODES[doors[0]]
+        if self.arena.mode != 'training':
+            for k in range(0, int(s.escort_total), 3):
+                q = path.at(k)
+                dot(q[0], q[2], 1.2, TEAL_L if k < s.escort else (230, 230, 230))
+            head = path.at(s.escort)
+            dot(head[0], head[2], 5, RED_L if s.blocked_by or s.blocked_valve >= 0 else GOLD)
+        for v in self.arena.valves:
+            opened = self.arena.valve_open.get(v['id'], True)
+            dot(v['pos'][0], v['pos'][2], 4, PURPLE if v['id'] in s.jammed else (TEAL_L if opened else RED_L))
+        for letter, doors in layout.DESTINATIONS.items():
+            n = layout.RBC_NODES[doors[0]]
             dot(n[0], n[2], 3, SKY)
         for cell in self.arena.rbc_view.cells.values():
             if cell['state'] not in ('dead', 'inside'):
@@ -253,7 +268,7 @@ class CombatHUD(Canvas):
             if owner is not None and owner.team == actor.team:
                 dot(m['pos'][0], m['pos'][2], 3, TEAL_L)
         if s.recon_available():
-            dot(RECON[0], RECON[2], 4, SKY)
+            dot(layout.RECON[0], layout.RECON[2], 4, SKY)
         for target in self.arena.actors.values():
             if target.slot != actor.slot and target.alive and (target.team == actor.team or target.reveal > 0 or target.marked > 0
                                                                or actor.reveal > 0 or (actor.team == CELLS and s.reveal > 0)):
@@ -261,7 +276,43 @@ class CombatHUD(Canvas):
         fwd = self.player_input.camera.transform.forward
         self.circle(cx, cy, 5, WHITE)
         self.seg(cx, cy, cx+fwd.x*12, cy+fwd.z*12, 2, WHITE)
-        self.tx("BAIRRO ARTERIAL", x+4, y+size+4, 12, MUTED, font='m')
+        self.tx(ascii_upper(layout.MAP_INFO.title), x+4, y+size+4, 12, MUTED, font='m')
+        if self.arena.valves:
+            self.ecg(x, y+size+22, size, s)
+
+    def ecg(self, x, y, w, s):
+        """Coracao: tracado do batimento (pico na sistole) e o estado das valvas."""
+        from .heart import beat
+        h = 40
+        self.rect(x-2, y-2, w+4, h+4, PANEL, 200)
+        systole, frac, left = beat(s.elapsed)
+        period = BALANCE['heart_period']
+        pts = []
+        for i in range(61):
+            t = s.elapsed-period*1.6*(1-i/60)
+            ph = (t % period)/period
+            spike = 0.0
+            if ph < .05:
+                spike = math.sin(ph/.05*math.pi)*.95
+            elif ph < .09:
+                spike = -math.sin((ph-.05)/.04*math.pi)*.35
+            elif .3 < ph < .42:
+                spike = math.sin((ph-.3)/.12*math.pi)*.22
+            pts.append((x+4+(w-8)*i/60, y+h*.55-spike*h*.42))
+        for a, b in zip(pts, pts[1:]):
+            self.seg(a[0], a[1], b[0], b[1], 2, RED_L if systole else TEAL_L)
+        self.circle(pts[-1][0], pts[-1][1], 3, WHITE)
+        label = "SISTOLE" if systole else "DIASTOLE"
+        self.tx(f"{label} {left:.1f}s", x+4, y+2, 11, RED_L if systole else TEAL_L, font='m')
+        names = {'av': 'tricuspide', 'semilunar': 'pulmonar'}
+        yy = y+h+4
+        for v in self.arena.valves:
+            opened = self.arena.valve_open.get(v['id'], True)
+            state = "EMPERRADA" if v['id'] in s.jammed else ("aberta" if opened else "fechada")
+            tint = PURPLE if v['id'] in s.jammed else (TEAL_L if opened else RED_L)
+            self.rect(x-2, yy, w+4, 16, PANEL, 180)
+            self.tx(f"valva {names.get(v.get('kind'), v['id'])}: {state}", x+4, yy+2, 11, tint, font='m')
+            yy += 17
 
     # -- topo: placar e objetivo ------------------------------------------------------------
     def team_tile(self, a, x, y, me, net):
@@ -291,14 +342,24 @@ class CombatHUD(Canvas):
         x0, w = 490, 300
         cells = me.team == CELLS
         pulse = .5+.5*math.sin(s.elapsed*8)
+        mode = self.arena.mode
         if cells:
             if s.wound_closed:
-                title, big, sub = "FERIDA FECHADA", f"{len(s.colonies)}", "colonias restantes"
+                title, big, sub = layout.label('sealed'), f"{len(s.colonies)}", "colonias restantes"
                 frac, tint = 1.0, TEAL
+            elif mode == 'training':
+                title = "FORMATURA"
+                big, sub = f"{int(s.escort)}/{int(s.escort_total)}", "eritroblastos formados"
+                frac, tint = s.escort/max(1, s.escort_total), TEAL
             else:
                 remaining = max(0, s.escort_total-s.escort)
-                title = "BLOQUEADA" if s.blocked_by else "ESCOLTA"
-                big, sub = f"{int(100*s.escort/s.escort_total)}%", f"ferida a {int(remaining)} m"
+                if s.blocked_by:
+                    title = "BLOQUEADO" if mode == 'convoy' else "BLOQUEADA"
+                elif s.blocked_valve >= 0:
+                    title = "VALVA EMPERRADA" if s.blocked_valve in s.jammed else "VALVA FECHADA"
+                else:
+                    title = layout.label('objective')
+                big, sub = f"{int(100*s.escort/s.escort_total)}%", f"{layout.label('target')} a {int(remaining)} m"
                 frac, tint = s.escort/s.escort_total, TEAL
         else:
             title, big = "INFECCAO", f"{int(s.infection())}/{BALANCE['infection_goal']}"
@@ -307,9 +368,10 @@ class CombatHUD(Canvas):
         tw = self.measure(title, 15)+self.measure(big, 30)+self.measure(sub, 13, 'm')+52
         bx = 640-tw/2
         self.sk(bx, 18, tw, 38, PANEL, 205)
-        title_tint = RED_L if title == "BLOQUEADA" else TEAL_L
+        alert = title in ("BLOQUEADA", "BLOQUEADO", "VALVA EMPERRADA")
+        title_tint = RED_L if alert else (GOLD if title == "VALVA FECHADA" else TEAL_L)
         cx = bx+16
-        cx += self.tx(title, cx, 29, 15, title_tint, alpha=int(255*(.6+.4*pulse)) if title == "BLOQUEADA" else 255)+12
+        cx += self.tx(title, cx, 29, 15, title_tint, alpha=int(255*(.6+.4*pulse)) if alert else 255)+12
         cx += self.tx(big, cx, 20, 30, WHITE)+12
         self.tx(sub, cx, 31, 13, MUTED, font='m')
         # Barra segmentada.
@@ -326,9 +388,15 @@ class CombatHUD(Canvas):
             a_txt, a_tint = f"infeccao {int(s.infection())}/{BALANCE['infection_goal']}", PINK
             b_txt, b_tint = f"reconhecimento {rec_text}", SKY
         else:
-            esc = f"plaquetas {int(100*s.escort/s.escort_total)}%" if not s.wound_closed else "ferida fechada"
-            a_txt = esc+(" - paradas" if s.blocked_by and not s.wound_closed else "")
-            a_tint = TEAL_L if s.blocked_by else PINK
+            if s.wound_closed:
+                esc = layout.label('sealed_short')
+            elif mode == 'training':
+                esc = f"formatura {int(s.escort)}/{int(s.escort_total)}"
+            else:
+                esc = f"{layout.label('payload')} {int(100*s.escort/s.escort_total)}%"
+            stopped = (s.blocked_by or s.blocked_valve >= 0) and not s.wound_closed
+            a_txt = esc+((" - parado" if mode == 'convoy' else " - paradas") if stopped else "")
+            a_tint = TEAL_L if stopped else PINK
             b_txt, b_tint = f"reconhec. inimigo {rec_text}", SKY
         wa, wb = self.measure(a_txt, 13), self.measure(b_txt, 13)
         self.tx(a_txt, 640-(wa+wb+14)/2, 76, 13, a_tint)
@@ -356,8 +424,9 @@ class CombatHUD(Canvas):
             if s.wound_closed:
                 status = (f"canalizando {int(100*s.recon/BALANCE['recon_channel'])}%" if s.recon > 0 else
                           "disponivel na torre" if s.recon_available() else f"recarga {int(s.recon_cooldown)}s")
-                self.chip("reconhecimento", 16, 222, PANEL, 13, 210, SKY)
-                self.tx(status, 20, 246, 15, WHITE)
+                y = 222+(44+17*len(self.arena.valves)+20 if self.arena.valves else 0)
+                self.chip("reconhecimento", 16, y, PANEL, 13, 210, SKY)
+                self.tx(status, 20, y+24, 15, WHITE)
             return
         carried = s.resources.get(me.slot, 0)
         x, y = 28, 436
@@ -645,14 +714,17 @@ class CombatHUD(Canvas):
         a = self.arena
         cam = self.player_input.camera.transform.position
         cells = me.team == CELLS
-        if not s.wound_closed:
+        if not s.wound_closed and a.mode != 'training':
             head = a.path.at(s.escort)
             d = math.dist(head, me.feet)
             tint = TEAL_L if cells else RED_L
-            label = f"plaquetas {int(d)}m" + (" - bloqueadas" if s.blocked_by else "")
+            stopped = " - bloqueado" if a.mode == 'convoy' else " - bloqueadas"
+            if s.blocked_valve >= 0 and not s.blocked_by:
+                stopped = " - valva emperrada" if s.blocked_valve in s.jammed else " - esperando a valva"
+            label = f"{layout.label('payload')} {int(d)}m" + (stopped if s.blocked_by or s.blocked_valve >= 0 else "")
             self.marker(Vec3(head[0], head[1]+2.6, head[2]), label, RED_L if s.blocked_by and cells else tint, 14)
         elif s.recon_available() and cells:
-            self.marker(Vec3(RECON[0], RECON[1]+2.5, RECON[2]), "reconhecimento", SKY, 14)
+            self.marker(Vec3(layout.RECON[0], layout.RECON[1]+2.5, layout.RECON[2]), "reconhecimento", SKY, 14)
         for colony in s.colonies:
             near = math.dist(colony['pos'], me.feet)
             if not cells or near < 25 or s.reveal > 0:
@@ -661,10 +733,21 @@ class CombatHUD(Canvas):
                                 f"colonia {colony['id']} - {int(near)}m", tint, 13)
                 if p:
                     self.pips(p[0], p[1]-46, colony['hp']/BALANCE['colony_health'], tint, 8)
-        if not cells:
+        for v in a.valves:
+            d = math.dist(v['pos'], me.feet)
+            if v['id'] in s.jammed and d < 60:
+                self.marker(Vec3(v['pos'][0], v['pos'][1]+v.get('height', 6)+.8, v['pos'][2]),
+                            "valva emperrada" if cells else "valva emperrada - proteja a colonia", PURPLE, 13)
+        if a.mode == 'training' and cells:
             for cell in a.rbc_view.cells.values():
-                if cell['state'] not in ('dead', 'inside') and math.dist(cell['pos'], me.feet) < 30:
-                    self.marker(Vec3(cell['pos'][0], cell['pos'][1]+2.2, cell['pos'][2]), "o2", PINK, 12, False)
+                if cell['state'] in ('flee', 'hide') and math.dist(cell['pos'], me.feet) < 45:
+                    self.marker(Vec3(cell['pos'][0], cell['pos'][1]+1.9, cell['pos'][2]), "socorro!", GOLD, 12, False)
+        if not cells:
+            tag = "caixa" if a.mode == 'training' else "o2"
+            for cell in a.rbc_view.cells.values():
+                if cell['state'] not in ('dead', 'inside', 'cry') and math.dist(cell['pos'], me.feet) < 30:
+                    top = 2.2*cell.get('scale', 1.0)
+                    self.marker(Vec3(cell['pos'][0], cell['pos'][1]+top, cell['pos'][2]), tag, PINK, 12, False)
         for drop in a.drops:
             if math.dist(drop['pos'], me.feet) < 25:
                 res = drop['kind'] == 'resource'
@@ -842,8 +925,9 @@ class CombatHUD(Canvas):
             self.tx("a partida em rede continua durante este menu.", 382, 300, 17, MUTED, font='m')
             if net.error:
                 self.fit(net.error, 382, 330, 520, 15, RED_L, font='m')
-            self.sbutton("continuar", 380, 380, 240, 48, lambda: setattr(self.player_input, "paused", False), True)
-            self.sbutton("sair da partida", 650, 380, 250, 48, lambda: leave(self.game))
+            self.sbutton("continuar", 380, 380, 160, 48, lambda: setattr(self.player_input, "paused", False), True)
+            self.sbutton("configuracoes", 556, 380, 180, 48, lambda: open_settings(self.game))
+            self.sbutton("sair da partida", 752, 380, 148, 48, lambda: leave(self.game))
         if s.winner:
             won = s.winner == me.team
             self.sk(330, 300, 620, 100, TEAL if won else RED, 235)

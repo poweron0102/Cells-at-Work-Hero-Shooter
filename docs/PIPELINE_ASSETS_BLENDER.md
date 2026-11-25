@@ -1,7 +1,8 @@
 # Pipeline de assets do Blender para o jogo
 
-O mapa ativo é o **Bairro Arterial**. O Bairro dos Canais, seus atlas com bake
-e suas ferramentas exclusivas foram removidos. A organização de mapas,
+Os mapas são o **Bairro Arterial**, o **Timo**, a **Medula Óssea** e o **Coração**
+([MAPAS_NOVOS.md](MAPAS_NOVOS.md)); todos usam o mesmo pipeline, escolhido com `--map`.
+O Bairro dos Canais, seus atlas com bake e suas ferramentas exclusivas foram removidos. A organização de mapas,
 personagens, armas e áudio está em [referencias/README.md](../referencias/README.md).
 
 ## Fonte e exports

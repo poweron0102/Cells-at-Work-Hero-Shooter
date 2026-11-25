@@ -8,9 +8,15 @@ import pyray as rl
 from EasyCells3D.Components import Component
 from EasyCells3D.Geometry import Vec3, Quaternion
 from .cursor import set_cursor_captured
+from . import settings
+from .options import blocking
 
-BASE_FOV = 75
+BASE_FOV = 75  # padrão; o jogador ajusta em Configurações > Vídeo (settings "fov")
 ZOOM_FOV = 32
+
+
+def base_fov():
+    return settings.get("fov")
 
 
 class PlayerInput(Component):
@@ -67,9 +73,10 @@ class PlayerInput(Component):
         if slot != self.last_slot:
             self.yaw = actor.yaw
             self.last_slot = slot
-        if rl.is_key_pressed(rl.KeyboardKey.KEY_ESCAPE):
+        menu = blocking(self.game)  # Esc que fecha as configurações não despausa
+        if rl.is_key_pressed(rl.KeyboardKey.KEY_ESCAPE) and not menu:
             self.paused = not self.paused
-        captured = not self.paused and actor.alive and not net.error
+        captured = not self.paused and not menu and actor.alive and not net.error
         set_cursor_captured(captured)
         if actor.alive and not self.was_alive:
             self.yaw, self.pitch = actor.yaw, 0
@@ -77,7 +84,7 @@ class PlayerInput(Component):
         self.was_alive = actor.alive
         if not actor.alive:
             self.tp = actor.third_person = 0.0
-            self.camera.vfov = BASE_FOV
+            self.camera.vfov = base_fov()
             target = self.spectate_target(actor)
             self.camera_target = target
             if target is not None:
@@ -86,10 +93,11 @@ class PlayerInput(Component):
             return
         if captured:
             delta = rl.get_mouse_delta()
-            sens = .0024*(.45 if actor.zoom else 1)
+            sens = .0024*settings.get("mouse_sensitivity")*(settings.get("zoom_sensitivity") if actor.zoom else 1)
+            flip = -1 if settings.get("invert_y") else 1
             self.yaw = (self.yaw + delta.x*sens) % math.tau
-            self.pitch = max(-1.45, min(1.45, self.pitch-delta.y*sens))
-        fov = ZOOM_FOV if actor.zoom else BASE_FOV
+            self.pitch = max(-1.45, min(1.45, self.pitch-delta.y*sens*flip))
+        fov = ZOOM_FOV if actor.zoom else base_fov()
         plan = getattr(actor, 'leap_plan', None)
         if plan is not None:  # Salto de impacto: o campo de visao abre com a velocidade
             fov += 9*math.sin(min(1.0, plan['t']/max(plan['time'], .01))*math.pi*.5)
@@ -160,4 +168,4 @@ class PlayerInput(Component):
 
     def on_destroy(self):
         set_cursor_captured(False)
-        self.camera.vfov = BASE_FOV
+        self.camera.vfov = base_fov()

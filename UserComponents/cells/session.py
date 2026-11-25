@@ -1,7 +1,7 @@
 """Lobby membership, hero selection and match transitions using engine RPCs."""
 from EasyCells3D.NetworkComponents import NetworkComponent, NetworkManager, NetworkVariable, Rpc, SendTo
 from .catalog import HEROES, CELLS, BACTERIA, can_select
-from . import settings
+from . import settings, maps
 
 
 class Session(NetworkComponent):
@@ -13,6 +13,11 @@ class Session(NetworkComponent):
         # Replay: o anfitrião decide no lobby; os clientes leem para mandar a própria mira (pitch).
         self.recording = NetworkVariable(bool(manager.is_server and settings.get("record_replay")),
                                          identifier=102, owner=0)
+        # Mapa da partida: o anfitrião escolhe no lobby (lembrado entre sessões).
+        start_map = settings.get("map") if manager.is_server else maps.DEFAULT
+        if start_map not in maps.available():
+            start_map = maps.DEFAULT
+        self.map = NetworkVariable(start_map, identifier=103, owner=0)
         self.status = "lobby"
         self.result = None
         self.arena = None
@@ -49,6 +54,16 @@ class Session(NetworkComponent):
         if self.manager.is_server and self.status == "lobby":
             self.recording.value = bool(value)
             settings.set_value("record_replay", bool(value))
+
+    def set_map(self, key):
+        """Anfitrião: escolhe o mapa da próxima partida (só no lobby)."""
+        if self.manager.is_server and self.status == "lobby" and key in maps.available():
+            self.map.value = key
+            settings.set_value("map", key)
+
+    @property
+    def map_key(self):
+        return self.map.value if self.map.value in maps.MAPS else maps.DEFAULT
 
     @Rpc(send_to=SendTo.CLIENTS)
     def show_error(self, message):

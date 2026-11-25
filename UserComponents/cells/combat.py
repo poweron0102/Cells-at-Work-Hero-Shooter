@@ -157,10 +157,10 @@ def cast(actor, aim, max_dist, through=False, origin=None):
             hits.append(dict(kind='minion', target=ident, point=origin+aim*t, dist=t))
     if actor.team != CELLS:
         for ident, cell in arena.rbc_view.cells.items():
-            if cell['state'] in ('dead', 'inside'):
+            if cell['state'] in ('dead', 'inside', 'cry'):
                 continue
             x, y, z = cell['pos']
-            t = ray_sphere(origin, aim, (x, y+.9, z), .55, limit)
+            t = ray_sphere(origin, aim, (x, y+.9*cell.get('scale', 1.0), z), .55*cell.get('scale', 1.0)+.05, limit)
             if t is not None:
                 hits.append(dict(kind='rbc', target=ident, point=origin+aim*t, dist=t))
     hits.sort(key=lambda h: h['dist'])
@@ -267,9 +267,9 @@ def melee_targets(actor, reach, arc_cos=.3, include_rbc=False):
                 out.append(('colony', colony['id']))
     elif include_rbc:
         for ident, cell in arena.rbc_view.cells.items():
-            if cell['state'] in ('dead', 'inside'):
+            if cell['state'] in ('dead', 'inside', 'cry'):
                 continue
             x, y, z = cell['pos']
-            if math.dist((x, y+.9, z), (p.x, p.y, p.z)) <= reach+.6:
+            if math.dist((x, y+.9*cell.get('scale', 1.0), z), (p.x, p.y, p.z)) <= reach+.6:
                 out.append(('rbc', ident))
     return out

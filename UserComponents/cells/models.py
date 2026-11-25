@@ -282,7 +282,7 @@ class CharacterModel:
         return rig is not None and rig.anim is not None
 
     def draw(self, position, yaw=0, phase=0, moving=False, reveal=0, shield=0, action=0.0, tint=None, kick=0.0,
-             weapon=True, cull=None, animation=None, motion=None):
+             weapon=True, cull=None, animation=None, motion=None, scale=1.0):
         """Desenha o personagem; ``kick`` (0..1) é o recuo do último disparo. Se o herói tem arma
         montada (e ``weapon``), desenha a arma na mão e devolve a posição do cano no mundo.
         ``cull`` ('front'/'back') liga o descarte de faces, usado pelos passes de contorno/silhueta.
@@ -348,6 +348,8 @@ class CharacterModel:
         rl.rl_push_matrix()
         rl.rl_translatef(position.x, position.y + bob, position.z)
         rl.rl_rotatef(180 - math.degrees(yaw), 0, 1, 0)
+        if scale != 1.0:
+            rl.rl_scalef(scale, scale, scale)
         if pose and not rig.clips:
             # Pose de corpo inteiro (modelos por partes): abaixa e inclina o tronco em torno do quadril.
             hips = rig.height * .49

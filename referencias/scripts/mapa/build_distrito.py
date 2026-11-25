@@ -1,9 +1,13 @@
-"""Monta o Bairro Arterial no Blender (cena nova, sem reaproveitar o mapa antigo).
+"""Monta um mapa no Blender a partir do layout em Python (cena nova).
 
 Executar no Blender aberto (MCP ou console Python):
-    exec(open(r'<repo>/referencias/scripts/mapa/build_distrito.py', encoding='utf-8').read(), {'REPO': r'<repo>'})
+    exec(open(r'<repo>/referencias/scripts/mapa/build_distrito.py', encoding='utf-8').read(),
+         {'REPO': r'<repo>', 'MAP': 'timo'})
 ou em segundo plano:
-    blender --background --factory-startup --python referencias/scripts/mapa/build_distrito.py
+    blender --background --factory-startup --python referencias/scripts/mapa/build_distrito.py -- --map timo
+
+Mapas: bairro (Bairro Arterial, padrao), timo, medula, coracao. Cada um tem seu layout em
+``<mapa>_layout.py`` (o Bairro usa ``distrito_layout.py``) e todos usam ``distrito_geo.py``.
 
 Coordenadas: o layout e escrito no espaco do JOGO (x leste, y cima, z sul).
 No Blender: X = x, Y = -z, Z = y (norte = +Y). O exportador glTF (+Y up)
@@ -22,8 +26,30 @@ sys.path.insert(0, os.path.join(REPO, 'referencias', 'scripts', 'mapa'))
 import distrito_geo as geo_module  # noqa: E402
 importlib.reload(geo_module)
 from distrito_geo import *  # noqa: E402,F401,F403
-import distrito_layout  # noqa: E402
-importlib.reload(distrito_layout)
+
+# chave -> (modulo do layout, pasta em Assets/Maps e nome do .blend, titulo)
+MAPS = {
+    'bairro': ('distrito_layout', 'BairroArterial', 'Bairro Arterial'),
+    'timo': ('timo_layout', 'Timo', 'Timo'),
+    'medula': ('medula_layout', 'MedulaOssea', 'Medula Ossea'),
+    'coracao': ('coracao_layout', 'Coracao', 'Coracao'),
+}
+
+
+def chosen_map():
+    """MAP do exec(...) ou ``-- --map chave`` na linha de comando do Blender."""
+    if globals().get('MAP'):
+        return globals()['MAP']
+    argv = sys.argv[sys.argv.index('--')+1:] if '--' in sys.argv else []
+    if '--map' in argv and argv.index('--map')+1 < len(argv):
+        return argv[argv.index('--map')+1]
+    return 'bairro'
+
+
+MAP = chosen_map()
+LAYOUT_MODULE, FOLDER, TITLE = MAPS[MAP]
+layout_module = importlib.import_module(LAYOUT_MODULE)
+importlib.reload(layout_module)
 
 MAX_CORNERS = 60000
 
@@ -104,9 +130,9 @@ def emit_groups(geo, coll):
     return count
 
 
-def emit_collision(geo, coll):
+def emit_collision(geo, coll, triangles=None, name='Colisao'):
     verts, faces, index = [], [], {}
-    for tri in geo.collision:
+    for tri in (geo.collision if triangles is None else triangles):
         f = []
         for p in tri:
             key = (round(p[0], 3), round(p[1], 3), round(p[2], 3))
@@ -116,9 +142,9 @@ def emit_collision(geo, coll):
             f.append(index[key])
         if len(set(f)) == 3:
             faces.append(f)
-    mesh = bpy.data.meshes.new('Colisao')
+    mesh = bpy.data.meshes.new(name)
     mesh.from_pydata([to_blender(v) for v in verts], [], faces)
-    ob = bpy.data.objects.new('Colisao', mesh)
+    ob = bpy.data.objects.new(name, mesh)
     coll.objects.link(ob)
     ob.display_type = 'WIRE'
     ob.hide_render = True
@@ -134,6 +160,7 @@ def emit_markers(markers, coll):
         coll.objects.link(empty)
     text = bpy.data.texts.new('marcadores.json')
     text.write(json.dumps({k: v for k, v in markers.items() if k != 'points'}, indent=1))
+    bpy.data.texts.new('mapa.txt').write(MAP)
 
 
 def setup_view():
@@ -159,15 +186,17 @@ def setup_view():
 def build(only=None):
     clear_scene()
     geo = Geo()
-    markers = distrito_layout.build(geo, only)
+    markers = layout_module.build(geo, only)
     art = collection('Arte')
     col = collection('Colisao', hide=True)
     marks = collection('Marcadores', hide=True)
     faces = emit_groups(geo, art)
     tris = emit_collision(geo, col)
+    if geo.screen:
+        tris += emit_collision(geo, collection('ColisaoVazada', hide=True), geo.screen, 'ColisaoVazada')
     emit_markers(markers, marks)
     setup_view()
-    print(f'Bairro Arterial: {faces} faces visiveis, {tris} triangulos de colisao, '
+    print(f'{TITLE}: {faces} faces visiveis, {tris} triangulos de colisao, '
           f'{len(art.objects)} objetos de arte')
     return geo, markers
 

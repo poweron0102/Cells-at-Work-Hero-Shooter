@@ -1,5 +1,8 @@
 # Bairro Arterial — pipeline do mapa
 
+> Os scripts deste pipeline servem a todos os mapas (`--map timo|medula|coracao`); os mapas
+> novos estão descritos em [MAPAS_NOVOS.md](MAPAS_NOVOS.md).
+
 Mapa construído do zero no Blender (5.2) a partir de `referencias/imagens/` e de
 `docs/PLANO_MAPA.md`. Toda a geometria é gerada por script, então qualquer ajuste
 de layout é reprodutível.
@@ -67,6 +70,7 @@ desenhado pelo shader de `UserComponents/cells/scenery.py`:
 | 6 | cantaria do canal | 15 | folhagem |
 | 7 | reboco | 16 | tecido da ferida |
 | 8 | janela | 17 | vidro |
+|  |  | 18 | alambrado (tela vazada) |
 
 A exportação junta as faces por zona em blocos de até 60 mil vértices (limite de
 índices de 16 bits do raylib), mantendo poucos *draw calls*.

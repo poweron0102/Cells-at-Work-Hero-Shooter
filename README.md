@@ -1,10 +1,13 @@
-# Cells at Work — Bairro Arterial
+# Cells at Work — Hero Shooter
 
 Protótipo FPS 3v3 em **Python 3.14**, usando a EasyCells3D deste repositório.
 Inclui multiplayer em rede local, oito heróis com kits próprios, bots de treino e
-um bairro grande modelado no Blender: escolta das plaquetas, hemácias que entregam
-oxigênio e fogem de bactérias, colônias bacterianas construídas pelos jogadores,
-reconhecimento de antígenos e reconhecimento do mapa após o fechamento da ferida.
+**quatro mapas** modelados no Blender a partir do anime: Bairro Arterial, Timo, Medula Óssea e
+Coração. Há escolta das plaquetas, hemácias que entregam oxigênio e fogem de bactérias,
+colônias bacterianas construídas pelos jogadores, reconhecimento de antígenos e reconhecimento
+do mapa após o fechamento da entrada bacteriana. A Medula e o Coração trocam a escolta por
+objetivos próprios (treino de entrega dos eritroblastos; comboio de hemácias que só atravessa as
+valvas abertas).
 
 As regras seguem `docs/PLANO_OBJETIVOS_E_HEROIS.md` e o mapa segue `docs/PLANO_MAPA.md`.
 Os valores de balanceamento (atributos de cada herói e regras da partida) estão em `Assets/balance.json`
@@ -27,7 +30,16 @@ Os nomes e IPs usados ficam como etiquetas abaixo de cada campo (clique para
 preencher, **×** para apagar); eles são salvos só neste computador, em
 `saves/recentes.json`. Tab troca de campo e Enter entra na rede.
 
-No lobby, seu herói aparece animado e explica as habilidades em balões.
+**Configurações** (no menu, ou em Esc › *configurações* durante a partida) abre o painel com quatro abas:
+**Vídeo** (janela ou tela cheia sem bordas, resolução, limite de FPS, VSync, campo de visão e qualidade
+das sombras, que vale a partir da próxima partida), **Áudio** (volume geral, efeitos, vozes e dublagem
+japonesa/inglesa), **Controles** (sensibilidade do mouse e da luneta, inverter eixo Y e a lista de teclas)
+e **Jogo** (contador de FPS, gravar replays e mapa ao hospedar). Tudo muda na hora e fica salvo em
+`saves/config.json`; *Restaurar padrões* desfaz só a aba aberta.
+
+No lobby, o anfitrião escolhe o **mapa** com as setas ao lado do nome, no alto da tela (a escolha
+fica salva em `saves/config.json`; os outros jogadores veem o mapa escolhido).
+Seu herói aparece animado e explica as habilidades em balões.
 **Trocar herói** abre a tira de retratos: passar o mouse mostra a prévia do kit,
 clicar marca e **Escolher!** confirma (Esc cancela). Dá para escolher também a
 facção, respeitando três vagas por time. **Iniciar 3v3** exige seis jogadores humanos. **Treino + bots**
@@ -106,12 +118,40 @@ que passam sobre recursos bacterianos os destroem.
 
 ## Objetivos
 
-**Escolta contínua.** As plaquetas saem da estação das células, percorrem a avenida
-arterial, contornam o chafariz da praça, cruzam a ponte central do canal e seguem
-até a obra da ferida. Avançam sozinhas; param apenas quando há bactéria viva logo à
+O lado das bactérias é igual em todos os mapas (colônias, infecção, recursos das hemácias,
+antígenos). O objetivo das células muda com o mapa:
+
+| Mapa | Objetivo das células | O que sela a entrada bacteriana |
+| --- | --- | --- |
+| Bairro Arterial, Timo | Escolta das plaquetas até a ferida | A ferida fechada |
+| Medula Óssea | Treino de entrega dos eritroblastos (formatura) | A meta de formaturas |
+| Coração | Comboio de hemácias pelo coração, com valvas no ritmo do batimento | O comboio chegando ao pulmão |
+
+**Escolta contínua (Bairro Arterial e Timo).** As plaquetas saem da estação das células e seguem
+até a ferida: no Bairro, pela avenida arterial, em volta do chafariz e pela ponte central do canal;
+no Timo, pelo campo de treino e pelo corredor principal do labirinto até a cápsula rompida. Avançam sozinhas; param apenas quando há bactéria viva logo à
 frente, na mesma passagem e com linha de visão (quem está em passarelas, sob a ponte
 ou atrás de paredes não bloqueia). O progresso nunca regride. Ao chegar, a ferida é
 fechada (irreversível) e as bactérias deixam de renascer pela entrada.
+
+**Treino de entrega (Medula Óssea).** Não há plaquetas nem hemácias adultas: os eritroblastos
+(hemácias crianças) saem um de cada vez do berçário com uma caixinha de O₂ de treino e vão até os
+postos de formatura A, B ou C pela cidade de papelão. Cada criança que chega conta uma formatura;
+ao bater a meta (`training_goal`), a medula entra em alerta e a entrada bacteriana é selada.
+Atingida por bactérias, a criança não morre: larga a caixa (vira recurso) e volta chorando ao
+berçário, sem poder ser atingida de novo até sair com outra caixa. Ela é, ao mesmo tempo, a
+economia das bactérias e o objetivo das células. Células perto de uma criança no treino carregam o
+especial.
+
+**Comboio e batimento (Coração).** Uma carreta de CO₂ puxada por hemácias segue da veia cava até o
+pulmão, com as mesmas regras de bloqueio da escolta (bactéria viva à frente, na mesma passagem).
+Duas valvas, portões no caminho, abrem e fecham no ritmo do batimento e se alternam como no
+coração de verdade: a **tricúspide** fecha na sístole e a **pulmonar** na diástole. A HUD mostra
+o traçado do ECG e o estado de cada valva. Fechada, a valva bloqueia passagem e tiros, e quem
+estiver no vão é empurrado para o lado mais próximo. O comboio espera no batente e segura aberta
+a valva que está atravessando. **Endocardite:** uma colônia construída a até `valve_jam_radius` m de
+uma valva a emperra fechada; o comboio só passa depois que as células destruírem essa colônia.
+Corredores laterais contornam as valvas, então só o comboio depende delas.
 
 **Hemácias e economia.** Hemácias levam oxigênio aos edifícios A, B e C, cada um com
 duas portas e rotas alternativas. Ao avistar uma bactéria, fogem e tentam outro
@@ -125,14 +165,16 @@ desenvolve. Destruir uma remove toda a sua contribuição.
 
 **Vitória.**
 - Bactérias: infecção coletiva atinge a meta (várias colônias desenvolvidas), mesmo com a ferida aberta.
-- Células: ferida fechada, nenhuma colônia e nenhuma bactéria viva.
+- Células: entrada bacteriana selada (ferida fechada, formatura ou comboio no pulmão), nenhuma colônia e nenhuma bactéria viva.
 
 **Antígenos e desbloqueios.** Bactérias derrotadas deixam amostras. Coletá-las
 aumenta o reconhecimento compartilhado (Macrófago rende mais). B Cell é liberado
 na primeira meta e Killer T na segunda.
 
-**Reconhecimento do mapa.** Depois do fechamento, células que ocupam o posto da
-torre treliçada da praça, sem bactérias presentes, revelam temporariamente as colônias.
+**Reconhecimento do mapa.** Depois do fechamento, células que ocupam o posto de reconhecimento,
+sem bactérias presentes, revelam temporariamente as colônias. O posto é a torre treliçada da praça
+(Bairro Arterial), a torre de observação do campo (Timo), o pé da torre do relógio (Medula) e o
+pátio oeste do átrio (Coração).
 
 **Respawn.** Durante a contagem, a câmera acompanha quem eliminou você. Bactérias
 escolhem entrada ou colônia; sem nenhuma das duas, acompanham um aliado vivo (Tab
@@ -153,9 +195,22 @@ Não há mais Systemic Stress, fases cronometradas, núcleos fixos nem resposta 
 | Pseudomonas | Ácido com explosão | Biofilme (acelera aliados, desacelera inimigos) | Biofilme maduro e corrosivo |
 | Streptococcus | Hemólise, forte contra hemácias | Arrancada, também no ar | Mais mobilidade e cadência |
 
-## Mapa: Bairro Arterial
+## Mapas
 
-Mapa novo, com cerca de **124 × 186 m** de área jogável e um horizonte de prédios
+| Mapa | Episódio | Modo | Destaques |
+| --- | --- | --- | --- |
+| Bairro Arterial | S01E02 | escolta | Canais e pontes, avenida arterial, obra da ferida. |
+| Timo | S01E09 | escolta | Dormitório, campo de treino com alambrado, labirinto do exame final, trilha da floresta. |
+| Medula Óssea | S01E06 | treino de entrega | Berçário, torre do relógio, cidade de papelão, academia com arcadas, canal com ponte em arco. |
+| Coração | S01E08 | comboio + valvas | Templo do átrio direito, túnel de torii, ventrículo listrado, artéria pulmonar, estação do pulmão. |
+
+Os quadros do anime usados como referência ficam em `referencias/<Mapa>/`, com um README que diz
+o que cada quadro inspirou. A construção, as regras de cada mapa e os comandos estão em
+[docs/MAPAS_NOVOS.md](docs/MAPAS_NOVOS.md).
+
+### Bairro Arterial
+
+Mapa com cerca de **124 × 186 m** de área jogável e um horizonte de prédios
 altos e vasos gigantes ao fundo. Foi construído do zero no Blender a partir das
 imagens de `referencias/imagens/`:
 
@@ -224,8 +279,8 @@ são malhas separadas, e o JSON guarda o cano, a janela de ejeção e a pose da 
 
 ## Câmera livre para referências
 
-Execute `.venv\Scripts\python.exe main_freecam.py`. Essa entrada abre diretamente o
-Bairro Arterial, sem partida, bots ou colisões.
+Execute `.venv\Scripts\python.exe main_freecam.py [--map timo]`. Essa entrada abre diretamente o
+mapa (o Bairro Arterial, se `--map` não for informado), sem partida, bots ou colisões.
 
 - **WASD / mouse:** voar e olhar. **E ou Espaço / Q ou Ctrl:** subir e descer.
 - **Shift / Alt:** acelerar e mover com precisão.
@@ -239,7 +294,10 @@ ficam em `Levels/`. Os menus usam o estilo Mangá de `manga_ui.py` (fontes Bange
 M PLUS Rounded 1c, OFL, em `Assets/fonts/`); as telas ficam em `screens.py`.
 Regras, física, combate, rede, interface e fábricas ficam em `UserComponents/cells/`:
 
-- `rules.py`: estado da partida, escolta, colônias, infecção, antígenos, vitória.
+- `maps.py` / `layout.py`: mapas disponíveis, modo de cada um e os marcadores do mapa ativo
+  (`layout.select(chave)` antes de montar a arena).
+- `rules.py`: estado da partida, escolta/comboio/formatura, colônias, infecção, antígenos, vitória.
+- `heart.py`: batimento e valvas do Coração (determinístico pelo relógio replicado).
 - `arena.py`: servidor autoritativo; valida pedidos e envia snapshot a 10 Hz.
 - `npcs.py`: hemácias (rotas, percepção, fuga, retomada).
 - `actors.py` / `combat.py`: heróis, kits, construção e respawn.
@@ -248,6 +306,8 @@ Regras, física, combate, rede, interface e fábricas ficam em `UserComponents/c
   (cena `Levels/replay.py`: estante e controles no estilo Mangá).
 - `audio.py` / `voice.py`: efeitos sonoros posicionados e falas dos personagens (dublagem
   japonesa ou inglesa, escolhida em `saves/config.json` via `settings.py`, ou por `CELLS_VOICE=en`).
+- `settings.py` / `options.py`: preferências salvas em `saves/config.json` (validadas ao ler) e a tela de
+  configurações, uma camada de UI persistente que desenha por cima de qualquer cena e aplica vídeo/áudio.
 
 Cada jogador simula seu movimento, mira, arma e habilidades localmente
 (`NetworkTransform` por UDP). Pedidos sobre objetos compartilhados (construir,
@@ -257,15 +317,17 @@ resultado, evitando gastos ou coletas duplicadas.
 ```powershell
 .venv\Scripts\python.exe -m unittest discover -s tests -v
 .venv\Scripts\python.exe scripts/check_multiplayer.py      # host + 5 clientes
-.venv\Scripts\python.exe scripts/check_scenes.py           # todas as cenas, janela oculta
+.venv\Scripts\python.exe scripts/check_scenes.py           # todas as cenas, janela oculta (--map=coracao)
+.venv\Scripts\python.exe scripts/check_match_views.py --map medula   # capturas de partida por mapa
+.venv\Scripts\python.exe scripts/map_check.py --map timo     # confere um layout sem Blender
 .venv\Scripts\python.exe scripts/check_hud.py              # capturas da HUD em .scratch/hud/
 .venv\Scripts\python.exe scripts/check_match_views.py      # capturas da partida em .scratch/match/
-.venv\Scripts\python.exe scripts/render_district.py        # vistas do mapa em .scratch/district/
+.venv\Scripts\python.exe scripts/render_district.py        # vistas do mapa em .scratch/district/ (--map timo)
 .venv\Scripts\python.exe scripts/check_art.py              # modelos dos personagens
 ```
 
 O GDD original está em [docs/GDD_Cells_at_Work_Hero_Shooter_Prototype.html](docs/GDD_Cells_at_Work_Hero_Shooter_Prototype.html).
 O mapa anterior, Bairro dos Canais, seus atlas e suas ferramentas exclusivas
-foram removidos. O único mapa mantido é o Bairro Arterial. Veja
+foram removidos. Os mapas atuais são o Bairro Arterial, o Timo, a Medula Óssea e o Coração. Veja
 [referencias/README.md](referencias/README.md) para a organização dos assets e os comandos
 de geração.

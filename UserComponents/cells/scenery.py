@@ -15,9 +15,20 @@ Carregado sob demanda: servidores e testes sem GPU nunca abrem o modelo.
 import pyray as rl
 from EasyCells3D.Components.Camera3D import Renderable3D
 from . import lighting
-from .layout import MAP_FOLDER, MAP_FILE, X0, Z0, X1, Z1
+from . import layout
 
 FOG = (0.955, 0.915, 0.835)
+
+CHAIN_GLSL = '''
+// Alambrado (padrao 18): losangos de arame de ~20 cm; entre os fios a tela e vazada.
+bool chainHole(vec3 p, vec3 n) {
+    vec3 a = abs(n);
+    vec2 uv = a.y > 0.7 ? p.xz : (a.x > a.z ? vec2(p.z, p.y) : p.xy);
+    vec2 q = uv * 5.0;
+    vec2 f = fract(vec2(q.x + q.y, q.x - q.y) * 0.7071);
+    return min(min(f.x, 1.0 - f.x), min(f.y, 1.0 - f.y)) > 0.1;
+}
+'''
 
 VERTEX = '''#version 330
 in vec3 vertexPosition;
@@ -56,6 +67,7 @@ uniform vec4 inkView;       // x, y = origem do viewport; z = ligado; w = raio e
 out vec4 finalColor;
 ''' + lighting.GLSL + '''
 
+''' + CHAIN_GLSL + '''
 // Buffer de contorno em RGBA8: rg = normal octaédrica, ba = distância em log (16 bits).
 const float INK_NEAR = 0.05;
 const float INK_LOG = 11.2898;  // log(4000 / 0.05)
@@ -146,6 +158,7 @@ void main() {
     int pat = int(floor(vPat));
     vec2 uv = planar(wPos, n);
     bool lit = true;
+    if (pat == 18 && chainHole(wPos, n)) discard;
     if (pat == 1) {
         col = bricks(uv, col, vec2(0.52, 0.22), 0.03, 0.22);
     } else if (pat == 2) {
@@ -253,33 +266,59 @@ void main() {
 # nao em cada camada de sacada/predio escondida atras de outra.
 PREPASS_VERTEX = '''#version 330
 in vec3 vertexPosition;
+in vec2 vertexTexCoord;
+in vec3 vertexNormal;
 uniform mat4 mvp;
+uniform mat4 matModel;
 invariant gl_Position;
-void main() { gl_Position = mvp * vec4(vertexPosition, 1.0); }
+out vec3 wPos;
+out vec3 wNor;
+out float vPat;
+void main() {
+    wPos = (matModel * vec4(vertexPosition, 1.0)).xyz;
+    wNor = normalize(mat3(matModel) * vertexNormal);
+    vPat = vertexTexCoord.x;
+    gl_Position = mvp * vec4(vertexPosition, 1.0);
+}
 '''
 PREPASS_FRAGMENT = '''#version 330
+in vec3 wPos;
+in vec3 wNor;
+in float vPat;
 out vec4 finalColor;
-void main() { finalColor = vec4(1.0); }
+''' + CHAIN_GLSL + '''
+void main() {
+    if (int(floor(vPat)) == 18 && chainHole(wPos, normalize(wNor))) discard;
+    finalColor = vec4(1.0);
+}
 '''
 
 INK_VERTEX = '''#version 330
 in vec3 vertexPosition;
 in vec3 vertexNormal;
+in vec2 vertexTexCoord;
 uniform mat4 mvp;
 uniform mat4 matModel;
 invariant gl_Position;
 out vec3 wNor;
+out vec3 wPos;
+out float vPat;
 out float invDist;
 void main() {
     wNor = normalize(mat3(matModel) * vertexNormal);
+    wPos = (matModel * vec4(vertexPosition, 1.0)).xyz;
+    vPat = vertexTexCoord.x;
     gl_Position = mvp * vec4(vertexPosition, 1.0);
     invDist = 1.0 / max(gl_Position.w, 1e-3);
 }
 '''
 INK_FRAGMENT = '''#version 330
 in vec3 wNor;
+in vec3 wPos;
+in float vPat;
 in float invDist;
 out vec4 finalColor;
+''' + CHAIN_GLSL + '''
 const float INK_NEAR = 0.05;
 const float INK_LOG = 11.2898;
 vec2 oct(vec3 n) {
@@ -289,6 +328,7 @@ vec2 oct(vec3 n) {
     return e * 0.5 + 0.5;
 }
 void main() {
+    if (int(floor(vPat)) == 18 && chainHole(wPos, normalize(wNor))) discard;
     float t = clamp(log(1.0 / (invDist * INK_NEAR)) / INK_LOG, 0.0, 1.0);
     float v = floor(t * 65535.0 + 0.5);
     float hi = floor(v / 256.0);
@@ -340,9 +380,9 @@ class _Shared:
 def _load():
     if _Shared.model is not None:
         return
-    model = rl.load_model(str(MAP_FOLDER / MAP_FILE))
+    model = rl.load_model(str(layout.MAP_FOLDER / layout.MAP_FILE))
     if not rl.is_model_valid(model):
-        raise RuntimeError(f'Falha ao carregar {MAP_FILE}')
+        raise RuntimeError(f'Falha ao carregar {layout.MAP_FILE}')
     shader = rl.load_shader_from_memory(VERTEX, FRAGMENT)
     for i in range(model.materialCount):
         model.materials[i].shader = shader
@@ -354,7 +394,7 @@ def _load():
     _set(shader, _Shared.ink_locs['inkView'], (0.0, 0.0, 0.0, 1.0), 'vec4')
     lighting.register(shader)
     try:
-        lighting.bake(model, (X0, Z0, X1, Z1))
+        lighting.bake(model, (layout.X0, layout.Z0, layout.X1, layout.Z1))
     except Exception as exc:  # noqa: BLE001 - sem a luz assada o mapa ainda desenha (faixas simples)
         print(f'WARNING: iluminacao do mapa desativada ({type(exc).__name__}: {exc})', flush=True)
     _Shared.sky_shader = rl.load_shader_from_memory(SKY_VERTEX, SKY_FRAGMENT)

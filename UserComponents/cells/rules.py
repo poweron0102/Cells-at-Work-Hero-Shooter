@@ -1,11 +1,17 @@
 """Regras compartilhadas: escolta, colonias, infeccao, antigenos e vitoria.
 
+O objetivo das celulas muda com o modo do mapa (``maps.MODES``): ``escort`` (plaquetas ate a
+ferida), ``convoy`` (comboio de hemacias, parado por valvas fechadas) e ``training``
+(formatura dos eritroblastos: ``escort`` conta as criancas formadas). Em todos, completar o
+objetivo sela a entrada bacteriana (``wound_closed``).
+
 Puro Python (testavel sem GPU/rede). O servidor executa ``tick`` e envia
 ``snapshot()`` aos clientes; acoes de jogadores chegam como pedidos validados.
 """
 import math
 from dataclasses import dataclass, field
 from .catalog import CELLS, BACTERIA, BALANCE, HEROES
+from .maps import MODES
 
 
 class EscortPath:
@@ -60,6 +66,7 @@ def escort_blockers(path, progress, bacteria):
 
 @dataclass
 class MatchState:
+    mode: str = 'escort'
     elapsed: float = 0.0
     winner: str = ""
     notice: str = "Escolte as plaquetas ate a ferida"
@@ -67,6 +74,8 @@ class MatchState:
     escort: float = 0.0
     escort_total: float = 150.0
     blocked_by: list = field(default_factory=list)
+    blocked_valve: int = -1   # coracao: valva fechada que faz o comboio esperar
+    jammed: list = field(default_factory=list)  # coracao: valvas emperradas por colonias
     wound_closed: bool = False
     recognition: float = 0.0
     colonies: list = field(default_factory=list)
@@ -160,6 +169,24 @@ class MatchState:
             return True
         return False
 
+    # -- objetivo das celulas -------------------------------------------
+    def seal(self):
+        """Objetivo cumprido: a entrada bacteriana fecha (irreversivel)."""
+        if self.wound_closed:
+            return
+        self.wound_closed = True
+        self.blocked_by, self.blocked_valve = [], -1
+        self.announce(MODES[self.mode]['announce'], 7)
+
+    def graduate(self):
+        """Medula: um eritroblasto completou o treino de entrega."""
+        if self.mode != 'training' or self.wound_closed or self.winner:
+            return
+        self.escort = min(self.escort_total, self.escort+1)
+        self.announce(f"ERITROBLASTO FORMADO ({int(self.escort)}/{int(self.escort_total)})", 3)
+        if self.escort >= self.escort_total:
+            self.seal()
+
     # -- reconhecimento do mapa -----------------------------------------
     def recon_available(self):
         return self.wound_closed and self.recon_cooldown <= 0 and not self.winner
@@ -179,7 +206,8 @@ class MatchState:
         return False
 
     # -- relogio --------------------------------------------------------
-    def tick(self, dt, blockers=(), bacteria_alive=0):
+    def tick(self, dt, blockers=(), bacteria_alive=0, limit=math.inf, blocked_valve=-1):
+        """``limit``: ate onde o comboio pode avancar agora (batente da proxima valva fechada)."""
         if self.winner:
             return
         self.elapsed += dt
@@ -190,12 +218,14 @@ class MatchState:
         for c in self.colonies:
             c["fortified"] = max(0.0, c.get("fortified", 0)-dt)
             c["marked"] = max(0.0, c.get("marked", 0)-dt)
-        self.blocked_by = list(blockers)
-        if not self.wound_closed and not self.blocked_by:
-            self.escort = min(self.escort_total, self.escort+dt*BALANCE['escort_speed'])
+        self.blocked_by = list(blockers) if not self.wound_closed else []
+        self.blocked_valve = blocked_valve if not self.wound_closed else -1
+        if not self.wound_closed and self.mode != 'training' and not self.blocked_by:
+            speed = BALANCE['convoy_speed'] if self.mode == 'convoy' else BALANCE['escort_speed']
+            step = min(self.escort_total, self.escort+dt*speed)
+            self.escort = max(self.escort, min(step, limit))
             if self.escort >= self.escort_total:
-                self.wound_closed = True
-                self.announce("FERIDA FECHADA - a entrada bacteriana foi selada", 7)
+                self.seal()
         if self.infection() >= BALANCE['infection_goal']:
             self.winner = BACTERIA
         elif self.wound_closed and not self.colonies and bacteria_alive == 0:

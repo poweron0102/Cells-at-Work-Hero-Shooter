@@ -15,10 +15,12 @@ from UserComponents.cells.visuals import ArenaEffects
 from UserComponents.cells.outline import SilhouettePass
 from UserComponents.cells.weapons import ViewModel
 from UserComponents.cells.world import build_district
+from UserComponents.cells import layout
 
 
 def init(game):
-    game.background_color = rl.Color(244, 233, 213, 255)
+    layout.select(game.session.map_key)
+    game.background_color = rl.Color(*layout.EXTRA.get('background', (244, 233, 213)), 255)
     game.physics_world = BulletPhysicsWorld()
     camera = game.CreateItem().AddComponent(Camera3D(vfov=75))
     arena = game.CreateItem().AddComponent(Arena())

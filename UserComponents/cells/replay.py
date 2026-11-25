@@ -8,7 +8,7 @@ o pitch (mira vertical) de cada herói a 10 Hz — os clientes o informam só ao
 enquanto a partida é gravada (``Combatant.report_aim``).
 
 Formato ``.replay``: gzip com uma sequência de pickles (protocolo 5)
-  1. cabeçalho ``dict(format, version, created, host, roster, status, balance)``
+  1. cabeçalho ``dict(format, version, created, host, roster, status, balance, map)``
   2. um bloco por quadro com novidades: ``(t, [pacote_em_pickle, ...], {slot: pitch} | None)``
   3. fim: ``("end", t, resultado)`` (ausente se o jogo caiu; o leitor aproveita o que houver)
 Ao lado, ``<nome>.json`` resume a partida para a lista de replays.
@@ -35,6 +35,7 @@ from EasyCells3D.Components import Component
 from EasyCells3D.Geometry import Vec3, Quaternion
 from EasyCells3D.NetworkComponents import NetworkManager, NetworkTransform
 from EasyCells3D.NetworkComponents.NetworkComponent import OP_RPC, OP_VAR
+from . import settings
 
 REPLAY_DIR = Path("replays")
 EXTENSION = ".replay"
@@ -151,7 +152,8 @@ def read_meta(path):
         if not isinstance(header, dict) or header.get("format") != FORMAT:
             return None
         meta = dict(created=header.get("created", ""), host=header.get("host", ""),
-                    roster=_roster_meta(header.get("roster", {})), duration=None, complete=False)
+                    roster=_roster_meta(header.get("roster", {})), duration=None, complete=False,
+                    map=header.get("map", "bairro"))
     meta["path"] = str(path)
     try:
         meta["size"] = path.stat().st_size
@@ -209,7 +211,7 @@ class ReplayRecorder(Component):
         self.created = now.isoformat(timespec="seconds")
         self.header = dict(format=FORMAT, version=VERSION, created=self.created, host=self.session.name,
                            roster=copy.deepcopy(self.session.roster.value), status=self.session.status,
-                           balance=balance_hash())
+                           balance=balance_hash(), map=self.session.map_key)
         self.file = gzip.open(self.path, "wb", compresslevel=6)
         pickle.dump(self.header, self.file, protocol=PICKLE)
         self.start = self.game.run_time
@@ -265,7 +267,7 @@ class ReplayRecorder(Component):
         result = self.session.result if final else None
         meta = dict(created=self.created, host=self.header["host"], roster=_roster_meta(self.header["roster"]),
                     duration=round(self.last_t, 2), complete=bool(final and result),
-                    balance=self.header["balance"])
+                    balance=self.header["balance"], map=self.header.get("map", "bairro"))
         if result:
             meta["winner"] = result.get("state", {}).get("winner")
             meta["score"] = {str(k): [v.get("kills", 0), v.get("deaths", 0)]
@@ -333,6 +335,7 @@ def open_replay(game, data, state=None):
     net = item.AddComponent(ReplayNetwork())
     session = item.AddComponent(Session(net, data.header.get("host") or "Replay"))
     session.roster._value = copy.deepcopy(data.header.get("roster", {}))
+    session.map._value = data.header.get("map", "bairro")  # replays antigos: so havia o Bairro Arterial
     session.status = data.header.get("status", "playing")
     session.joined = True
     game.session = session
@@ -647,8 +650,10 @@ class ReplayDirector(Component):
             k = rl.KeyboardKey
             if rl.is_mouse_button_down(rl.MouseButton.MOUSE_BUTTON_RIGHT):
                 delta = rl.get_mouse_delta()
-                self.cam_yaw = (self.cam_yaw + delta.x * .0028) % math.tau
-                self.cam_pitch = max(-1.5, min(1.5, self.cam_pitch - delta.y * .0028))
+                sens = .0028 * settings.get("mouse_sensitivity")
+                flip = -1 if settings.get("invert_y") else 1
+                self.cam_yaw = (self.cam_yaw + delta.x * sens) % math.tau
+                self.cam_pitch = max(-1.5, min(1.5, self.cam_pitch - delta.y * sens * flip))
             yaw, pitch = self.cam_yaw, self.cam_pitch
             forward = Vec3(math.sin(yaw) * math.cos(pitch), math.sin(pitch), -math.cos(yaw) * math.cos(pitch))
             right = Vec3(math.cos(yaw), 0, math.sin(yaw))

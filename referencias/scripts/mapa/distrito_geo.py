@@ -12,7 +12,7 @@ import math
 import random
 
 # Padroes do shader (UV.x = id + 0.5). Mantenha em sincronia com scenery.py.
-PLAIN, BRICK, FLAGSTONE, TILE, PLANK, WATER, ASHLAR, PLASTER, WINDOW, METAL, DIRT, ROOF, NET, GLOW, HAZARD, LEAF, TISSUE, GLASS = range(18)
+PLAIN, BRICK, FLAGSTONE, TILE, PLANK, WATER, ASHLAR, PLASTER, WINDOW, METAL, DIRT, ROOF, NET, GLOW, HAZARD, LEAF, TISSUE, GLASS, CHAINLINK = range(19)
 
 # Paleta inspirada nas referencias: creme, ocre, terracota, agua clara.
 CREAM = (244, 232, 208)
@@ -77,6 +77,9 @@ class Geo:
         self.groups = {}
         self.current = None
         self.collision = []  # triangles [(p0, p1, p2)]
+        # Colisao "vazada" (alambrados): barra personagens, mas tiros e visao passam.
+        self.screen = []
+        self.screening = False
         self.rng = random.Random(seed)
         self.spots = []
         self.overlays = []
@@ -141,8 +144,9 @@ class Geo:
             g.verts.extend(pts)
             g.faces.append((tuple(range(base, base+len(pts))), color, pat, smooth))
         if collide:
+            target = self.screen if self.screening else self.collision
             for i in range(1, len(pts)-1):
-                self.collision.append((pts[0], pts[i], pts[i+1]))
+                target.append((pts[0], pts[i], pts[i+1]))
 
     def box(self, c, s, color, pat=PLAIN, collide=True, ry=0.0, skip=(), visible=True, top=None, pats=None):
         """Axis box (optionally rotated about Y). ``top``/``pats`` override per face."""
@@ -572,3 +576,143 @@ class Geo:
             self.box((x+nx*.04, y+h/2, z), (.08, h, w), color, PLANK, collide=False)
             self.box((x+nx*.06, y+h+.15, z), (.12, .3, w+.5), frame, collide=False)
             self.box((x+nx*.7, y+h+.55, z), (1.4, .1, w+1.2), RED_ARCH, collide=False)
+
+    # -- props dos mapas novos (Timo, Medula, Coracao) -------------------------
+    def fence(self, p0, p1, h=2.6, color=(118, 124, 128), post=(92, 96, 100), barbed=True, collide=True):
+        """Cerca de tela (alambrado): postes, tela vazada (padrao CHAINLINK) e arame farpado.
+        A colisao barra a passagem; tiros tambem param nela (a tela e um so plano)."""
+        dx, dz = p1[0]-p0[0], p1[2]-p0[2]
+        L = math.hypot(dx, dz) or 1
+        ux, uz = dx/L, dz/L
+        y = p0[1]
+        n = max(1, int(L/2.6+.5))
+        for i in range(n+1):
+            t = i/n
+            self.cylinder((p0[0]+dx*t, y, p0[2]+dz*t), .05, h+.25, post, METAL, seg=6, caps=False)
+        self.tube([(p0[0], y+h, p0[2]), (p1[0], y+h, p1[2])], .04, post, METAL, seg=5, caps=False)
+        nx, nz = -uz, ux
+        quad = [(p0[0], y+.05, p0[2]), (p1[0], y+.05, p1[2]), (p1[0], y+h, p1[2]), (p0[0], y+h, p0[2])]
+        self.face(quad, color, CHAINLINK, (nx, 0, nz))
+        self.face([(q[0]-nx*.02, q[1], q[2]-nz*.02) for q in quad], color, CHAINLINK, (-nx, 0, -nz))
+        if barbed:
+            for off in (.15, .3, .45):
+                self.tube([(p0[0], y+h+off, p0[2]), (p1[0], y+h+off, p1[2])], .015, IRON, seg=4, caps=False)
+        if collide:
+            ry = math.atan2(dx, dz)
+            self.screening = True
+            self.box(((p0[0]+p1[0])/2, y+(h+.5)/2, (p0[2]+p1[2])/2), (.12, h+.5, L), post, visible=False, ry=ry)
+            self.screening = False
+
+    def tire(self, x, y, z, r=.42, color=(46, 44, 48), collide=True):
+        """Pneu deitado (pista de obstaculos)."""
+        seg = 12
+        for k in range(seg):
+            a0, a1 = k*math.tau/seg, (k+1)*math.tau/seg
+            for ri, n in ((r, 1), (r*.55, -1)):
+                p = [(x+math.cos(a0)*ri, y, z+math.sin(a0)*ri), (x+math.cos(a1)*ri, y, z+math.sin(a1)*ri),
+                     (x+math.cos(a1)*ri, y+.28, z+math.sin(a1)*ri), (x+math.cos(a0)*ri, y+.28, z+math.sin(a0)*ri)]
+                mid = (math.cos((a0+a1)/2)*n, 0, math.sin((a0+a1)/2)*n)
+                self.face(p, color, PLAIN, mid, smooth=True)
+            top = [(x+math.cos(a0)*r*.55, y+.28, z+math.sin(a0)*r*.55), (x+math.cos(a1)*r*.55, y+.28, z+math.sin(a1)*r*.55),
+                   (x+math.cos(a1)*r, y+.28, z+math.sin(a1)*r), (x+math.cos(a0)*r, y+.28, z+math.sin(a0)*r)]
+            self.face(top, color, PLAIN, (0, 1, 0))
+        if collide:
+            self.collider((x-r, y, z-r), (x+r, y+.3, z+r))
+
+    def bush(self, x, y, z, s=1.0, collide=False):
+        rng = self.rng
+        for _ in range(4):
+            ox, oz = rng.uniform(-.6, .6)*s, rng.uniform(-.6, .6)*s
+            self.sphere((x+ox, y+.5*s, z+oz), rng.uniform(.55, .85)*s, rng.choice((LEAF_C, LEAF_D)), LEAF,
+                        seg=7, rings=4, squash=.8)
+        if collide:
+            self.collider((x-.7*s, y, z-.7*s), (x+.7*s, y+1.1*s, z+.7*s))
+
+    def mountain(self, cx, cz, r, h, base=(206, 172, 136), streak=(156, 116, 90), y=-3.0, seg=48):
+        """Montanha de perfil concavo com sulcos de erosao descendo do cume (o vulcao listrado ao
+        fundo do campo de treino do timo, S01E09 06:42)."""
+        rng = random.Random(f'{cx}|{cz}|{r}')
+        # Aneis do pe ao cume: (altura relativa, raio relativo) - encosta mais ingreme no alto.
+        rings = ((0.0, 1.0), (.22, .66), (.48, .4), (.74, .2), (.93, .07))
+        # Sulcos: faixas estreitas que comecam no cume e terminam em alturas diferentes.
+        gully = [rng.random() < .3 for _ in range(seg)]
+        reach = [rng.uniform(.15, .8) for _ in range(seg)]
+        jitter = [[rng.uniform(.9, 1.08) for _ in range(seg)] for _ in rings]
+        pts = []
+        for i, (fh, fr) in enumerate(rings):
+            ring = []
+            for k in range(seg):
+                a = k*math.tau/seg
+                rr = r*fr*jitter[i][k]*(.93 if gully[k] and i else 1.0)
+                ring.append((cx+math.cos(a)*rr, y+h*fh, cz+math.sin(a)*rr))
+            pts.append(ring)
+        top = (cx, y+h, cz)
+        for i in range(len(rings)):
+            for k in range(seg):
+                j = (k+1) % seg
+                a = (k+.5)*math.tau/seg
+                out = (math.cos(a), .45, math.sin(a))
+                dark = gully[k] and rings[i][0] >= reach[k]
+                col = streak if dark else base
+                if i == len(rings)-1:
+                    self.face([pts[i][k], pts[i][j], top], col, DIRT, out, smooth=True)
+                else:
+                    self.face([pts[i][k], pts[i][j], pts[i+1][j], pts[i+1][k]], col, DIRT, out, smooth=True)
+
+    def speaker_pole(self, x, y, z, h=6.0):
+        """Poste com cornetas de alto-falante (o do labirinto do timo)."""
+        self.cylinder((x, y, z), .09, h, (196, 200, 206), METAL, seg=6)
+        for ang in (0, math.pi/2, math.pi, 3*math.pi/2):
+            dx, dz = math.cos(ang), math.sin(ang)
+            self.tube([(x+dx*.15, y+h-.05, z+dz*.15), (x+dx*.55, y+h+.05, z+dz*.55)], .14, (220, 222, 226), METAL, seg=8)
+        self.collider((x-.12, y, z-.12), (x+.12, y+h, z+.12))
+
+    def lattice_tower(self, x, y, z, h=9.0, w=2.6, color=(214, 70, 60), deck=True):
+        """Torre trelicada com cabine no topo (posto de observacao); so as pernas colidem."""
+        half = w/2
+        legs = [(-half, -half), (half, -half), (half, half), (-half, half)]
+        for lx, lz in legs:
+            self.tube([(x+lx, y, z+lz), (x+lx*.55, y+h, z+lz*.55)], .09, color, METAL, seg=5)
+            self.collider((x+lx-.15, y, z+lz-.15), (x+lx+.15, y+2.4, z+lz+.15))
+        for k in range(1, int(h/2.2)+1):
+            yy = y+k*2.2
+            s = half*(1-.45*min(1, (yy-y)/h))
+            for (ax, az), (bx, bz) in zip(legs, legs[1:]+legs[:1]):
+                self.tube([(x+ax/half*s, yy, z+az/half*s), (x+bx/half*s, yy, z+bz/half*s)], .05, WHITE, METAL, seg=4,
+                          caps=False)
+        if deck:
+            s = half*.55+.5
+            self.box((x, y+h, z), (s*2+.6, .18, s*2+.6), (90, 90, 98), METAL, collide=False)
+            self.box((x, y+h+2.4, z), (s*2+1.0, .2, s*2+1.0), color, ROOF, collide=False)
+            for cx_, cz_ in ((-s, -s), (s, -s), (s, s), (-s, s)):
+                self.box((x+cx_, y+h+1.2, z+cz_), (.12, 2.4, .12), IRON, collide=False)
+
+    def water_tower(self, x, y, z, h=10.0, r=3.0, color=(232, 226, 214)):
+        for lx, lz in ((-1, -1), (1, -1), (1, 1), (-1, 1)):
+            self.tube([(x+lx*r*.8, y, z+lz*r*.8), (x+lx*r*.55, y+h, z+lz*r*.55)], .16, (120, 130, 140), METAL, seg=6)
+            self.collider((x+lx*r*.8-.2, y, z+lz*r*.8-.2), (x+lx*r*.8+.2, y+3, z+lz*r*.8+.2))
+        self.cylinder((x, y+h, z), r, 4.2, color, METAL, seg=16, collide=False)
+        self.cylinder((x, y+h+4.2, z), r+.1, 1.2, (200, 90, 80), ROOF, seg=16, r_top=.2, collide=False)
+
+    def hay_bale(self, x, y, z, ry=0.0, s=1.0):
+        self.box((x, y+.45*s, z), (1.2*s, .9*s, .9*s), (206, 178, 112), DIRT, ry=ry)
+        self.box((x, y+.45*s, z), (.08*s, .92*s, .92*s), (150, 120, 70), collide=False, ry=ry)
+
+    def torii(self, x, y, z, w=4.0, h=4.4, along='x', color=(214, 56, 50), collide=True):
+        """Portico vermelho (torii): dois pilares, a viga reta (nuki) e a viga curva de cima (kasagi)."""
+        half = w/2
+
+        def P(d, yy, n=0.0):
+            return (x+d, yy, z+n) if along == 'x' else (x+n, yy, z+d)
+        for sgn in (-1, 1):
+            self.cylinder(P(sgn*half, y), .2, h, color, PLAIN, seg=10)
+            self.cylinder(P(sgn*half, y), .28, .4, (40, 36, 40), PLAIN, seg=10, collide=False)
+            if collide:
+                c = P(sgn*half, y)
+                self.collider((c[0]-.22, y, c[2]-.22), (c[0]+.22, y+h, c[2]+.22))
+        size = (w+.8, .26, .3) if along == 'x' else (.3, .26, w+.8)
+        self.box(P(0, y+h*.78), size, color, collide=False)
+        top = [P(d, y+h+.18+.25*(abs(d)/(half+1.3))**2) for d in (-(half+1.3), -half, 0, half, half+1.3)]
+        self.tube(top, .2, (40, 36, 40), seg=6)
+        self.tube([(p[0], p[1]-.3, p[2]) for p in top[1:4]], .16, color, seg=6)
+        self.box(P(0, y+h*.9), (.5, h*.22, .1) if along == 'x' else (.1, h*.22, .5), (40, 36, 40), collide=False)

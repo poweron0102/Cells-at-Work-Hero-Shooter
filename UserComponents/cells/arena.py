@@ -13,14 +13,21 @@ from .rules import MatchState, EscortPath, escort_blockers
 from .catalog import CELLS, BACTERIA, HEROES, BALANCE
 from .bots import BotBrain
 from .npcs import Hemacias, RemoteHemacias
-from .layout import (CELL_SPAWNS, BACTERIA_ENTRANCE, ESCORT_PATH, RECON, COLONY_HINTS, in_cells_base)
+from . import layout, heart
 
 
 class Arena(NetworkComponent):
     def __init__(self):
         super().__init__(identifier=200, owner=0)
-        self.path = EscortPath(ESCORT_PATH)
-        self.state = MatchState(escort_total=self.path.total)
+        self.mode = layout.MODE
+        self.path = EscortPath(layout.ESCORT_PATH)
+        total = BALANCE['training_goal'] if self.mode == 'training' else self.path.total
+        self.state = MatchState(mode=self.mode, escort_total=total, notice=layout.label('start'))
+        # Coracao: valvas (portoes) e onde o comboio cruza cada uma.
+        self.valves = [dict(v) for v in layout.VALVES] if self.mode == 'convoy' else []
+        self.valve_progress = {v['id']: heart.valve_progress(v, self.path) for v in self.valves}
+        self.valve_bodies = {}
+        self.valve_open = {v['id']: True for v in self.valves}
         self.actors = {}
         self.zones, self.tracers, self.effects = [], [], []
         self.minions = {}      # id -> dict(kind, slot, pos, yaw, hp, max, life): torretas e clones
@@ -48,6 +55,51 @@ class Arena(NetworkComponent):
         self.game.session.arena = self
         if self.server:
             self.hemacias = Hemacias(self)
+        for v in self.valves:
+            item = self.game.CreateItem()
+            item.name = f"Valva {v['id']}"
+            x, y, z = v['pos']
+            h = v.get('height', 6.0)
+            item.transform.position = Vec3(x, y+h/2, z)
+            half = Vec3(v['width']/2, h/2, .35) if v['axis'] == 'x' else Vec3(.35, h/2, v['width']/2)
+            body = item.AddComponent(PhysicsBody3D(BoxShape(half), body_type=BodyType.STATIC))
+            body.nav_ignore = True  # a navegacao passa pelo vao (os bots esperam a valva abrir)
+            self.valve_bodies[v['id']] = body
+
+    # -- coracao: valvas ------------------------------------------------------
+    def valve_is_open(self, valve):
+        s = self.state
+        return heart.is_open(valve, s.elapsed, s.jammed, s.escort, self.valve_progress[valve['id']], s.wound_closed)
+
+    def update_valves(self):
+        """Abre/fecha as valvas deste par pelo relogio replicado; quem esta no vao quando ela
+        fecha e empurrado para o lado mais perto (so os atores simulados aqui)."""
+        for v in self.valves:
+            body = self.valve_bodies.get(v['id'])
+            if body is None:
+                continue
+            opened = self.valve_is_open(v)
+            if opened == self.valve_open.get(v['id']) and body.enable == (not opened):
+                continue
+            if not opened and self.valve_open.get(v['id'], True):
+                self.clear_doorway(v)
+            self.valve_open[v['id']] = opened
+            body.enable = not opened
+
+    def clear_doorway(self, v):
+        x, y, z = v['pos']
+        half_w, half_t = v['width']/2+.5, .35+.55
+        for actor in self.actors.values():
+            if not actor.local or not actor.alive:
+                continue
+            p = actor.transform.position
+            along, across = (p.x-x, p.z-z) if v['axis'] == 'x' else (p.z-z, p.x-x)
+            if abs(along) > half_w or abs(across) > half_t or not (y-.5 <= p.y-.95 <= y+v.get('height', 6.0)):
+                continue
+            side = 1.0 if across >= 0 else -1.0
+            push = side*(half_t+.15)
+            target = Vec3(p.x, p.y+.05, z+push) if v['axis'] == 'x' else Vec3(x+push, p.y+.05, p.z)
+            actor.body.teleport(target)
 
     # -- consultas --------------------------------------------------------
     def spawn_options(self):
@@ -61,9 +113,9 @@ class Arena(NetworkComponent):
     def spawn_position(self, slot, choice):
         kind, ident = choice
         if kind == 'base':
-            x, y, z = CELL_SPAWNS[slot % 3]
+            x, y, z = layout.CELL_SPAWNS[slot % 3]
         elif kind == 'entrance':
-            x, y, z = BACTERIA_ENTRANCE[slot % 3]
+            x, y, z = layout.BACTERIA_ENTRANCE[slot % 3]
         else:
             colony = self.state.colony(ident)
             if colony is None:
@@ -122,14 +174,17 @@ class Arena(NetworkComponent):
         x, y, z = point
         if normal.y < .8:
             return "Chao inclinado demais"
-        if in_cells_base(x, z):
+        if layout.in_cells_base(x, z):
             return "Proibido na base das celulas"
         if any(math.dist(c['pos'], point) < 4.5 for c in self.state.colonies):
             return "Muito perto de outra colonia"
         if any(math.dist(p, point) < 4.5 for s, p in self.builds.items() if s != slot):
             return "Outra construcao em andamento"
-        if math.dist(point, self.path.at(self.state.escort)) < 3:
+        if self.mode != 'training' and math.dist(point, self.path.at(self.state.escort)) < 3:
             return "Sobre a escolta"
+        for v in self.valves:
+            if math.hypot(point[0]-v['pos'][0], point[2]-v['pos'][2]) < v['width']/2+1.2:
+                return "No vao da valva"
         world = self.game.physics_world
         if world.overlap_sphere(Vec3(x, y+1.2, z), .95, 1):
             return "Sem espaco livre"
@@ -159,8 +214,7 @@ class Arena(NetworkComponent):
         if math.dist(actor.feet, position) > BALANCE['colony_build_radius']+3:
             return
         position = tuple(position)
-        from .layout import in_cells_base as forbidden
-        if forbidden(position[0], position[2]) or any(math.dist(c['pos'], position) < 4.5 for c in self.state.colonies):
+        if layout.in_cells_base(position[0], position[2]) or any(math.dist(c['pos'], position) < 4.5 for c in self.state.colonies):
             return
         self.builds.pop(slot, None)
         if self.state.add_colony(slot, position):
@@ -216,7 +270,8 @@ class Arena(NetworkComponent):
             return
         position = self.hemacias.damage(ident, amount)
         if position is not None:
-            self.add_drop('resource', position, BALANCE['rbc_resource'])
+            amount = BALANCE['kid_resource'] if self.hemacias.kids else BALANCE['rbc_resource']
+            self.add_drop('resource', position, amount)
 
     @Rpc(send_to=SendTo.ALL, require_owner=False)
     def reward(self, slot, amount):
@@ -470,17 +525,26 @@ class Arena(NetworkComponent):
         living = [a for a in self.actors.values() if a.alive and a.body.enable]
         bacteria = [a for a in living if a.team != CELLS]
         cells = [a for a in living if a.team == CELLS]
-        head = self.path.at(state.escort)
-        eye = (head[0], head[1]+1.2, head[2])
-        candidates = [(a.slot, a.transform.position.to_tuple,
-                       self.clear_line(eye, a.transform.position.to_tuple)) for a in bacteria]
-        blockers = escort_blockers(self.path, state.escort, candidates)
-        for zone in self.zones:
-            # Pneumonia: a nuvem sobre as plaquetas tambem as para.
-            if zone['kind'] == 'cloud' and zone['owner'] in self.actors and zone['owner'] not in blockers \
-                    and math.dist(zone['pos'], head) < zone['radius']+1:
-                blockers.append(zone['owner'])
-        state.tick(dt, blockers, len(bacteria))
+        blockers = []
+        if self.mode != 'training':
+            head = self.path.at(state.escort)
+            eye = (head[0], head[1]+1.2, head[2])
+            candidates = [(a.slot, a.transform.position.to_tuple,
+                           self.clear_line(eye, a.transform.position.to_tuple)) for a in bacteria]
+            blockers = escort_blockers(self.path, state.escort, candidates)
+            for zone in self.zones:
+                # Pneumonia: a nuvem sobre as plaquetas (ou o comboio) tambem os para.
+                if zone['kind'] == 'cloud' and zone['owner'] in self.actors and zone['owner'] not in blockers \
+                        and math.dist(zone['pos'], head) < zone['radius']+1:
+                    blockers.append(zone['owner'])
+        limit, valve = math.inf, -1
+        if self.valves and not state.wound_closed:
+            state.jammed = heart.jammed_valves(self.valves, state.colonies)
+            limit = heart.max_advance(self.valves, self.valve_progress, state.elapsed, state.jammed, state.escort)
+            valve = heart.convoy_block(self.valves, self.valve_progress, state.elapsed, state.jammed, state.escort)
+        elif self.valves:
+            state.jammed = []
+        state.tick(dt, blockers, len(bacteria), limit, valve)
         if self.hemacias:
             self.hemacias.tick(dt, bacteria)
         # Physical pickups: bacteria gather resources; cells destroy them and collect antigens.
@@ -508,7 +572,7 @@ class Arena(NetworkComponent):
                     self.drops.remove(drop)
                     break
         # Reconnaissance: contested presence at the plaza post, only after the wound closes.
-        near = lambda a: math.dist(a.feet, RECON) <= BALANCE['recon_radius']
+        near = lambda a: math.dist(a.feet, layout.RECON) <= BALANCE['recon_radius']
         channel = [a for a in cells if near(a)]
         if channel:
             state.channel_recon(channel[0].slot, dt, any(near(a) for a in bacteria))
@@ -564,6 +628,8 @@ class Arena(NetworkComponent):
         self.step_spits(dt)
         self.rbc_view.update(dt)
         self.sync_bodies()
+        if self.valves:
+            self.update_valves()
         if session.status != "playing" or not self.server:
             if not self.server:
                 self.state.elapsed += dt

@@ -7,6 +7,7 @@ from EasyCells3D import Game
 from EasyCells3D.Components import Component
 from EasyCells3D.NetworkComponents.RpcLog import RpcLog
 from UserComponents.cells.session import connect
+from UserComponents.cells.options import install as install_options
 
 
 class FrameLimit(Component):
@@ -59,6 +60,8 @@ def main():
     game = Game("menu", "Cells at Work | Abrasion", screen_resolution=(1280, 720),
                 dynamic_resolution=not args.hidden, target_fps=60)
     try:
+        # Tela de configurações persistente; as capturas automáticas (--hidden) ficam em 1280x720/60.
+        install_options(game, manage_display=not args.hidden)
         if args.host or args.join or args.training:
             connect(game, args.join or "::", args.port, not bool(args.join), args.name)
             if args.record and not args.join:

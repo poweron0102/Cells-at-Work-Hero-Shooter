@@ -12,6 +12,8 @@ from UserComponents.cells.world import build_district
 
 def build(game, visuals=True):
     """Arena de espectador alimentada pelo replay (``visuals=False`` nos testes sem janela)."""
+    from UserComponents.cells import layout
+    layout.select(game.session.map_key)
     game.physics_world = BulletPhysicsWorld()
     camera = game.CreateItem().AddComponent(Camera3D(vfov=75)) if visuals else None
     arena = game.CreateItem().AddComponent(Arena())
@@ -40,8 +42,9 @@ def init(game):
         game.time_scale = 1.0
         load_ui(game, ReplayLibrary())
         return
-    game.background_color = rl.Color(244, 233, 213, 255)
     director = build(game)
+    from UserComponents.cells import layout
+    game.background_color = rl.Color(*layout.EXTRA.get('background', (244, 233, 213)), 255)
     load_ui(game, ReplayOverlay(director))
 
 

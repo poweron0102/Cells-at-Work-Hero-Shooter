@@ -7,7 +7,7 @@ recursos, construcao e desenvolvimento de colonias.
 import math
 from EasyCells3D.Geometry import Vec3
 from .catalog import CELLS, HEROES, BALANCE
-from .layout import COLONY_HINTS, RECON
+from . import layout
 
 
 def _v(p):
@@ -68,13 +68,29 @@ class BotBrain:
         if resources:
             return _v(resources[0]['pos']), 'destruir recurso'
         known = [c for c in s.colonies if s.reveal > 0 or math.dist(c['pos'], feet) < 30]
+        # Coracao: a colonia que emperra a valva do comboio e prioridade de todos.
+        jam = [c for c in s.colonies for v in a.valves if v['id'] in s.jammed
+               and math.hypot(c['pos'][0]-v['pos'][0], c['pos'][2]-v['pos'][2]) <= BALANCE['valve_jam_radius']]
+        if jam and not s.wound_closed and role != 1:
+            return _v(min(jam, key=lambda c: math.dist(c['pos'], feet))['pos']), 'colonia'
         if known and (role == 2 or s.wound_closed):
             return _v(min(known, key=lambda c: math.dist(c['pos'], feet))['pos']), 'colonia'
         if s.wound_closed:
             if s.recon_available() and role == 0:
-                return _v(RECON), 'reconhecimento'
-            spot = COLONY_HINTS[(actor.slot*5+int(s.elapsed//25)) % len(COLONY_HINTS)]
+                return _v(layout.RECON), 'reconhecimento'
+            hints = layout.COLONY_HINTS
+            spot = hints[(actor.slot*5+int(s.elapsed//25)) % len(hints)]
             return _v(spot), 'patrulha'
+        if a.mode == 'training':
+            # Medula: acompanhar as criancas no treino e socorrer quem esta fugindo.
+            out = [c for c in a.rbc_view.cells.values() if c['state'] in ('deliver', 'flee', 'hide')]
+            threatened = [c for c in out if c['state'] in ('flee', 'hide')]
+            pool = threatened or out
+            if pool:
+                pick = sorted(pool, key=lambda c: math.dist(c['pos'], feet))[min(role, len(pool)-1)]
+                return _v(pick['pos']), 'proteger'
+            hints = layout.COLONY_HINTS
+            return _v(hints[(actor.slot*3+int(s.elapsed//20)) % len(hints)]), 'patrulha'
         if role == 1:
             threatened = [c for c in a.rbc_view.cells.values() if c['state'] in ('flee', 'hide')]
             if threatened:
@@ -88,7 +104,7 @@ class BotBrain:
         carried = s.resources.get(actor.slot, 0)
         own = s.colonies_of(actor.slot)
         if carried >= BALANCE['colony_cost'] and len(own) < BALANCE['colony_limit']:
-            free = [h for h in COLONY_HINTS
+            free = [h for h in layout.COLONY_HINTS
                     if all(math.dist(h, c['pos']) > 5 for c in s.colonies) and math.dist(h, feet) < 70]
             if free:
                 spot = min(free, key=lambda h: math.dist(h, feet)+(actor.slot*7) % 11)
@@ -100,13 +116,13 @@ class BotBrain:
         resources = [d for d in a.drops if d['kind'] == 'resource']
         if resources:
             return _v(min(resources, key=lambda d: math.dist(d['pos'], feet))['pos']), 'recolher'
-        if actor.slot % 3 == 0 and not s.wound_closed:
+        if actor.slot % 3 == 0 and not s.wound_closed and a.mode != 'training':
             head = a.path.at(min(s.escort_total, s.escort+4))
             return _v(head), 'bloquear'
-        rbcs = [c for c in a.rbc_view.cells.values() if c['state'] not in ('dead', 'inside')]
+        rbcs = [c for c in a.rbc_view.cells.values() if c['state'] not in ('dead', 'inside', 'cry')]
         if rbcs:
             return _v(min(rbcs, key=lambda c: math.dist(c['pos'], feet))['pos']), 'cacar'
-        return _v(COLONY_HINTS[actor.slot % len(COLONY_HINTS)]), 'patrulha'
+        return _v(layout.COLONY_HINTS[actor.slot % len(layout.COLONY_HINTS)]), 'patrulha'
 
     # -- habilidades ------------------------------------------------------
     @staticmethod
@@ -173,7 +189,7 @@ class BotBrain:
             aim = Vec3(m['pos'][0], m['pos'][1]+.85, m['pos'][2])-position-Vec3(0, .56, 0)
             fire = True
         elif actor.team != CELLS and intent == 'cacar':
-            near = [c for c in arena.rbc_view.cells.values() if c['state'] not in ('dead', 'inside')
+            near = [c for c in arena.rbc_view.cells.values() if c['state'] not in ('dead', 'inside', 'cry')
                     and math.dist(c['pos'], actor.feet) < 20]
             if near:
                 c = min(near, key=lambda c: math.dist(c['pos'], actor.feet))

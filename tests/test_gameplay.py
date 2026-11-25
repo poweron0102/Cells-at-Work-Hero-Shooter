@@ -98,7 +98,7 @@ class GameplayTests(unittest.TestCase):
         hem.replan(cell, hem.clock)
         self.assertIn(cell.path[0], ('S', 'SW'))  # first leg stays on the current street
         for a, b in zip(cell.path, cell.path[1:]):
-            self.assertIn(b, npcs.GRAPH[a])
+            self.assertIn(b, npcs.graph()[a])
         self.assertNotEqual(cell.path[0], 'SW')  # never runs through the bacterium
 
     def test_scared_cells_scatter_in_different_safe_directions(self):
@@ -114,7 +114,7 @@ class GameplayTests(unittest.TestCase):
             self.assertEqual(cell.state, 'flee')
             firsts.add(cell.path[0])
             for a, b in zip(cell.path, cell.path[1:]):
-                self.assertIn(b, npcs.GRAPH[a])  # still along the streets
+                self.assertIn(b, npcs.graph()[a])  # still along the streets
             route = [cell.pos]+[RBC_NODES[n] for n in cell.path]
             cost = sum(npcs.leg_cost(p, q, [t[0] for t in threats.values()], 9.0)-math.dist(p, q)
                        for p, q in zip(route, route[1:]))

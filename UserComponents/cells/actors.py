@@ -416,10 +416,15 @@ class Combatant(NetworkComponent, KitMixin):
             self.interact()
         self.update_build(cmd.get("build", False), dt)
         self.kit_update(dt)
-        # Charge for escorting: cells near the platelets while the wound is open.
+        # Charge for escorting: cells near the platelets/convoy (or, in the marrow, near an
+        # erythroblast still out on its training run) while the entrance is open.
         if self.team == CELLS and not self.arena.state.wound_closed:
-            head = self.arena.path.at(self.arena.state.escort)
-            if math.dist(head, self.feet) < 7:
+            if self.arena.mode == 'training':
+                near = any(c['state'] in ('deliver', 'flee', 'hide') and math.dist(c['pos'], self.feet) < BALANCE['kid_protect_radius']
+                           for c in self.arena.rbc_view.cells.values())
+            else:
+                near = math.dist(self.arena.path.at(self.arena.state.escort), self.feet) < 7
+            if near:
                 self.gain(dt*BALANCE['charge_escort'])
         self.previous = cmd.copy()
         if self.transform.y < -10:

@@ -12,6 +12,8 @@ from .hud_icons import draw_icon
 from .manga_ui import (MangaCanvas, HeroStage, INK, PAPER, WHITE, YELLOW, RED, CYAN, PINK, BLUSH, MINT,
                        GREY, MUTED, BURST_SOFT, ease_out)
 from .session import connect, disconnect
+from .options import open_settings
+from .maps import info as map_info, available as maps_available, next_map, MODES
 
 TEAM_TINT = {CELLS: CYAN, BACTERIA: PINK}
 TEAM_PAGE = {CELLS: MINT, BACTERIA: BLUSH}
@@ -107,6 +109,8 @@ class MenuScreen(MangaCanvas):
         self.recent = recents.remove(kind, value)
 
     def loop(self):
+        if self.blocked():
+            return
         super().loop()
         if rl.is_key_pressed(rl.KeyboardKey.KEY_TAB):
             self.focus = "ip" if self.focus == "name" else "name"
@@ -198,6 +202,8 @@ class MenuScreen(MangaCanvas):
         tag = "PRIMEIRA LINHA DE DEFESA"
         self.box(left + 40, bottom - 44, self.measure(tag, 14) + 22, 26, WHITE, 3, 3)
         self.t(tag, left + 51, bottom - 40, 14)
+        self.button("CONFIGURAÇÕES", right - 278, bottom - 152, 252, lambda: open_settings(self.game), h=54,
+                    size=26)
         self.button("ASSISTIR REPLAYS", right - 278, bottom - 82, 252, lambda: open_replays(self.game), h=58,
                     size=27, arrow=True)
 
@@ -312,7 +318,7 @@ class LobbyScreen(MangaCanvas):
 
     def loop(self):
         super().loop()
-        if self.picking:
+        if self.picking and not self.blocked():
             if rl.is_key_pressed(rl.KeyboardKey.KEY_ESCAPE):
                 self.close_picker()
             elif rl.is_key_pressed(rl.KeyboardKey.KEY_ENTER) and self.candidate:
@@ -363,6 +369,34 @@ class LobbyScreen(MangaCanvas):
             self.circle(cx, y + 17, 6, RED)
             self.ring(cx, y + 17, 9, 9 + 4 * pulse, 0, 360, RED, int(200 * (1 - pulse)))
         self.click(x, y, w, 34, lambda: net.set_recording(not on))
+
+    def map_picker(self, x, y, right):
+        """Mapa da partida: o anfitrião troca com as setas; os clientes só leem."""
+        net = self.net
+        current = map_info(net.map_key)
+        host = net.manager.is_server
+        options = maps_available()
+        cycle = host and len(options) > 1
+        title = current.title.upper()
+        sub = MODES[current.mode]["objective"]
+        tw = self.measure(title, 24, "title")
+        sw = self.measure(sub, 13)
+        if x + tw + sw + (96 if cycle else 40) > right:
+            sub, sw = "", -10
+        w = tw + sw + (96 if cycle else 40)
+        self.panel(x + 4, y + 4, w, 34, INK)
+        self.panel(x, y, w, 34, RED)
+        cx = x + (34 if cycle else 12)
+        if cycle:
+            for side, bx in ((-1, x + 4), (1, x + w - 30)):
+                hover = self.hovered(bx, y + 4, 26, 26)
+                self.panel(bx, y + 4, 26, 26, YELLOW if hover else WHITE)
+                mx, my = bx + 13, y + 17
+                self.tri((mx - 6 * side, my - 7), (mx - 6 * side, my + 7), (mx + 6 * side, my), INK)
+                self.click(bx, y + 4, 26, 26, lambda d=side: net.set_map(next_map(net.map_key, d)))
+        self.t(title, cx, y + 3, 24, WHITE, "title")
+        if sub:
+            self.t(sub, cx + tw + 10, y + 10, 13, YELLOW)
 
     def card(self, slot, x, y, w, h, picking):
         net = self.net
@@ -623,12 +657,13 @@ class LobbyScreen(MangaCanvas):
         if self.picking:
             story = f"{local['name']} está escolhendo um herói…"
         else:
-            story = f"{count} de 6 combatentes chegaram ao Bairro Arterial…"
+            story = f"{count} de 6 combatentes a caminho de"
         sw = self.measure(story, 22, "title") + 28
         self.rbox(100, 18, sw, 34, INK, -1)
         self.rbox(96, 14, sw, 34, INK, -1)
         self.rbox(99, 17, sw - 6, 28, YELLOW, -1)
         self.t(story, 110, 20, 22, INK, "title", angle=-1)
+        self.map_picker(96 + sw + 12, 14, self.R - tw - 14 - 230)
         self.roster(self.picking)
         if self.picking:
             self.picker(local)
@@ -663,12 +698,17 @@ class ResultScreen(MangaCanvas):
         title = "INFECÇÃO CONTIDA!" if winner == CELLS else "INFECÇÃO ESTABELECIDA!"
         self.fit(title, 46, 40, left - 46 - 24, 74, tint=TEAM_TINT[winner] if winner == CELLS else RED, font="title",
                  stroke=3, shadow=5)
-        sub = "Resultado decidido por escolta, colônias e infecção."
+        mode = state.get("mode", "escort")
+        sub = {"escort": "Resultado decidido por escolta, colônias e infecção.",
+               "convoy": "Resultado decidido pelo comboio, pelas valvas e pelas colônias.",
+               "training": "Resultado decidido pela formatura, pelas colônias e pela infecção."}.get(mode, "")
         self.rbox(46, 132, self.measure(sub, 16, "body") + 24, 32, YELLOW, -1)
         self.t(sub, 58, 138, 16, font="body", angle=-1)
         elapsed = int(state.get("elapsed", 0))
         stats = [("TEMPO", f"{elapsed // 60:02}:{elapsed % 60:02}"), ("ANTÍGENO", f"{int(state.get('recognition', 0))}%"),
-                 ("ESCOLTA", f"{int(100 * state.get('escort', 0) / max(1, state.get('escort_total', 1)))}%"),
+                 (MODES.get(mode, MODES["escort"])["result"],
+                  f"{int(state.get('escort', 0))}/{int(state.get('escort_total', 0))}" if mode == "training" else
+                  f"{int(100 * state.get('escort', 0) / max(1, state.get('escort_total', 1)))}%"),
                  ("COLÔNIAS", str(len(state.get('colonies', []))))]
         sw = min(186.0, (left - 46 - 24) / 4)
         for i, (label, value) in enumerate(stats):

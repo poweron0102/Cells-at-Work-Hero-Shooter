@@ -22,12 +22,21 @@ import heapq
 import math
 import random
 from .catalog import BALANCE, CELLS
-from .layout import RBC_NODES, RBC_EDGES, DESTINATIONS, RBC_DEPOT
+from . import layout
 
-GRAPH = {name: [] for name in RBC_NODES}
-for a, b in RBC_EDGES:
-    GRAPH[a].append(b)
-    GRAPH[b].append(a)
+_GRAPHS = {}
+
+
+def graph():
+    """Vizinhos de cada no de rua do mapa ativo (``rbc_edges``)."""
+    key = layout.MAP_KEY
+    if key not in _GRAPHS:
+        g = {name: [] for name in layout.RBC_NODES}
+        for a, b in layout.RBC_EDGES:
+            g[a].append(b)
+            g[b].append(a)
+        _GRAPHS[key] = g
+    return _GRAPHS[key]
 
 
 def _d2(a, b):
@@ -68,8 +77,8 @@ def leg_cost(p, q, threats, danger):
 
 def anchors(origin, threats=(), danger=9.0):
     """Os dois nos da rua onde ``origin`` esta: os unicos alcancaveis em linha reta."""
-    a, b = min(RBC_EDGES, key=lambda e: seg_dist(origin, RBC_NODES[e[0]], RBC_NODES[e[1]]))
-    return {n: leg_cost(origin, RBC_NODES[n], threats, danger) for n in (a, b)}
+    a, b = min(layout.RBC_EDGES, key=lambda e: seg_dist(origin, layout.RBC_NODES[e[0]], layout.RBC_NODES[e[1]]))
+    return {n: leg_cost(origin, layout.RBC_NODES[n], threats, danger) for n in (a, b)}
 
 
 def search(origin, threats=(), danger=9.0):
@@ -79,15 +88,15 @@ def search(origin, threats=(), danger=9.0):
     """
     best, parent, queue = {}, {}, []
     for node, c in anchors(origin, threats, danger).items():
-        best[node], parent[node] = (c, math.dist(origin, RBC_NODES[node])), None
+        best[node], parent[node] = (c, math.dist(origin, layout.RBC_NODES[node])), None
         heapq.heappush(queue, (c, node))
     while queue:
         g, node = heapq.heappop(queue)
         if g > best[node][0]:
             continue
         length = best[node][1]
-        for other in GRAPH[node]:
-            a, b = RBC_NODES[node], RBC_NODES[other]
+        for other in graph()[node]:
+            a, b = layout.RBC_NODES[node], layout.RBC_NODES[other]
             ng = g+leg_cost(a, b, threats, danger)
             if ng < best.get(other, (math.inf,))[0]:
                 best[other], parent[other] = (ng, length+math.dist(a, b)), node
@@ -100,7 +109,7 @@ def route(parent, node, origin):
     while parent[path[-1]] is not None:
         path.append(parent[path[-1]])
     path.reverse()
-    if len(path) > 1 and _d2(RBC_NODES[path[0]], origin) < ARRIVE**2:
+    if len(path) > 1 and _d2(layout.RBC_NODES[path[0]], origin) < ARRIVE**2:
         path.pop(0)  # ja esta em cima do primeiro no
     return path
 
@@ -120,16 +129,16 @@ class RedBloodCell:
         self.rng = rng
         self.reset(destination)
 
-    def reset(self, destination):
+    def reset(self, destination, health=None):
         self.destination = destination
         # Spread out along the depot's exit street (never sideways into the station's props).
-        x, y, z = RBC_DEPOT
-        ex, _, ez = RBC_NODES['depot_out']
+        x, y, z = layout.RBC_DEPOT
+        ex, _, ez = layout.RBC_NODES['depot_out']
         length = math.hypot(ex-x, ez-z) or 1
         ux, uz = (ex-x)/length, (ez-z)/length
         along, side = self.rng.uniform(0, min(1.5, length)), self.rng.uniform(-.3, .3)
         self.pos = [x+ux*along-uz*side, y, z+uz*along+ux*side]
-        self.hp = BALANCE['rbc_health']
+        self.hp = health or BALANCE['rbc_health']
         self.state = 'deliver'
         self.path = []
         self.node = 'depot'
@@ -148,6 +157,10 @@ class RedBloodCell:
     def alive(self):
         return self.state not in ('dead', 'inside')
 
+    @property
+    def hittable(self):
+        return self.state not in ('dead', 'inside', 'cry')
+
     def snapshot(self):
         return (self.id, round(self.pos[0], 2), round(self.pos[1], 2), round(self.pos[2], 2), round(self.yaw, 2),
                 self.state, int(self.hp), self.moving)
@@ -159,13 +172,20 @@ class Hemacias:
     def __init__(self, arena, seed=11):
         self.arena = arena
         self.rng = random.Random(seed)
-        order = ['A', 'B', 'C']
-        self.cells = [RedBloodCell(i, order[i % 3], self.rng) for i in range(BALANCE['rbc_count'])]
+        # Medula: eritroblastos (criancas) no treino de entrega - nao morrem; atingidos, largam a
+        # caixa e voltam chorando ao bercario. Cada entrega e uma formatura.
+        self.kids = layout.MODE == 'training'
+        self.health = BALANCE['kid_health'] if self.kids else BALANCE['rbc_health']
+        self.speed = BALANCE['kid_speed'] if self.kids else BALANCE['rbc_speed']
+        self.order = sorted(layout.DESTINATIONS)
+        order = self.order
+        count = BALANCE['training_kids'] if self.kids else BALANCE['rbc_count']
+        self.cells = [RedBloodCell(i, order[i % len(order)], self.rng) for i in range(int(count))]
         for i, cell in enumerate(self.cells):
             # Stagger departures so the district fills up gradually.
             cell.state, cell.timer = 'inside', 1.0+i*2.2
         self.next_destination = 0
-        self.deliveries = {'A': 0, 'B': 0, 'C': 0}
+        self.deliveries = {k: 0 for k in order}
         self.clock = 0.0
         self.perceive_timer = 0.0
         self.door = -math.inf  # instante da ultima saida do deposito
@@ -192,7 +212,7 @@ class Hemacias:
         best, parent = search(cell.pos, threats)
         cell.commit_until = now+BALANCE['rbc_commit']
         cell.tail = None
-        goals = [n for n in DESTINATIONS[cell.destination] if n in best]
+        goals = [n for n in layout.DESTINATIONS[cell.destination] if n in best]
         scared = min((math.dist(t, cell.pos) for t in threats), default=99) < PANIC
         if goals and not scared:
             goal = min(goals, key=lambda n: best[n][0])
@@ -214,7 +234,7 @@ class Hemacias:
         proxima): o primeiro quanto menor melhor, o segundo quanto maior (longe, escondido, sem
         correr demais)."""
         cost, length = best[node]
-        p = RBC_NODES[node]
+        p = layout.RBC_NODES[node]
         clear = min((math.dist(p, t) for t in threats), default=99)
         hidden = clear > 4 and not any(self.line_of_sight(t, p) for t in threats)
         return int(cost//DANGER_COST), min(clear, 20)+(12 if hidden else 0)-.1*length, clear
@@ -245,13 +265,13 @@ class Hemacias:
         """Ponto sorteado numa rua que sai do abrigo (nunca de volta pela rota nem rumo a uma
         ameaca): quem foge junto nao para empilhado no mesmo no."""
         came = path[-2] if len(path) > 1 else None
-        p = RBC_NODES[node]
+        p = layout.RBC_NODES[node]
         clear = min((math.dist(p, t) for t in threats), default=99)
         options = []
-        for other in GRAPH[node]:
+        for other in graph()[node]:
             if other == came:
                 continue
-            q = RBC_NODES[other]
+            q = layout.RBC_NODES[other]
             length = math.dist(p, q)
             k = min(self.rng.uniform(.15, .5), 6.0/max(length, .1))
             point = (p[0]+(q[0]-p[0])*k, p[1]+(q[1]-p[1])*k, p[2]+(q[2]-p[2])*k)
@@ -282,20 +302,19 @@ class Hemacias:
                     if watched and cell.waited < DOOR_WAIT:
                         cell.waited += dt  # espera la dentro em vez de sair para o perigo
                         continue
-                    order = 'ABC'
-                    dest = order[self.next_destination % 3]
+                    dest = self.order[self.next_destination % len(self.order)]
                     self.next_destination += 1
-                    cell.reset(dest)
+                    cell.reset(dest, self.health)
                     self.door = now
                     self.replan(cell, now)
                 continue
-            if perceive:
+            if perceive and cell.state != 'cry':
                 self.perceive(cell, bacteria, now)
             self.move(cell, dt, now)
 
     def door_watched(self, bacteria):
         """Alguma bacteria perto da saida do deposito e com ela a vista?"""
-        door = RBC_NODES['depot_out']
+        door = layout.RBC_NODES['depot_out']
         for actor in bacteria:
             p = actor.transform.position
             pos = (p.x, p.y-.95, p.z)
@@ -339,11 +358,14 @@ class Hemacias:
     def move(self, cell, dt, now):
         cell.moving = False
         if cell.path:
-            target = RBC_NODES[cell.path[0]]
+            target = layout.RBC_NODES[cell.path[0]]
         elif cell.tail is not None and cell.state == 'flee':
             target = cell.tail
         else:
-            if cell.state in ('flee', 'hide') and cell.node == 'depot':
+            if cell.state == 'cry':
+                # Chegou chorando ao bercario: entra e so sai de novo com outra caixa.
+                cell.state, cell.timer, cell.waited = 'inside', BALANCE['kid_respawn']+self.rng.uniform(0, 2.0), 0.0
+            elif cell.state in ('flee', 'hide') and cell.node == 'depot':
                 # Fugiu para a estacao: entra e sai de novo depois (uma por vez, sem bacteria na porta).
                 cell.state, cell.timer, cell.waited = 'inside', self.rng.uniform(2.0, 4.0), 0.0
             elif cell.state == 'flee':
@@ -351,16 +373,19 @@ class Hemacias:
             return
         dx, dz = target[0]-cell.pos[0], target[2]-cell.pos[2]
         dist = math.hypot(dx, dz)
-        speed = BALANCE['rbc_speed']*(1.3 if cell.state == 'flee' else self.queue(cell, dx/max(dist, 1e-6),
-                                                                                    dz/max(dist, 1e-6)))
+        fast = cell.state in ('flee', 'cry')
+        speed = self.speed*(1.3 if fast else self.queue(cell, dx/max(dist, 1e-6), dz/max(dist, 1e-6)))
         if dist < ARRIVE:
             if not cell.path:
                 cell.tail = None
                 return
             cell.node = cell.path.pop(0)
-            if not cell.path and cell.state == 'deliver' and cell.node in DESTINATIONS[cell.destination]:
+            if not cell.path and cell.state == 'deliver' and cell.node in layout.DESTINATIONS[cell.destination]:
                 self.deliveries[cell.destination] += 1
-                cell.state, cell.timer = 'inside', BALANCE['rbc_respawn']+self.rng.uniform(0, 2.5)
+                respawn = BALANCE['kid_respawn'] if self.kids else BALANCE['rbc_respawn']
+                cell.state, cell.timer = 'inside', respawn+self.rng.uniform(0, 2.5)
+                if self.kids:
+                    self.arena.state.graduate()
             return
         step = min(dist, speed*dt)
         cell.pos[0] += dx/dist*step
@@ -388,12 +413,18 @@ class Hemacias:
         return k
 
     def damage(self, ident, amount):
-        """Returns the drop position if the cell died."""
+        """Returns the drop position if the cell died (or, a kid, dropped its box)."""
         cell = self.cells[ident]
-        if not cell.alive:
+        if not cell.hittable:
             return None
         cell.hp -= amount
         if cell.hp <= 0:
+            if self.kids:
+                # Larga a caixa de treino (vira recurso) e volta chorando ao bercario pelas ruas.
+                cell.state, cell.tail, cell.threats = 'cry', None, {}
+                cell.carrying = False
+                cell.path, _ = plan(cell.pos, ['depot'])
+                return tuple(cell.pos)
             cell.state, cell.timer = 'dead', BALANCE['rbc_respawn']+self.rng.uniform(0, 2.5)
             return tuple(cell.pos)
         return None
@@ -402,11 +433,15 @@ class Hemacias:
         return [c.snapshot() for c in self.cells if c.alive]
 
 
+KID_SCALE = .72  # eritroblastos (criancas da medula) desenhados e atingidos menores
+
+
 class RemoteHemacias:
     """Client mirror of the server snapshot with simple interpolation."""
 
     def __init__(self):
         self.cells = {}
+        self.scale = KID_SCALE if layout.MODE == 'training' else 1.0
 
     def apply(self, data):
         seen = set()
@@ -414,7 +449,8 @@ class RemoteHemacias:
             seen.add(ident)
             cell = self.cells.get(ident)
             if cell is None or cell['state'] in ('dead', 'inside'):
-                self.cells[ident] = dict(pos=[x, y, z], target=[x, y, z], yaw=yaw, state=state, hp=hp, moving=moving, phase=0.0)
+                self.cells[ident] = dict(pos=[x, y, z], target=[x, y, z], yaw=yaw, state=state, hp=hp, moving=moving, phase=0.0,
+                                         scale=self.scale)
             else:
                 cell.update(target=[x, y, z], yaw=yaw, state=state, hp=hp, moving=moving)
         for ident in list(self.cells):

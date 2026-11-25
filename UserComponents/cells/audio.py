@@ -21,7 +21,7 @@ POLY = {"shot_rifle": 8, "shot_shotgun": 4, "shot_sniper": 3, "shot_organic": 8,
 SFX = ("shot_rifle", "shot_shotgun", "shot_sniper", "shot_organic", "shot_spit", "reload", "swing", "punch",
        "slam", "dash", "explosion", "splash", "net", "chain", "needle", "ult", "ult_ready", "kill", "death",
        "respawn", "heal", "shield", "absorb", "receptor", "turret", "wall", "crumble", "pop", "hiss", "rain",
-       "hit", "hurt", "event")
+       "hit", "hurt", "event", "heartbeat")
 
 # Arma principal de cada heroi: (som, pitch).
 GUN = {"neutrophil": ("shot_rifle", 1.0), "macrophage": ("shot_shotgun", 1.0), "b_cell": ("shot_sniper", 1.05),
@@ -63,6 +63,8 @@ class AudioFeedback(Component):
         self.escort = 0.0
         self.go_timer = -1.0
         self.walls, self.minions = set(), set()
+        self.systole = None     # coracao: fase anterior do batimento
+        self.valves = {}        # coracao: estado anterior de cada valva (aberta?)
 
     # -- carga ----------------------------------------------------------------
     def init(self):
@@ -172,6 +174,24 @@ class AudioFeedback(Component):
                              force=True)
         self.winner = state.winner
         self.watch_platelets(me, dt)
+        self.watch_heart()
+
+    def watch_heart(self):
+        """Coracao: "tum-tum" a cada sistole e o baque dos portoes das valvas (posicionado)."""
+        arena = self.arena
+        if not arena.valves:
+            return
+        from .heart import beat
+        systole = beat(arena.state.elapsed)[0]
+        if systole and self.systole is False:
+            self.play("heartbeat", .5)
+        self.systole = systole
+        for v in arena.valves:
+            opened = arena.valve_open.get(v['id'], True)
+            before = self.valves.get(v['id'])
+            if before is not None and opened != before:
+                self.play_at("slam", tuple(v['pos']), .7, .62 if not opened else .9, 40.0)
+            self.valves[v['id']] = opened
 
     def watch_actor(self, actor):
         """Eventos visiveis de qualquer ator: tiros, especial, mortes (com a fala do autor)."""

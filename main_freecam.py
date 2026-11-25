@@ -8,7 +8,8 @@ from EasyCells3D import Game
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Camera livre do Bairro Arterial")
+    parser = argparse.ArgumentParser(description="Camera livre dos mapas")
+    parser.add_argument("--map", default=None, help="Chave do mapa (bairro, timo, medula, coracao)")
     parser.add_argument("--output", type=Path, default=Path("capturas"),
                         help="Pasta dos prints e dados da camera (padrao: capturas)")
     parser.add_argument("--frames", type=int, default=0, help=argparse.SUPPRESS)
@@ -16,6 +17,9 @@ def main():
     parser.add_argument("--hidden", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
     os.chdir(Path(__file__).resolve().parent)
+    if args.map:
+        from UserComponents.cells import layout
+        layout.select(args.map)
     rl.set_trace_log_level(rl.LOG_WARNING)
     if args.hidden:
         rl.set_config_flags(rl.FLAG_WINDOW_HIDDEN)

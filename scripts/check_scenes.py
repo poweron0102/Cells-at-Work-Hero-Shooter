@@ -12,12 +12,15 @@ from UserComponents.cells.session import connect, disconnect
 from UserComponents.cells import replay
 
 
+MAP = next((a.split("=", 1)[1] for a in sys.argv[1:] if a.startswith("--map=")), None)
+
+
 class SceneProbe(Component):
     def __init__(self):
         self.frame = 0
 
     def capture(self, name):
-        rl.take_screenshot(f".scratch/scenes/{name}.png")
+        rl.take_screenshot(f".scratch/scenes/{MAP + '_' if MAP else ''}{name}.png")
         print(f"CAPTURE {name}: {len(self.game.cameras)} cameras / {len(self.game.item_list)} root items", flush=True)
 
     def loop(self):
@@ -26,6 +29,8 @@ class SceneProbe(Component):
         if f == 8:
             self.capture("menu")
             connect(game, "127.0.0.1", 0, True, "Worker 1146")
+            if MAP:
+                game.session.map.value = MAP  # direto: não grava a escolha em saves/config.json
             game.new_game("lobby")
         elif f == 16:
             self.capture("lobby")
@@ -40,10 +45,13 @@ class SceneProbe(Component):
             game.session.arena.actors[0].damage(1000, game.session.arena.actors[3])
         elif f == 156:
             self.capture("respawn")
-            game.session.arena.state.escort = 60
+            state = game.session.arena.state
+            state.escort = min(60, state.escort_total*.5)
         elif f == 165:
             self.capture("escort")
-            game.session.arena.state.escort = game.session.arena.state.escort_total
+            state = game.session.arena.state
+            state.escort = state.escort_total
+            state.seal()  # treino (medula) nao fecha pelo progresso: sela direto
         elif f == 173:
             self.capture("wound_closed")
             game.session.arena.state.winner = "cells"

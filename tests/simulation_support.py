@@ -15,7 +15,9 @@ def headless_game():
     return Game(level, "Simulation test", render_target=True)
 
 
-def mount_arena(game):
+def mount_arena(game, map_key='bairro'):
+    from UserComponents.cells import layout
+    layout.select(map_key)
     game.physics_world = BulletPhysicsWorld()
     arena = game.CreateItem().AddComponent(Arena())
     arena.navigator = build_district(game)

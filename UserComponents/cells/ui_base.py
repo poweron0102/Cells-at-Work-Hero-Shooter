@@ -126,7 +126,14 @@ class Canvas(RenderableUI):
         self.text("EASYCELLS 3D     /     FAN PROTOTYPE", 42, 685, 12, MUTED)
         self.text("OBJETIVOS DEFINEM A VITORIA. O CORPO DEFINE O COMBATE.", 785, 685, 11, MUTED)
 
+    def blocked(self):
+        """True enquanto a tela de configurações (``options``) está por cima desta."""
+        screen = getattr(self.game, "options", None)
+        return screen is not None and screen is not self and screen.blocking()
+
     def loop(self):
+        if self.blocked():
+            return
         if rl.is_mouse_button_pressed(rl.MouseButton.MOUSE_BUTTON_LEFT):
             for rect, action in reversed(self.controls):
                 if rl.check_collision_point_rec(rl.get_mouse_position(), rect):

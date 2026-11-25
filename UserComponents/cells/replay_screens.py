@@ -180,7 +180,9 @@ class ReplayLibrary(MangaCanvas):
         info_x = x + 18
         buttons = 236
         width = R - info_x - buttons
-        self.fit(f"OPERAÇÃO ABRASION · SALA DE {str(meta.get('host', '?')).upper()}", info_x, y + 8, width, 19,
+        from .maps import info as map_info
+        place = map_info(meta.get("map", "bairro")).title.upper()
+        self.fit(f"{place} · SALA DE {str(meta.get('host', '?')).upper()}", info_x, y + 8, width, 19,
                  font="title")
         tx = info_x
         duration = meta.get("duration")
