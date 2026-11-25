@@ -89,8 +89,13 @@ class PlayerInput(Component):
             sens = .0024*(.45 if actor.zoom else 1)
             self.yaw = (self.yaw + delta.x*sens) % math.tau
             self.pitch = max(-1.45, min(1.45, self.pitch-delta.y*sens))
-        self.camera.vfov = ZOOM_FOV if actor.zoom else BASE_FOV
+        fov = ZOOM_FOV if actor.zoom else BASE_FOV
+        plan = getattr(actor, 'leap_plan', None)
+        if plan is not None:  # Salto de impacto: o campo de visao abre com a velocidade
+            fov += 9*math.sin(min(1.0, plan['t']/max(plan['time'], .01))*math.pi*.5)
+        self.camera.vfov = fov
         self.place_camera(actor)
+        self.shake(actor)
         down = lambda key: captured and rl.is_key_down(key)
         k = rl.KeyboardKey
         self.kit_card = rl.is_key_down(k.KEY_F1)
@@ -140,6 +145,18 @@ class PlayerInput(Component):
             eye = eye+(want_eye-eye)*k
         self.camera.transform.position = eye
         self.camera.transform.rotation = rotation
+
+    def shake(self, actor):
+        """Tremor curto da camera (pouso do Salto de impacto): ``actor.shake`` em segundos."""
+        k = min(1.0, getattr(actor, 'shake', 0.0)/.45)
+        if k <= 0:
+            return
+        k *= k
+        t = rl.get_time()
+        offset = Vec3(math.sin(t*71.0), math.sin(t*53.0+1.7), math.sin(t*61.0+.6))*(.09*k)
+        self.camera.transform.position = self.camera.transform.position+offset
+        roll = Quaternion.from_axis_angle(Vec3(0, 0, 1), math.sin(t*47.0)*.035*k)
+        self.camera.transform.rotation = self.camera.transform.rotation*roll
 
     def on_destroy(self):
         set_cursor_captured(False)

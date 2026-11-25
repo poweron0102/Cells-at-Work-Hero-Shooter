@@ -36,7 +36,7 @@ EFFECT = {"heal": ("heal", 1.0, .5), "repair": ("heal", .8, .4), "backstab": ("p
           "punch": ("punch", 1.0, .9), "slam": ("slam", 1.0, 1.0), "antibody": ("explosion", 1.2, .8),
           "burst": ("splash", 1.0, .8), "ult": ("ult", 1.0, .9), "spit": ("slam", .8, 1.0),
           "perforin": ("needle", .6, .8), "pop": ("pop", 1.0, .6), "spawn": ("pop", .7, .5),
-          "crumble": ("crumble", 1.0, .8), "shatter": ("crumble", 1.3, .6)}
+          "crumble": ("crumble", 1.0, .8), "shatter": ("crumble", 1.3, .6), "launch": ("dash", .7, .8)}
 ZONE = {"cloud": ("hiss", .8, .7), "rain": ("rain", 1.0, .9), "acid": ("hiss", 1.3, .35),
         "biofilm": ("splash", .6, .6), "dome": ("shield", .7, .8), "mature": ("hiss", .6, .7)}
 THROW = {"acid": ("swing", .8, .6), "antibody": ("swing", .9, .6)}

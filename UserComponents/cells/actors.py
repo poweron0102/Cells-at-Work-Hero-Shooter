@@ -15,6 +15,10 @@ from .kits import KitMixin
 from .visuals import CombatantVisual
 
 SHIELD_BASE = {"pneumococcus": 70}
+# Esferas de acerto: (altura do centro acima dos pes, raio, e cabeca?). Sentado = B-Cell na Chuva de
+# anticorpos: corpo e cabeca descem para o tamanho do heroi sentado no chao.
+STAND_HITBOXES = ((.8, .5, False), (1.57, .32, True))
+SIT_HITBOXES = ((.38, .42, False), (.74, .26, True))
 
 
 class Combatant(NetworkComponent, KitMixin):
@@ -68,6 +72,16 @@ class Combatant(NetworkComponent, KitMixin):
         p = self.transform.position
         return (p.x, p.y-.95, p.z)
 
+    @property
+    def sitting(self):
+        """B-Cell sentado no chao comandando a Chuva de anticorpos (replicado pelo status 'ult')."""
+        return self.hero == 'b_cell' and self.fx.get('ult', 0) > 0
+
+    def hitboxes(self):
+        """[(centro, raio, cabeca?)] das esferas de acerto deste quadro."""
+        x, y, z = self.feet
+        return [((x, y+h, z), r, head) for h, r, head in (SIT_HITBOXES if self.sitting else STAND_HITBOXES)]
+
     # -- dano ---------------------------------------------------------------
     def damage(self, amount, source, effect=None):
         """Called by the attacker (any peer); routed to the owner of the target."""
@@ -115,6 +129,8 @@ class Combatant(NetworkComponent, KitMixin):
             self.slow, self.slow_factor = effect['slow'][1], effect['slow'][0]
         if effect.get('knock') and self.body.enable:
             kx, ky, kz = effect['knock']
+            if self.leap_plan is not None:
+                self.end_leap()
             self.body.velocity = Vec3(kx, ky, kz)
             self.dash = 0
             self.grapple = 0
@@ -154,8 +170,14 @@ class Combatant(NetworkComponent, KitMixin):
     def status_fx(self, kind, seconds):
         if seconds > 0:
             self.fx[kind] = max(self.fx.get(kind, 0), seconds)
+            self.fx_len[kind] = self.fx[kind]
         else:
             self.fx.pop(kind, None)
+
+    @Rpc(send_to=SendTo.NOT_ME, require_owner=False, protocol=Protocol.UDP)
+    def sync_focus(self, x, y, z):
+        """Centro da Chuva de anticorpos (o B-Cell a move com WASD); a zona o segue (Arena.loop)."""
+        self.ult_focus = (x, y, z)
 
     @Rpc(send_to=SendTo.NOT_ME, require_owner=False)
     def sync_front(self, kind, radius):
@@ -169,6 +191,8 @@ class Combatant(NetworkComponent, KitMixin):
         self.placing = self.place = None
         if self.front:
             self.set_front_state(None)
+        if self.leap_plan is not None:
+            self.end_leap()
         source.credit_kill(self.transform.position.to_tuple)
         self.body.enable = False
         self.arena.eliminated(self.slot, source.slot, self.deaths.value, self.transform.position.to_tuple)
@@ -370,7 +394,11 @@ class Combatant(NetworkComponent, KitMixin):
                 speed *= 1.25 if friendly else .6
         if self.root > 0:
             self.dash = self.grapple = 0
-        if self.dash > 0 and self.dash_dir is not None:
+            if self.leap_plan is not None:
+                self.end_leap()  # preso no ar: cai sem esmagar
+        if self.leap_plan is not None:
+            self.update_leap(dt)
+        elif self.dash > 0 and self.dash_dir is not None:
             self.body.velocity = self.dash_dir
             self.dash_hits()
         elif self.stagger > 0:
@@ -379,13 +407,7 @@ class Combatant(NetworkComponent, KitMixin):
             self.controller.move_speed = speed
             self.controller.jump_height = kit.jump_height
             self.controller.move(move if speed > 0 else Vec3(0, 0, 0))
-        if self.leap:
-            self.leap += dt
-        if self.leap > .3 and self.controller.is_grounded:
-            self.leap = 0
-            self.area_damage(4, 50, knock=6)
-            self.arena.effect('slam', self.feet, 4)
-        if cmd.get("jump") and not self.previous.get("jump") and self.root <= 0:
+        if cmd.get("jump") and not self.previous.get("jump") and self.root <= 0 and not self.sitting:
             self.controller.jump()
         if cmd.get("reload"):
             self.weapon.reload()

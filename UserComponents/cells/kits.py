@@ -14,9 +14,10 @@ import math
 import time
 from EasyCells3D.Geometry import Vec3
 from .catalog import HEROES, CELLS, BALANCE
-from .combat import direction, cast, melee_targets, impact_kind, EYE
+from .combat import direction, cast, melee_targets, impact_kind, assist_target, skill_reach, EYE
 
 GRAVITY = 18.0
+LEAP_MIN = 3.5  # m: mirando os proprios pes, o Salto de impacto ainda avanca isso
 PLACE_RANGE = {'turret': 12.0, 'wall': 10.0}
 STATUS_KINDS = ('root', 'antiheal', 'perforin', 'ult', 'absorb')
 
@@ -48,6 +49,8 @@ class KitMixin:
         self.charge = 0.0
         self.boost = self.capsule = self.dash = self.reveal = self.marked = 0
         self.slow = self.slow_factor = self.haste = self.guard = self.leap = self.stagger = 0
+        self.leap_plan = None     # Salto de impacto em voo (start_leap)
+        self.shake = 0.0          # tremor da camera do jogador local (pouso do salto)
         self.root = self.antiheal = self.frenzy = self.shield_hold = 0
         self.ult = self.ult_cam = 0
         self.ult_on = False
@@ -78,13 +81,14 @@ class KitMixin:
         self.rain_tick = 0
         self.swing = getattr(self, 'swing', 0)
         self.fx = {}
+        self.fx_len = {}          # duracao total de cada efeito de status (progresso das poses)
         self.absorbed_fx = 0
         self.minion_serial = getattr(self, 'minion_serial', 0)
 
     TIMERS = ("ability_cd", "secondary_cd", "ability2_cd", "melee_cd", "boost", "capsule", "dash", "reveal",
               "marked", "slow", "haste", "stagger", "guard", "hit_marker", "hurt", "kill_marker", "absorbed",
               "root", "antiheal", "frenzy", "shield_hold", "ult", "ult_cam", "engulf_lock", "barrier_lock",
-              "dash_kill", "grapple", "slide", "absorbed_fx")
+              "dash_kill", "grapple", "slide", "absorbed_fx", "shake")
 
     @property
     def eye(self):
@@ -222,6 +226,8 @@ class KitMixin:
     def handle_input(self, cmd, dt):
         if not cmd.get('fire'):
             self.fire_block = False
+        if self.hero == 'b_cell' and self.ult > 0 and self.ult_focus is not None:
+            self.steer_rain(cmd, dt)
         if self.placing:
             self.update_placement(cmd)
             return
@@ -328,10 +334,7 @@ class KitMixin:
         elif h == 'staphylococcus' and self.secondary_cd <= 0:
             self.secondary_cd = cd
             self.mark_action()
-            hits = cast(self, self.aim(), 40)
-            if hits:
-                self.arena.tracer(self.eye.to_tuple, hits[0]['point'].to_tuple, 'sticky', self.slot, impact_kind(hits))
-                self.apply_hit(hits[0], 35, dict(slow=(.4, 2.5)))
+            self.skill_shot('sticky', 40, 35, dict(slow=(.4, 2.5)), trace_miss=False)
 
     # ------------------------------------------------------------------ Q
     def ability(self):
@@ -362,9 +365,7 @@ class KitMixin:
         elif h == 'macrophage':
             self.hook()
         elif h == 'killer_t':
-            aim = direction(self.yaw)
-            self.body.velocity = Vec3(aim.x*12, 8.5, aim.z*12)
-            self.leap = .01
+            self.start_leap()
         elif h == 'pneumococcus':
             self.start_dash(.4, 19)
         elif h == 'pseudomonas':
@@ -379,9 +380,80 @@ class KitMixin:
         self.ability_cd = cd
         self.mark_action(.6)
 
+    # ------------------------------------------------------------------ salto de impacto
+    def leap_target(self):
+        """Ponto de pouso (centro do corpo) do Salto de impacto: onde a mira toca o mapa, preso
+        entre ``LEAP_MIN`` e ``leap_range`` metros na horizontal e apoiado no chao abaixo."""
+        world = self.game.physics_world
+        reach = BALANCE['leap_range']
+        p = self.transform.position
+        flat = direction(self.yaw)
+        aim = self.aim()
+        hit = world.raycast(self.eye, aim, reach*1.6, 1)
+        point = (hit.point-flat*.6) if hit is not None else self.eye+aim*reach
+        dx, dz = point.x-p.x, point.z-p.z
+        d = math.hypot(dx, dz)
+        if d > reach:
+            dx, dz, d = dx*reach/d, dz*reach/d, reach
+        if d < LEAP_MIN:
+            dx, dz, d = flat.x*LEAP_MIN, flat.z*LEAP_MIN, LEAP_MIN
+        x, z = p.x+dx, p.z+dz
+        top = max(p.y, point.y)+2.0
+        ground = world.raycast(Vec3(x, top, z), Vec3(0, -1, 0), top-p.y+12, 1)
+        y = ground.point.y+.95 if ground is not None and ground.normal is not None and ground.normal.y > .5 else p.y
+        return Vec3(x, y, z), d
+
+    def start_leap(self):
+        """Arco balistico curto e pesado ate o ponto mirado: o tempo de voo cresce pouco com a
+        distancia (``leap_time`` no alcance maximo) e a gravidade do salto e calculada para pousar
+        nele; esmaga ao tocar o chao (``update_leap``)."""
+        target, d = self.leap_target()
+        p = self.transform.position
+        seconds = BALANCE['leap_time']*(.65+.35*d/BALANCE['leap_range'])
+        rise = target.y-p.y
+        apex = max(1.5+.1*d, rise+1.0)
+        g = ((math.sqrt(2*apex)+math.sqrt(2*max(.05, apex-rise)))/seconds)**2
+        self.leap_plan = dict(t=0.0, time=seconds, g=g, vy=math.sqrt(2*g*apex),
+                              vx=(target.x-p.x)/seconds, vz=(target.z-p.z)/seconds, target=target.to_tuple)
+        self.leap = seconds
+        self.dash = self.grapple = 0
+        self.arena.effect('launch', self.feet, 1.8)
+        self.status_fx('leap', seconds+1.5)  # termina no pouso (end_leap)
+
+    def update_leap(self, dt):
+        """Roda no lugar do controle de movimento enquanto o heroi esta no ar."""
+        plan = self.leap_plan
+        plan['t'] += dt
+        t = plan['t']
+        late = t > plan['time']
+        vy = max(-34.0, plan['vy']-plan['g']*t)
+        # Passou do tempo sem tocar o chao (alvo atras de um muro, borda): cai reto e rapido.
+        vx, vz = (0.0, 0.0) if late else (plan['vx'], plan['vz'])
+        self.body.velocity = Vec3(vx, vy, vz)
+        if t > .12 and vy < 0 and self.controller.is_grounded:
+            self.land_leap()
+        elif t > plan['time']+1.5:
+            self.end_leap()
+
+    def land_leap(self):
+        self.end_leap()
+        v = self.body.velocity
+        self.body.velocity = Vec3(0, min(0.0, v.y), 0)
+        radius = BALANCE['leap_radius']
+        self.area_damage(radius, BALANCE['leap_damage'], knock=6)
+        self.arena.effect('slam', self.feet, radius, 'leap')
+        self.status_fx('slam', .5)
+        self.shake = max(self.shake, .45)
+
+    def end_leap(self):
+        self.leap_plan = None
+        self.leap = 0
+        self.status_fx('leap', 0)
+
     def hook(self):
-        hits = cast(self, self.aim(), 20)
-        end = hits[0]['point'] if hits else self.eye+self.aim()*20
+        aim = self.assisted_aim('hook')
+        hits = cast(self, aim, 20)
+        end = hits[0]['point'] if hits else self.eye+aim*20
         self.arena.tracer(self.eye.to_tuple, end.to_tuple, 'hook', self.slot, impact_kind(hits))
         if hits and hits[0]['kind'] == 'actor':
             target = hits[0]['target']
@@ -507,7 +579,7 @@ class KitMixin:
             self.arena.tracer(self.eye.to_tuple, hit.point.to_tuple, 'flagellum', self.slot, 'world')
             self.grapple, self.grapple_point = .9, hit.point
         elif h == 'streptococcus':
-            hits = cast(self, aim, 22)
+            hits = cast(self, self.assisted_aim('chain'), 22)
             if not hits:
                 return
             self.arena.tracer(self.eye.to_tuple, hits[0]['point'].to_tuple, 'chain', self.slot, impact_kind(hits))
@@ -517,10 +589,16 @@ class KitMixin:
         self.ability2_cd = cd
         self.mark_action(.6)
 
-    def skill_shot(self, kind, reach, damage, effect):
-        hits = cast(self, self.aim(), reach)
-        end = hits[0]['point'] if hits else self.eye+self.aim()*reach
-        self.arena.tracer(self.eye.to_tuple, end.to_tuple, kind, self.slot, impact_kind(hits))
+    def assisted_aim(self, kind):
+        """Mira da habilidade de tiro unico ``kind``: vai no inimigo dentro do cone de assistencia (assist_angle)."""
+        return assist_target(self, self.aim(), skill_reach(self.hero, kind))[1]
+
+    def skill_shot(self, kind, reach, damage, effect, trace_miss=True):
+        aim = self.assisted_aim(kind)
+        hits = cast(self, aim, reach)
+        end = hits[0]['point'] if hits else self.eye+aim*reach
+        if hits or trace_miss:
+            self.arena.tracer(self.eye.to_tuple, end.to_tuple, kind, self.slot, impact_kind(hits))
         if hits:
             self.apply_hit(hits[0], damage, effect)
 
@@ -602,7 +680,9 @@ class KitMixin:
             if down is not None:
                 point = down.point
             self.ult_focus = (point.x, point.y, point.z)
-            self.zone('rain', 7, 4.5, self.ult_focus)
+            self.zone('rain', 7, 4.5, self.ult_focus, follow='focus')
+            self.sync_focus(*self.ult_focus)
+            self.focus_clock = 0.0
             self.zoom = False
         elif h == 'killer_t':
             pass
@@ -629,6 +709,55 @@ class KitMixin:
                                         (start.x, start.y-.95, start.z), yaw, BALANCE['clone_health'], 10)
         self.ult = seconds
         self.status_fx('ult', seconds)
+
+    def steer_rain(self, cmd, dt):
+        """Chuva de anticorpos: WASD move a area em relacao a camera aerea (que olha na direcao da mira);
+        bots a levam ate o inimigo mais proximo. A area segue a rua: sobe rampas e caixas, mas nao
+        atravessa paredes de predio nem passa de ``rain_range`` do B-Cell."""
+        fx, fy, fz = self.ult_focus
+        if self.is_bot:
+            enemies = [a for a in self.arena.actors.values() if a.team != self.team and a.alive]
+            target = min(enemies, key=lambda a: math.dist(a.feet, self.ult_focus), default=None)
+            if target is None:
+                return
+            mx, mz = target.feet[0]-fx, target.feet[2]-fz
+        else:
+            f = direction(self.yaw)
+            x, z = cmd.get('x', 0), cmd.get('z', 0)
+            mx, mz = f.x*z+math.cos(self.yaw)*x, f.z*z+math.sin(self.yaw)*x
+        length = math.hypot(mx, mz)
+        if length < (.3 if self.is_bot else 1e-3):
+            return
+        step = BALANCE['rain_speed']*dt/length
+        mx, mz = mx*step, mz*step
+        moved = (self.rain_step(fx, fy, fz, mx, mz) or self.rain_step(fx, fy, fz, mx, 0.0)
+                 or self.rain_step(fx, fy, fz, 0.0, mz))  # encostou numa parede: desliza ao longo dela
+        if moved is None:
+            return
+        self.ult_focus = moved
+        self.focus_clock = getattr(self, 'focus_clock', 0.0)-dt
+        if self.focus_clock <= 0:
+            self.focus_clock = .05
+            self.sync_focus(*moved)
+
+    def rain_step(self, fx, fy, fz, dx, dz):
+        """Novo centro da Chuva depois de andar (dx, dz) ou None se bloqueado."""
+        length = math.hypot(dx, dz)
+        if length < 1e-6:
+            return None
+        nx, nz = fx+dx, fz+dz
+        p = self.transform.position
+        far = math.hypot(nx-p.x, nz-p.z)
+        if far > BALANCE['rain_range'] and far > math.hypot(fx-p.x, fz-p.z):
+            return None
+        world = self.game.physics_world
+        # Parede: raio horizontal 2,2 m acima do chao (passa por cima de caixas e carros, nao de predios).
+        if world.raycast(Vec3(fx, fy+2.2, fz), Vec3(dx/length, 0, dz/length), length+.4, 1) is not None:
+            return None
+        ground = world.raycast(Vec3(nx, fy+2.4, nz), Vec3(0, -1, 0), 8, 1)
+        if ground is None:
+            return None
+        return (nx, ground.point.y, nz)
 
     def spit(self):
         """Macrofago: cospe o que engoliu numa onda frontal e encerra o Banquete."""

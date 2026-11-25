@@ -35,7 +35,7 @@ class CharacterAssetTests(unittest.TestCase):
                   'Wave': 'forearm.R'}
         for key, expected in (('platelet', {'Idle', 'Walk', 'Repair'}),
                               ('red_blood_cell', {'Idle', 'Walk', 'Run', 'Carry', 'Wave'}),
-                              ('b_cell', {'Idle', 'Walk', 'Run', 'Jump', 'Land', 'Fire', 'Reload', 'Melee'})):
+                              ('b_cell', {'Idle', 'Walk', 'Run', 'Jump', 'Land', 'Fire', 'Reload', 'Melee', 'Sit'})):
             gltf, binary, meta = self.load(key)
             for node in gltf['nodes']:
                 if 'mesh' in node:

@@ -91,6 +91,9 @@ for _k, _v in STYLES.items():
 
 SPECIAL_KINDS = ('mark', 'sticky', 'acid', 'beam', 'net', 'hook', 'chain', 'flagellum', 'perforin', 'toxin',
                  'capsule', 'turret', 'clone')
+# Habilidades de tiro unico com efeito: cabeca propria (anel girando + forma do efeito) e onda no impacto,
+# para nunca parecerem um tiro comum.
+SKILL_KINDS = ('net', 'perforin', 'toxin', 'sticky', 'hook', 'chain')
 
 
 def style_for(kind, hero):
@@ -373,6 +376,10 @@ class ShotEffects(Renderable3D):
                 self.particles.append(dict(kind='drop', pos=b, vel=v, age=0, life=self.rng.uniform(.2, .4),
                                            size=self.rng.uniform(.03, .05), color=pink, core=(255, 230, 240), g=0))
             return
+        if shot.get('kind') in SKILL_KINDS:
+            # Onda da habilidade: anel que abre no ponto atingido (maior se pegou alguem).
+            self.particles.append(dict(kind='shock', pos=b, vel=(0, 0, 0), age=0, life=.45,
+                                       size=1.5 if kind == 'actor' else .8, color=st['glow'], g=0))
         if kind == 'world':
             hit = self.game.physics_world.raycast(Vec3(*b) - d * .25, d, .6, 1 | 8)
             if hit is not None and hit.normal is not None:
@@ -440,7 +447,8 @@ class ShotEffects(Renderable3D):
         fwd, up = t.forward, t.up
         right = fwd.cross(up).normalize()
         R, U = right.to_tuple, up.to_tuple
-        textures()
+        from .ability_fx import textures as all_textures
+        all_textures()  # inclui a textura da rede ('net')
         batch = Batch()
         for shot in list(self.arena.tracers):
             if not shot.get('seen'):
@@ -500,11 +508,60 @@ class ShotEffects(Renderable3D):
         h, tl = at(head_d), at(tail_d)
         batch.add((ADD, 'streak'), ribbon, tl, h, st['glow_w'], eye, st['glow'], 170, MIN_ANGLE * 4)
         batch.add((ADD, 'streak'), ribbon, tl, h, st['width'], eye, st['core'], 255, MIN_ANGLE)
-        if st['blob']:
+        if shot.get('kind') in SKILL_KINDS:
+            self.draw_skill(shot, batch, eye, R, U, at, head_d, tail_d)
+        if shot.get('kind') == 'net':
+            pass  # a cabeça é a própria malha (draw_skill), sem bolha brilhante por cima
+        elif st['blob']:
             batch.add((ADD, 'glow'), billboard, h, st['blob'] * 2.6, R, U, st['glow'], 200)
             batch.add((ADD, 'core'), billboard, h, st['blob'], R, U, st['core'], 255)
         elif head_d < dist:
             batch.add((ADD, 'glow'), billboard, h, st['glow_w'] * .9, R, U, st['glow'], 120)
+
+    def draw_skill(self, shot, batch, eye, R, U, at, head_d, tail_d):
+        """Cabeça das habilidades de tiro único: anel de assinatura girando e a forma do efeito."""
+        kind, st, age = shot['kind'], shot['style'], shot['age']
+        h = at(head_d)
+        travel = head_d < shot['dist']
+        if travel and kind != 'net':
+            batch.add((ADD, 'ring'), billboard, h, .24 + .05 * math.sin(age * 40), R, U, st['glow'], 220, age * 9)
+            batch.add((ADD, 'glow'), billboard, h, .5, R, U, st['glow'], 140)
+        if kind == 'net' and travel:
+            # A rede abre enquanto voa: malha branca com contorno escuro (legível sobre fundo claro).
+            k = min(1.0, head_d / 6.0)
+            size = .14 + .5 * k
+            for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+                o = size * .035
+                q = (h[0] + (R[0] * dx + U[0] * dy) * o, h[1] + (R[1] * dx + U[1] * dy) * o,
+                     h[2] + (R[2] * dx + U[2] * dy) * o)
+                batch.add((ALPHA, 'net'), billboard, q, size, R, U, (40, 48, 60), 170, age * 4)
+            batch.add((ALPHA, 'net'), billboard, h, size, R, U, (255, 255, 248), 255, age * 4)
+        elif kind == 'perforin':
+            # Hélice de gotas vermelhas atrás da agulha.
+            for i in range(12):
+                d = head_d - i * .3
+                if d <= tail_d - 1.5 or d < 0:
+                    break
+                p = at(d)
+                a = age * 26 + i * .85
+                c, s = math.cos(a) * .13, math.sin(a) * .13
+                q = (p[0] + R[0] * c + U[0] * s, p[1] + R[1] * c + U[1] * s, p[2] + R[2] * c + U[2] * s)
+                batch.add((ADD, 'core'), billboard, q, .055, R, U, (255, 96, 96), int(240 * (1 - i / 12)))
+        elif kind in ('toxin', 'sticky') and travel:
+            # Respinga pelo caminho.
+            if self.rng.random() < .6:
+                self.particles.append(dict(kind='drop', pos=h, vel=(self.rng.uniform(-.6, .6), self.rng.uniform(-.2, .6),
+                                                                  self.rng.uniform(-.6, .6)), age=0,
+                                           life=self.rng.uniform(.3, .55), size=self.rng.uniform(.03, .05),
+                                           color=st['glow'], core=st['core'], g=9.0))
+            if kind == 'toxin':
+                batch.add((ALPHA, 'glow'), billboard, at(max(0.0, head_d - .6)), .45, R, U, (120, 60, 170), 120)
+        elif kind in ('hook', 'chain'):
+            # Elos ao longo da corda até a cabeça.
+            n = min(70, int(head_d / .45))
+            for i in range(1, n + 1):
+                p = at(i * .45)
+                batch.add((ADD, 'ring'), billboard, p, .085, R, U, st['core'], 220, (i % 2) * 1.57)
 
     SPIT_CONVERGE = .12  # s até o glob visual (saído do cano) encostar na trajetória simulada (do olho)
 
@@ -626,6 +683,9 @@ class ShotEffects(Renderable3D):
             elif kind == 'flash':
                 batch.add((ADD, 'star'), billboard, p['pos'], p['size'] * (.6 + .4 * k), R, U, p['color'],
                           int(255 * k))
+            elif kind == 'shock':
+                batch.add((ADD, 'ring'), billboard, p['pos'], p['size'] * (.25 + .9 * (1 - k)), R, U, p['color'],
+                          int(255 * k * k))
             else:
                 grow = 1 + (1 - k) * 2.2
                 batch.add((ALPHA, 'glow'), billboard, p['pos'], p['size'] * grow, R, U, p['color'], int(110 * k * k))

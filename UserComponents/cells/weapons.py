@@ -346,6 +346,7 @@ class ViewModel(Renderable3D):
         self.prev_sec = self.prev_ability = 0.0
         self.prev_swing = 0
         self.prev_grounded, self.prev_vy = True, 0.0
+        self.prev_slam = 0.0
         self.bob_phase = 0.0
         self.sprint = 0.0
         self.equip = 1.0
@@ -420,6 +421,13 @@ class ViewModel(Renderable3D):
             self.rot.kick(0, .1)
             self.rot.kick(2, .08)
         self.prev_sec, self.prev_ability = actor.secondary_cd, actor.ability_cd
+        slam = actor.fx.get('slam', 0.0)
+        if slam > self.prev_slam + .05:
+            # Pouso do Salto de impacto: a arma afunda com o golpe no chão.
+            self.pos.kick(1, -.08)
+            self.rot.kick(0, -.28)
+            self.rot.kick(2, self.rng.uniform(-.12, .12))
+        self.prev_slam = slam
         self.equip = min(1.0, self.equip + dt / .45)
         self.fire_t += dt
         self.melee_t += dt
@@ -559,6 +567,16 @@ class ViewModel(Renderable3D):
                 pz += .06 * chop
                 px += .04 * chop
                 py += .02 * up - .03 * chop
+        # Salto de impacto: ergue a arma na subida e a crava para baixo na descida.
+        plan = getattr(actor, 'leap_plan', None)
+        if plan is not None:
+            k = min(1.0, plan['t'] / max(plan['time'], .01))
+            up = smooth(0.0, .3, k) * (1 - smooth(.5, .9, k))
+            down = smooth(.5, .9, k)
+            pitch += .38 * up - .42 * down
+            py += .035 * up - .05 * down
+            pz -= .05 * up - .02 * down
+            roll += .18 * up
         # Saque.
         e = self.equip
         ee = 1 - (1 - e) ** 3

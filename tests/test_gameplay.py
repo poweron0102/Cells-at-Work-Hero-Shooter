@@ -101,6 +101,74 @@ class GameplayTests(unittest.TestCase):
             self.assertIn(b, npcs.GRAPH[a])
         self.assertNotEqual(cell.path[0], 'SW')  # never runs through the bacterium
 
+    def test_scared_cells_scatter_in_different_safe_directions(self):
+        hem, cell = self.first_rbc()
+        # Junction with the delivery street watched on both sides: each scared cell draws its own escape.
+        threats = {3: (RBC_NODES['A_e'], hem.clock), 4: (RBC_NODES['WSc'], hem.clock)}
+        firsts, spots = set(), set()
+        for _ in range(24):
+            cell.reset('A')
+            cell.pos = list(RBC_NODES['WBs'])
+            cell.threats = dict(threats)
+            hem.replan(cell, hem.clock)
+            self.assertEqual(cell.state, 'flee')
+            firsts.add(cell.path[0])
+            for a, b in zip(cell.path, cell.path[1:]):
+                self.assertIn(b, npcs.GRAPH[a])  # still along the streets
+            route = [cell.pos]+[RBC_NODES[n] for n in cell.path]
+            cost = sum(npcs.leg_cost(p, q, [t[0] for t in threats.values()], 9.0)-math.dist(p, q)
+                       for p, q in zip(route, route[1:]))
+            self.assertEqual(cost, 0)  # never runs towards a threat
+            if cell.tail:
+                spots.add((round(cell.tail[0], 1), round(cell.tail[2], 1)))
+        self.assertGreaterEqual(len(firsts), 2, firsts)
+        self.assertGreaterEqual(len(spots), 4, spots)
+
+    def test_bacterium_close_by_scares_even_with_a_safe_detour(self):
+        hem, cell = self.first_rbc()
+        cell.pos = list(RBC_NODES['S'])
+        cell.threats = {3: ((cell.pos[0]+3, 0, cell.pos[2]+2), hem.clock)}
+        hem.replan(cell, hem.clock)
+        self.assertEqual(cell.state, 'flee')
+        cell.threats.clear()
+        cell.calm_since = hem.clock-10
+        hem.perceive(cell, [], hem.clock)
+        self.assertEqual(cell.state, 'deliver')
+
+    def test_cells_leave_the_depot_one_at_a_time_and_wait_while_the_door_is_watched(self):
+        hem = self.arena.hemacias
+        for cell in hem.cells:
+            cell.state, cell.timer = 'inside', 99
+        a, b = hem.cells[0], hem.cells[1]
+        a.timer = b.timer = 0
+        bacterium = self.arena.actors[3]
+        door = RBC_NODES['depot_out']
+        bacterium.body.teleport(Vec3(door[0], door[1]+1, door[2]-6))
+        step(self.game, 1/30)
+        hem.tick(1/30, [bacterium])
+        self.assertEqual((a.state, b.state), ('inside', 'inside'))
+        bacterium.body.teleport(Vec3(60, 1, -60))
+        step(self.game, 1/30)
+        hem.tick(1/30, [bacterium])
+        self.assertEqual(sum(c.state != 'inside' for c in (a, b)), 1)
+        for _ in range(int(npcs.DOOR_GAP*30)+2):
+            hem.tick(1/30, [])
+        self.assertNotIn('inside', (a.state, b.state))
+
+    def test_cells_on_the_same_street_keep_their_distance(self):
+        hem = self.arena.hemacias
+        for cell in hem.cells:
+            cell.state, cell.timer = 'inside', 99
+        lead, back = hem.cells[0], hem.cells[1]
+        s, sw = RBC_NODES['S'], RBC_NODES['SW']
+        for cell, k in ((lead, .2), (back, .2-1.0/math.dist(s, sw))):
+            cell.reset('A')
+            cell.pos = [s[0]+(sw[0]-s[0])*k, s[1], s[2]+(sw[2]-s[2])*k]
+            cell.state, cell.path, cell.threats = 'deliver', ['SW', 'A_e'], {}
+        for _ in range(60):
+            hem.tick(1/30, [])
+            self.assertGreater(math.dist(lead.pos, back.pos), .9)
+
     def test_killing_a_red_blood_cell_drops_resources_for_bacteria(self):
         hem, cell = self.first_rbc()
         self.arena.hit_rbc(3, cell.id, 999)

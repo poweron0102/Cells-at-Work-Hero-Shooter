@@ -211,6 +211,45 @@ def release_models():
     _RIGS.clear()
 
 
+def leap_pose(leap, leap_len, slam, slam_len):
+    """Pose do Salto de impacto para modelos por partes, pelos tempos restantes dos efeitos de
+    status ``leap`` (no ar) e ``slam`` (pouso): agacha no impulso, encolhe as pernas e ergue os
+    braços no voo, inclina para a frente na descida e soca o chão no impacto."""
+    def ease(a, b, x):
+        k = min(1.0, max(0.0, (x - a) / (b - a)))
+        return k * k * (3 - 2 * k)
+    if leap > 0:
+        e = max(0.0, leap_len - leap)
+        crouch = 1 - ease(0.0, .12, e)
+        tuck = ease(.03, .2, e)
+        up = ease(.12, .38, e)
+        dive = ease(.3, .55, e)
+        return dict(tuck=tuck, up=up * (1 - .35 * dive), dive=dive, drop=.1 * crouch,
+                    lean=.3 * crouch - .2 * tuck * (1 - dive) + .45 * dive)
+    if slam > 0:
+        e = max(0.0, slam_len - slam)
+        hit = ease(0.0, .05, e) * (1 - ease(.22, slam_len, e))
+        return dict(slam=hit, drop=.16 * hit, lean=.6 * hit)
+    return None
+
+
+def leap_limb(part, pose):
+    """(ax, ay, az) de um braço/perna na pose do salto; None = animação normal."""
+    lean = pose.get('lean', 0.0)
+    if part.swing == 'leg':
+        tuck, slam = pose.get('tuck', 0.0), pose.get('slam', 0.0)
+        # Pernas compensam a inclinação do tronco (pés para baixo), uma à frente e outra atrás no voo,
+        # abertas na base no pouso.
+        lead = -1.15 if part.side > 0 else .55
+        return -lean + lead * tuck * (1 - .5 * pose.get('dive', 0.0)), 0.0, part.side * (.1 * tuck + .48 * slam)
+    if part.swing == 'arm':
+        up, slam = pose.get('up', 0.0), pose.get('slam', 0.0)
+        crouch = max(0.0, lean) * (1 - up) * (1 - slam)
+        # Ergue os dois braços acima da cabeça e desce os punhos no chão à frente.
+        return -2.75 * up - 1.0 * slam + .4 * crouch, 0.0, part.side * (.18 * up + .12 * slam)
+    return None
+
+
 class CharacterModel:
     """Desenha um personagem animado proceduralmente.  API usada pelo resto do jogo:
     ``CharacterModel(hero).draw(position, yaw, phase, moving, reveal, shield, action, tint)``.
@@ -303,9 +342,18 @@ class CharacterModel:
                         rl.update_model_animation(rig.model, clip, frame)
                 rig.pose_key = key
             bob = 0.0
+        pose = motion.get('pose') if motion else None
+        if pose and not rig.clips:
+            walk *= 1 - max(pose.get('tuck', 0.0), pose.get('slam', 0.0))
         rl.rl_push_matrix()
         rl.rl_translatef(position.x, position.y + bob, position.z)
         rl.rl_rotatef(180 - math.degrees(yaw), 0, 1, 0)
+        if pose and not rig.clips:
+            # Pose de corpo inteiro (modelos por partes): abaixa e inclina o tronco em torno do quadril.
+            hips = rig.height * .49
+            rl.rl_translatef(0, hips - pose.get('drop', 0.0), 0)
+            rl.rl_rotatef(math.degrees(pose.get('lean', 0.0)), 1, 0, 0)
+            rl.rl_translatef(0, -hips, 0)
         if cull:
             rl.rl_draw_render_batch_active()
             rl.rl_enable_backface_culling()
@@ -323,7 +371,7 @@ class CharacterModel:
             if rig.clips:
                 _DrawMesh(part.mesh, material, rig.identity[0])
                 continue
-            m = self._part_transform(part, phase, walk, t, action, kick if part.name == rig.mount_part else 0.0)
+            m = self._part_transform(part, phase, walk, t, action, kick if part.name == rig.mount_part else 0.0, pose)
             parent = mats.get(part.parent) if part.parent != 'body' else None
             if parent is not None:
                 m = parent if m is None else _compose(parent, m)
@@ -418,11 +466,16 @@ class CharacterModel:
         return (position.x + x * c + z * s, position.y + bob + y, position.z - x * s + z * c)
 
     @staticmethod
-    def _part_transform(part, phase, walk, t, action, kick=0.0):
-        """Matriz local da parte (None = identidade). ``kick`` = recuo do disparo (braço da arma)."""
+    def _part_transform(part, phase, walk, t, action, kick=0.0, pose=None):
+        """Matriz local da parte (None = identidade). ``kick`` = recuo do disparo (braço da arma).
+        ``pose`` (salto/pouso, ver ``leap_pose``) sobrepõe braços e pernas."""
         swing = part.swing
         if swing == 'static' or swing == 'weapon':
             return None
+        if pose and swing in ('arm', 'leg'):
+            r = leap_limb(part, pose)
+            if r is not None:
+                return _about(part.pivot, _rot(*r))
         ax = ay = az = 0.0
         if swing == 'leg':
             ax = math.sin(phase + part.phase) * part.amp * walk

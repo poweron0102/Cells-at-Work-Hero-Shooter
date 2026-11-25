@@ -5,6 +5,14 @@ Ciclo (PLANO_MAPA.md, secao 5): entrega -> percepcao (so com linha de visao)
 retomada apos um periodo sem ver perigo. Uma escolha de rota vale por um
 intervalo minimo, mas ameaca nova e proxima permite reagir antes.
 
+Bacteria vista de perto (``PANIC``) assusta: a hemacia corre antes de pensar na
+entrega. Na fuga, cada uma sorteia uma das direcoes seguras (ruas que nao passam
+perto de nenhuma ameaca) e para num ponto sorteado de uma rua ao lado do abrigo:
+assustadas juntas, elas se espalham em vez de correr todas para a mesma esquina.
+Perto da estacao, voltam para dentro dela. Do deposito saem uma de cada vez, e
+esperam la dentro enquanto uma bacteria vigia a porta; na rua, quem vem atras
+guarda distancia de quem anda a frente.
+
 Todo movimento, inclusive a fuga, segue as arestas de ``rbc_edges`` (que
 ``scripts/check_rbc_routes.py`` garante livres de parede e com chao continuo):
 a busca parte dos dois nos da rua onde a hemacia esta, nunca de um no
@@ -37,6 +45,12 @@ def seg_dist(p, a, b):
 DANGER_COST = 400  # por trecho que aproxima a hemacia de uma ameaca lembrada
 ARRIVE = .4
 FLEE_RANGE = 30.0  # metros de rua que a hemacia aceita correr ate um abrigo
+SAFE_CLEAR = 6.0   # abrigo seguro: pelo menos isso longe de toda ameaca lembrada
+DOOR_GAP = 1.4     # s entre duas saidas do deposito
+DOOR_WAIT = 8.0    # s maximos esperando no deposito enquanto ha bacteria a vista da porta
+HOME_RANGE = 14.0  # metros de rua: assustada a essa distancia do deposito, entra de volta nele
+GAP = 1.7          # m que a hemacia de tras guarda de quem anda a frente no mesmo sentido
+PANIC = 8.0        # m: bacteria vista mais perto que isso assusta (corre antes de pensar na entrega)
 
 
 def leg_cost(p, q, threats, danger):
@@ -122,6 +136,9 @@ class RedBloodCell:
         self.threats = {}  # slot -> (pos, time seen)
         self.commit_until = 0.0
         self.calm_since = 0.0
+        self.calm_need = BALANCE['rbc_memory']*.5
+        self.tail = None   # ponto final na rua depois do ultimo no (onde a fugitiva se esconde)
+        self.waited = 0.0  # tempo esperando no deposito
         self.timer = 0.0
         self.yaw = 0.0
         self.moving = False
@@ -151,6 +168,7 @@ class Hemacias:
         self.deliveries = {'A': 0, 'B': 0, 'C': 0}
         self.clock = 0.0
         self.perceive_timer = 0.0
+        self.door = -math.inf  # instante da ultima saida do deposito
 
     # -- helpers ---------------------------------------------------------
     def ground(self, x, z, expected):
@@ -173,27 +191,75 @@ class Hemacias:
         threats = [t[0] for t in cell.threats.values()]
         best, parent = search(cell.pos, threats)
         cell.commit_until = now+BALANCE['rbc_commit']
+        cell.tail = None
         goals = [n for n in DESTINATIONS[cell.destination] if n in best]
-        if goals:
+        scared = min((math.dist(t, cell.pos) for t in threats), default=99) < PANIC
+        if goals and not scared:
             goal = min(goals, key=lambda n: best[n][0])
             if best[goal][0] < DANGER_COST:
                 cell.state = 'deliver'
                 cell.path = route(parent, goal, cell.pos)
                 return
-        # No safe route: run, along the streets, to a nearby corner the threats cannot see.
+        # Scared, or no safe route: run, along the streets, in one of the safe directions (drawn at
+        # random); the delivery resumes after a while without seeing danger.
+        if cell.state != 'flee':
+            cell.calm_need = BALANCE['rbc_memory']*.5+self.rng.uniform(0, 1.5)
         cell.state = 'flee'
-        cell.path = route(parent, self.shelter(best, threats), cell.pos)
+        node = self.shelter(best, parent, threats, cell.pos)
+        cell.path = route(parent, node, cell.pos)
+        cell.tail = self.hideout(node, cell.path, threats)
 
-    def shelter(self, best, threats):
-        def key(node):
-            cost, length = best[node]
-            p = RBC_NODES[node]
-            clear = min((math.dist(p, t) for t in threats), default=99)
-            hidden = clear > 4 and not any(self.line_of_sight(t, p) for t in threats)
-            # First never cross a threat, then prefer cover and distance, then short runs.
-            return (int(cost//DANGER_COST), -(min(clear, 20)+(12 if hidden else 0)-.1*length))
+    def shelter_score(self, node, best, threats):
+        """(trechos que se aproximam de ameaca, qualidade do abrigo, distancia da ameaca mais
+        proxima): o primeiro quanto menor melhor, o segundo quanto maior (longe, escondido, sem
+        correr demais)."""
+        cost, length = best[node]
+        p = RBC_NODES[node]
+        clear = min((math.dist(p, t) for t in threats), default=99)
+        hidden = clear > 4 and not any(self.line_of_sight(t, p) for t in threats)
+        return int(cost//DANGER_COST), min(clear, 20)+(12 if hidden else 0)-.1*length, clear
+
+    def shelter(self, best, parent, threats, origin):
+        """Abrigo da fuga. Entre as direcoes seguras (rota sem passar perto de ameaca ate um no a
+        ``SAFE_CLEAR`` de todas), sorteia uma pela primeira rua da rota, com mais chance para as
+        melhores; sem nenhuma segura, o melhor abrigo possivel."""
         options = [n for n, (_, length) in best.items() if length <= FLEE_RANGE] or list(best)
-        return min(options, key=key)
+        scored = {n: self.shelter_score(n, best, threats) for n in options}
+        safe = [n for n in options if scored[n][0] == 0 and scored[n][2] >= SAFE_CLEAR]
+        if not safe:
+            return min(options, key=lambda n: (scored[n][0], -scored[n][1]))
+        if 'depot' in safe and best['depot'][1] <= HOME_RANGE:
+            return 'depot'  # perto da estacao: volta para dentro (``move``) em vez de lotar a porta
+        directions = {}
+        for node in safe:
+            path = route(parent, node, origin)
+            first = path[0] if path else node
+            if first not in directions or scored[node][1] > scored[directions[first]][1]:
+                directions[first] = node
+        picks = sorted(directions.values())
+        top = max(scored[n][1] for n in picks)
+        weights = [max(1.0, scored[n][1]-top+10) for n in picks]
+        return self.rng.choices(picks, weights)[0]
+
+    def hideout(self, node, path, threats):
+        """Ponto sorteado numa rua que sai do abrigo (nunca de volta pela rota nem rumo a uma
+        ameaca): quem foge junto nao para empilhado no mesmo no."""
+        came = path[-2] if len(path) > 1 else None
+        p = RBC_NODES[node]
+        clear = min((math.dist(p, t) for t in threats), default=99)
+        options = []
+        for other in GRAPH[node]:
+            if other == came:
+                continue
+            q = RBC_NODES[other]
+            length = math.dist(p, q)
+            k = min(self.rng.uniform(.15, .5), 6.0/max(length, .1))
+            point = (p[0]+(q[0]-p[0])*k, p[1]+(q[1]-p[1])*k, p[2]+(q[2]-p[2])*k)
+            if min((math.dist(point, t) for t in threats), default=99) >= clear:
+                options.append(point)
+        if not options:
+            return None
+        return self.rng.choice(options)
 
     # -- loop ------------------------------------------------------------
     def tick(self, dt, bacteria):
@@ -204,19 +270,38 @@ class Hemacias:
         perceive = self.perceive_timer <= 0
         if perceive:
             self.perceive_timer = .25
+        watched = None
         for cell in self.cells:
             if cell.state in ('dead', 'inside'):
                 cell.timer -= dt
                 if cell.timer <= 0:
+                    if now-self.door < DOOR_GAP:
+                        continue  # uma de cada vez pela porta
+                    if watched is None:
+                        watched = self.door_watched(bacteria)
+                    if watched and cell.waited < DOOR_WAIT:
+                        cell.waited += dt  # espera la dentro em vez de sair para o perigo
+                        continue
                     order = 'ABC'
                     dest = order[self.next_destination % 3]
                     self.next_destination += 1
                     cell.reset(dest)
+                    self.door = now
                     self.replan(cell, now)
                 continue
             if perceive:
                 self.perceive(cell, bacteria, now)
             self.move(cell, dt, now)
+
+    def door_watched(self, bacteria):
+        """Alguma bacteria perto da saida do deposito e com ela a vista?"""
+        door = RBC_NODES['depot_out']
+        for actor in bacteria:
+            p = actor.transform.position
+            pos = (p.x, p.y-.95, p.z)
+            if math.dist(pos, door) < BALANCE['rbc_sight']*.75 and self.line_of_sight(door, pos):
+                return True
+        return False
 
     def perceive(self, cell, bacteria, now):
         sight = BALANCE['rbc_sight']
@@ -248,24 +333,34 @@ class Hemacias:
             if (new_threat and closest < 6) or now >= cell.commit_until:
                 if new_threat or cell.state == 'deliver':
                     self.replan(cell, now)
-        elif cell.state in ('flee', 'hide') and now-cell.calm_since > memory*.5:
-            self.replan(cell, now)  # resume the delivery
+        elif cell.state in ('flee', 'hide') and now-cell.calm_since > cell.calm_need:
+            self.replan(cell, now)  # resume the delivery (each one after its own pause)
 
     def move(self, cell, dt, now):
         cell.moving = False
-        if not cell.path:
-            if cell.state == 'flee':
+        if cell.path:
+            target = RBC_NODES[cell.path[0]]
+        elif cell.tail is not None and cell.state == 'flee':
+            target = cell.tail
+        else:
+            if cell.state in ('flee', 'hide') and cell.node == 'depot':
+                # Fugiu para a estacao: entra e sai de novo depois (uma por vez, sem bacteria na porta).
+                cell.state, cell.timer, cell.waited = 'inside', self.rng.uniform(2.0, 4.0), 0.0
+            elif cell.state == 'flee':
                 cell.state = 'hide'
             return
-        target = RBC_NODES[cell.path[0]]
         dx, dz = target[0]-cell.pos[0], target[2]-cell.pos[2]
         dist = math.hypot(dx, dz)
-        speed = BALANCE['rbc_speed']*(1.3 if cell.state == 'flee' else 1)
+        speed = BALANCE['rbc_speed']*(1.3 if cell.state == 'flee' else self.queue(cell, dx/max(dist, 1e-6),
+                                                                                    dz/max(dist, 1e-6)))
         if dist < ARRIVE:
+            if not cell.path:
+                cell.tail = None
+                return
             cell.node = cell.path.pop(0)
             if not cell.path and cell.state == 'deliver' and cell.node in DESTINATIONS[cell.destination]:
                 self.deliveries[cell.destination] += 1
-                cell.state, cell.timer = 'inside', BALANCE['rbc_respawn']
+                cell.state, cell.timer = 'inside', BALANCE['rbc_respawn']+self.rng.uniform(0, 2.5)
             return
         step = min(dist, speed*dt)
         cell.pos[0] += dx/dist*step
@@ -276,6 +371,22 @@ class Hemacias:
         cell.yaw = math.atan2(dx, -dz)
         cell.moving = True
 
+    def queue(self, cell, ux, uz):
+        """Fila na mesma rua: perto de outra hemacia que anda a frente no mesmo sentido, desacelera
+        em vez de grudar nela (na fuga ninguem espera)."""
+        k = 1.0
+        for other in self.cells:
+            if other is cell or not other.moving or not other.alive:
+                continue
+            ox, oz = other.pos[0]-cell.pos[0], other.pos[2]-cell.pos[2]
+            ahead = ox*ux+oz*uz
+            if ahead <= 0 or ahead > GAP or abs(ox*uz-oz*ux) > .7:
+                continue
+            if math.sin(other.yaw)*ux-math.cos(other.yaw)*uz < .5:
+                continue  # cruzando ou vindo no sentido contrario: passa
+            k = min(k, max(.15, (ahead-.6)/(GAP-.6)))
+        return k
+
     def damage(self, ident, amount):
         """Returns the drop position if the cell died."""
         cell = self.cells[ident]
@@ -283,7 +394,7 @@ class Hemacias:
             return None
         cell.hp -= amount
         if cell.hp <= 0:
-            cell.state, cell.timer = 'dead', BALANCE['rbc_respawn']
+            cell.state, cell.timer = 'dead', BALANCE['rbc_respawn']+self.rng.uniform(0, 2.5)
             return tuple(cell.pos)
         return None
 

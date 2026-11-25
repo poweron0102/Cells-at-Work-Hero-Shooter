@@ -29,7 +29,8 @@ ZONE_TINT = {'biofilm': (93, 200, 133), 'mature': (70, 170, 90), 'acid': (170, 2
 FX_TINT = {'slam': (240, 226, 206), 'burst': (170, 236, 80), 'ult': (255, 230, 140), 'repair': (250, 200, 90),
            'antibody': (120, 200, 255), 'spit': (255, 140, 190), 'shatter': (200, 150, 255),
            'perforin': (255, 70, 70), 'heal': (120, 255, 170), 'punch': (255, 150, 90), 'backstab': (255, 90, 90),
-           'spawn': (140, 220, 255), 'pop': (255, 170, 210), 'crumble': (230, 170, 70)}
+           'spawn': (140, 220, 255), 'pop': (255, 170, 210), 'crumble': (230, 170, 70), 'launch': (240, 226, 206)}
+LEAP_TINT = (255, 140, 90)
 
 
 # --------------------------------------------------------------------------------------
@@ -381,6 +382,24 @@ class AbilityEffects(Renderable3D):
                     batch.add((ALPHA, 'core'), billboard, (x+rgt[0]*s, y+1.3-t*t*2.6+(i % 3)*.3, z+rgt[2]*s), .25,
                               R, U, tint, int(230*a))
                 continue
+            if kind == 'slam' and fx.get('extra') == 'leap':
+                # Salto de impacto: clarao, segunda onda rapida, rachaduras e poeira subindo.
+                batch.add((ADD, 'star'), billboard, (x, y+.5, z), r*.55*(1-t)+.3, R, U, LEAP_TINT, int(255*a))
+                ground(batch, (x, y, z), r*(.15+1.25*t**.6), LEAP_TINT, 230*a*a, 'ring')
+                ground(batch, (x, y, z), r*.75, (60, 40, 30), 150*a, 'splat', ALPHA, angle=x+z)
+                rng = random.Random(int(x*13+z*29))
+                for i in range(14):
+                    ang = i*math.tau/14+rng.uniform(-.2, .2)
+                    d = r*(.35+.75*t)*rng.uniform(.7, 1)
+                    h = .2+t*rng.uniform(.6, 1.8)
+                    batch.add((ALPHA, 'puff'), billboard, (x+math.cos(ang)*d, y+h, z+math.sin(ang)*d),
+                              .45+.9*t, R, U, (205, 190, 170), int(150*a), ang)
+            elif kind == 'launch':
+                for i in range(8):
+                    ang = i*math.tau/8
+                    d = r*(.3+.7*t)
+                    batch.add((ALPHA, 'puff'), billboard, (x+math.cos(ang)*d, y+.15+t*.5, z+math.sin(ang)*d),
+                              .3+.5*t, R, U, tint, int(140*a), ang)
             # Onda no chao (todas as outras).
             ground(batch, (x, y, z), r*(.25+.75*t), tint, 255*a, 'ring', normal=fx.get('normal'))
             ground(batch, (x, y, z), r*(.2+.8*t), tint, 90*a, 'disc', ALPHA, normal=fx.get('normal'))
@@ -429,14 +448,37 @@ class AbilityEffects(Renderable3D):
             p = a.transform.position
             if a.fx.get('root', 0) > 0:
                 ground(batch, (p.x, p.y-.93, p.z), .9, (240, 240, 230), 230, 'net', ALPHA, self.time)
+            if a.fx.get('leap', 0) > 0:
+                self.draw_leap_trail(batch, a, R, U)
             if a.fx.get('perforin', 0) > 0:
                 pulse = .5+.5*math.sin(self.time*(6+12*(1-min(1, a.fx['perforin']/3))))
                 batch.add((ADD, 'glow'), billboard, (p.x, p.y+.1, p.z), .9+.3*pulse, R, U, (255, 60, 60), int(140+100*pulse))
+            if a.fx.get('antiheal', 0) > 0:
+                # Toxina: bolhas roxas subindo em volta do corpo (sem cura).
+                for i in range(6):
+                    ph = (self.time*.9+i/6) % 1.0
+                    ang = i*math.tau/6+self.time*1.5
+                    batch.add((ADD, 'core'), billboard, (p.x+math.cos(ang)*.45, p.y-.8+ph*1.9, p.z+math.sin(ang)*.45),
+                              .07, R, U, (196, 120, 245), int(230*(1-ph)))
             if a.shield.value > 0 and a.hero != 'pneumococcus' or a.shield.value > 75:
                 batch.add((ADD, 'ring'), billboard, (p.x, p.y+.05, p.z), 1.15, R, U, (140, 210, 255), 110)
             if a.guard > 0 or a.fx.get('frenzy', 0) > 0 or a.fx.get('haste', 0) > 0:
                 tint = (120, 255, 200) if a.fx.get('haste', 0) > 0 else (190, 255, 120)
                 ground(batch, (p.x, p.y-.9, p.z), .9, tint, 160, 'glow')
+
+    def draw_leap_trail(self, batch, a, R, U):
+        """Rastro do Salto de impacto: copias do brilho pelas ultimas posicoes do heroi."""
+        trails = self.__dict__.setdefault('trails', {})
+        p = a.transform.position
+        now = self.time
+        pts = [(q, t) for q, t in trails.get(a.slot, []) if now-t < .22 and math.dist(q, p.to_tuple) < 8]
+        pts.append((p.to_tuple, now))
+        trails[a.slot] = pts[-14:]
+        cam = self.camera.global_transform.position.to_tuple
+        for (q0, t0), (q1, _) in zip(pts, pts[1:]):
+            k = 1-(now-t0)/.22
+            batch.add((ADD, 'beam'), ribbon, q0, q1, .9*k, cam, LEAP_TINT, int(120*k))
+        batch.add((ADD, 'glow'), billboard, (p.x, p.y+.1, p.z), 1.0, R, U, LEAP_TINT, 110)
 
     # -- torretas e clones ---------------------------------------------------------------
     def draw_minions(self, me):
@@ -501,12 +543,13 @@ class AbilityEffects(Renderable3D):
             if landing:
                 ground(batch, landing, 3.5, (170, 240, 70), 230, 'ring', angle=self.time)
                 ground(batch, landing, 3.4, (170, 240, 70), 60, 'disc', ALPHA)
-        if me.leap > 0:
-            p = me.transform.position
-            v = me.body.velocity
-            t = max(.15, (v.y+math.sqrt(max(0.0, v.y*v.y+2*9.8*1.5)))/9.8) if v.y > -50 else .2
-            x, z = p.x+v.x*t*.6, p.z+v.z*t*.6
-            hit = self.game.physics_world.raycast(Vec3(x, p.y, z), Vec3(0, -1, 0), 30, 1)
-            if hit is not None:
-                ground(batch, hit.point.to_tuple, 4, (255, 140, 90), 230, 'ring', angle=self.time*2)
-                ground(batch, hit.point.to_tuple, 3.9, (255, 140, 90), 60, 'disc', ALPHA)
+        plan = getattr(me, 'leap_plan', None)
+        if plan is not None:
+            # Circulo de pouso: o anel interno fecha ate o impacto.
+            x, y, z = plan['target']
+            point = (x, y-.93, z)
+            r = BALANCE['leap_radius']
+            k = min(1.0, plan['t']/max(plan['time'], .01))
+            ground(batch, point, r, LEAP_TINT, 235, 'ring', angle=self.time*2)
+            ground(batch, point, r*.98, LEAP_TINT, 55, 'disc', ALPHA)
+            ground(batch, point, r*(1-.85*k)+.15, (255, 220, 190), 200, 'ring', angle=-self.time*3)

@@ -233,6 +233,16 @@
   "wall_life": 5.0,
   "wall_width": 6.0,
   "clone_health": 180,
-  "dome_radius": 7.0
+  "dome_radius": 7.0,
+  "_salto": "Salto de impacto (Q do Killer T): pousa onde a mira toca o mapa",
+  "leap_range": 16.0,
+  "leap_time": 0.75,
+  "leap_damage": 50,
+  "leap_radius": 4.5,
+  "_chuva": "Chuva de anticorpos (F do B-Cell): WASD move a area; o B-Cell fica sentado",
+  "rain_speed": 9.0,
+  "rain_range": 40.0,
+  "_assistencia": "habilidades de tiro unico (rede, perforina, toxina, gancho...): inimigo a ate assist_angle graus da mira e acerto garantido",
+  "assist_angle": 5.0
  }
 }

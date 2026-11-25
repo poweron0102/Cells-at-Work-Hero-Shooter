@@ -268,6 +268,9 @@ class Arena(NetworkComponent):
         if normal is not None:
             zone['normal'] = tuple(normal)
         self.zones.append(zone)
+        actor = self.actors.get(owner)
+        if follow == 'focus' and actor is not None and not actor.local:
+            actor.ult_focus = tuple(position)  # nada de centro velho de uma Chuva anterior
 
     # -- objetos de habilidade --------------------------------------------------
     @Rpc(send_to=SendTo.ALL, require_owner=False)
@@ -357,7 +360,7 @@ class Arena(NetworkComponent):
                 if other.front and math.dist(center, (nx, ny, nz)) < other.front_radius <= math.dist(center, (x, y, z)):
                     shield = other
                     break
-                if point is None and math.dist(other.transform.position.to_tuple, (nx, ny, nz)) < .75:
+                if point is None and any(math.dist(c, (nx, ny, nz)) < r+.25 for c, r, _ in other.hitboxes()):
                     point = (nx, ny, nz)
             p['pos'] = (nx, ny, nz)
             p['trail'] = (p['trail']+[p['pos']])[-10:]
@@ -543,7 +546,12 @@ class Arena(NetworkComponent):
             if zone.get('follow'):
                 owner = self.actors.get(zone['owner'])
                 if owner is not None and owner.alive:
-                    zone['pos'] = owner.feet
+                    if zone['follow'] != 'focus':
+                        zone['pos'] = owner.feet
+                    elif owner.ult_focus is not None:
+                        # Chuva de anticorpos: segue o centro que o B-Cell move (suave nos outros pares).
+                        k = 1.0 if owner.local else min(1.0, dt*12)
+                        zone['pos'] = tuple(a+(b-a)*k for a, b in zip(zone['pos'], owner.ult_focus))
         for ident, wall in list(self.walls.items()):
             wall['life'] -= dt
             if wall['life'] <= 0:

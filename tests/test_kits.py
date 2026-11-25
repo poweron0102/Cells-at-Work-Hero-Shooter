@@ -159,6 +159,120 @@ class KitTests(unittest.TestCase):
         self.settle(3.2)
         self.assertLessEqual(self.bact.health.value, after_hit-55)
 
+    def leap(self, pitch=-.1):
+        """Killer T salta (Q); devolve (segundos no ar, posicao de partida)."""
+        self.hero(self.cell, 'killer_t')
+        self.cell.pitch = pitch
+        start = self.cell.transform.position
+        self.cell.controls = dict(ability=True, yaw=0, pitch=pitch)
+        self.settle()
+        self.cell.controls = dict(yaw=0, pitch=pitch)
+        seconds = 1/60
+        while self.cell.leap_plan is not None and seconds < 3:
+            self.settle()
+            seconds += 1/60
+        return seconds, start
+
+    def test_impact_leap_is_fast_lands_where_aimed_and_slams(self):
+        self.bact.body.teleport(Vec3(0, 1, 47))
+        self.settle()
+        health = self.total(self.bact)
+        seconds, start = self.leap(pitch=0)
+        self.assertLess(seconds, BALANCE['leap_time']+.15)  # antes: ~1,7 s flutuando
+        travelled = math.hypot(self.cell.transform.x-start.x, self.cell.transform.z-start.z)
+        self.assertGreater(travelled, 10)
+        self.assertLess(self.total(self.bact), health)
+        self.assertGreater(self.cell.fx.get('slam', 0), 0)
+        self.assertNotIn('leap', self.cell.fx)
+
+    def test_impact_leap_aimed_at_the_floor_still_hops_forward(self):
+        seconds, start = self.leap(pitch=-1.4)
+        self.assertLess(seconds, .8)
+        self.assertGreater(start.z-self.cell.transform.z, 2.0)
+
+    def test_net_mid_leap_drops_the_killer_t_without_slam(self):
+        self.hero(self.bact, 'staphylococcus')
+        self.bact.body.teleport(Vec3(0, 1, 48))
+        self.settle()
+        self.hero(self.cell, 'killer_t')
+        self.cell.controls = dict(ability=True, yaw=0, pitch=0)
+        self.settle(.1)
+        self.cell.controls = dict(yaw=0, pitch=0)
+        self.assertIsNotNone(self.cell.leap_plan)
+        self.cell.take_hit(0, self.bact.slot, dict(root=1.0))
+        self.settle()
+        self.assertIsNone(self.cell.leap_plan)
+        self.assertNotIn('slam', self.cell.fx)
+
+    def test_antibody_rain_follows_wasd_and_b_cell_sits_with_a_smaller_hitbox(self):
+        self.hero(self.cell, 'b_cell')
+        self.cell.charge = 100
+        self.cell.pitch = -.3
+        self.tap(self.cell, 'ultimate')
+        self.assertTrue(self.cell.sitting)
+        rain = next(z for z in self.arena.zones if z['kind'] == 'rain')
+        fx, _, fz = self.cell.ult_focus
+        self.cell.controls = dict(z=1.0, yaw=0, pitch=-.3)   # W: para a frente da camera (-z)
+        self.settle(.5)
+        self.cell.controls = dict(x=1.0, yaw=0, pitch=-.3)   # D: para a direita (+x)
+        self.settle(.3)
+        self.cell.controls = dict(yaw=0, pitch=-.3)
+        self.settle(2/60)  # a zona acompanha no quadro seguinte
+        nx, _, nz = self.cell.ult_focus
+        self.assertLess(nz, fz-BALANCE['rain_speed']*.5*.7)
+        self.assertGreater(nx, fx+BALANCE['rain_speed']*.3*.7)
+        self.assertAlmostEqual(rain['pos'][0], nx, delta=.01)
+        self.assertAlmostEqual(rain['pos'][2], nz, delta=.01)
+        # Sentado: um tiro na altura da cabeca de pe passa por cima; um tiro baixo acerta.
+        from UserComponents.cells.combat import cast
+        self.bact.yaw, self.bact.pitch = math.pi, 0
+        eye = self.bact.eye
+        feet = self.cell.feet
+        over = cast(self.bact, (Vec3(feet[0], feet[1]+1.5, feet[2])-eye).normalize(), 30)
+        self.assertFalse(over and over[0]['kind'] == 'actor')
+        low = cast(self.bact, (Vec3(feet[0], feet[1]+.5, feet[2])-eye).normalize(), 30)
+        self.assertEqual(low[0]['kind'], 'actor')
+        self.settle(HEROES['b_cell'].ult_time)
+        self.assertFalse(self.cell.sitting)
+
+    def test_rain_does_not_walk_through_walls(self):
+        from UserComponents.cells.world import block
+        self.hero(self.cell, 'b_cell')
+        self.cell.charge = 100
+        self.cell.pitch = -.5
+        self.tap(self.cell, 'ultimate')
+        fx, fy, fz = self.cell.ult_focus
+        block(self.game, "Test wall", (fx, fy+3, fz-3), (12, 6, 1), (100, 100, 100))
+        self.settle()
+        self.cell.controls = dict(z=1.0, yaw=0, pitch=-.5)
+        self.settle(1.0)
+        self.assertGreater(self.cell.ult_focus[2], fz-3)
+
+    def test_skill_shot_inside_the_assist_circle_always_hits(self):
+        from UserComponents.cells.combat import assist_target
+        self.bact.yaw = 0  # de costas: so a rede decide
+        self.cell.yaw = .1  # ~6 graus ao lado: o raio passa ao lado do corpo
+        self.settle()
+        target, _ = assist_target(self.cell, self.cell.aim(), 25)
+        self.assertIs(target, self.bact)
+        self.cell.controls = dict(ability2=True, yaw=.1, pitch=0)
+        self.settle()
+        self.assertGreater(self.bact.root, 0)
+
+    def test_skill_shot_outside_the_assist_circle_misses(self):
+        self.cell.controls = dict(ability2=True, yaw=.3, pitch=0)
+        self.settle()
+        self.assertEqual(self.bact.root, 0)
+
+    def test_assist_never_sees_through_walls(self):
+        from UserComponents.cells.combat import assist_target
+        from UserComponents.cells.world import block
+        block(self.game, "Test wall", (0, 2, 57), (6, 4, 1), (100, 100, 100))
+        self.cell.yaw = .05
+        self.settle()
+        target, aim = assist_target(self.cell, self.cell.aim(), 25)
+        self.assertIsNone(target)
+
     def test_net_roots_the_target(self):
         self.tap(self.cell, 'ability2')
         self.assertGreater(self.bact.root, 0)

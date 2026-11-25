@@ -113,10 +113,14 @@ class CombatantVisual(Renderable3D):
                 rig, now, self.speed, walk=self.motion['walk'],
                 run=None if rig.anim.measured else self.motion['run'],
                 airborne=self.motion.get('Jump'),
-                events={k: self.motion[k] for k in ('Fire', 'Reload', 'Melee', 'Land') if k in self.motion})
+                events={k: self.motion[k] for k in ('Fire', 'Reload', 'Melee', 'Land') if k in self.motion},
+                layers={'Sit': 1.0} if a.sitting else None)  # B-Cell sentado na Chuva de anticorpos
             self.motion['animator'] = self.animator
         else:
-            self.motion = None
+            from .models import leap_pose
+            pose = leap_pose(a.fx.get('leap', 0.0), a.fx_len.get('leap', 1.0),
+                             a.fx.get('slam', 0.0), a.fx_len.get('slam', .5))
+            self.motion = {'pose': pose} if pose else None
         self.args = (p-Vec3(0, .95, 0), a.yaw, self.phase, moving, 1 if revealed else 0,
                      a.shield.value, a.action, tint, kick)
         return self.args

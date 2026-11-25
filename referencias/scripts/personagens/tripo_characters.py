@@ -90,7 +90,9 @@ CHARACTERS = {
                'Reload': clip('rifle-reload', duration=1.6, layer='upper'),
                'Melee': clip('punch-cross', .2, .9, duration=.45, layer='upper'),
                'Jump': clip('jump-air', loop=True, layer='lower'),
-               'Land': clip('jump-land', .1, .9, duration=.45, layer='lower')}),
+               'Land': clip('jump-land', .1, .9, duration=.45, layer='lower'),
+               # Sentado no chão comandando a Chuva de anticorpos (especial F).
+               'Sit': clip('sit-ground-idle', loop=True, close=.2)}),
 }
 LOCOMOTION = ('Walk', 'Run')
 
@@ -386,6 +388,28 @@ def gun_frame(grip, fore):
     return Matrix.Translation(grip) @ Matrix((left, -barrel, up)).transposed().to_4x4()
 
 
+LAP_CLIPS = ('Sit',)
+
+
+def lap_gun(frame):
+    """Arma de quem está sentado no chão de joelhos dobrados: atravessada sobre os joelhos, cabo do lado
+    direito e cano para a esquerda do personagem (+X), com o rosto livre acima dela."""
+    hips = frame['hips'].translation
+    knees = (frame['shin.L'].translation + frame['shin.R'].translation) / 2
+    forward = knees - hips
+    forward.z = 0
+    forward.normalize()
+    up = Vector((0, 0, 1))
+    left = up.cross(forward).normalized()
+    if left.x < 0:
+        left = -left
+    lap = hips.lerp(knees, .72)
+    lap.z = knees.z + .04
+    grip = lap - left * .14
+    barrel = (forward * .2 + left * .98).normalized()
+    return gun_frame(grip, grip + barrel)
+
+
 def rig_weapon(rig, clips, legs_only=()):
     """Soquete da arma preso à mão direita (pose do Rifle Idle) e mão esquerda no guarda-mão em todos
     os clipes, menos no meio da recarga, quando ela busca o carregador. Os clipes ``legs_only`` só
@@ -401,6 +425,11 @@ def rig_weapon(rig, clips, legs_only=()):
         n = len(frames) - 1
         for i, frame in enumerate(frames):
             u = i / max(1, n)
+            if name in LAP_CLIPS:
+                # Sentado: rifle deitado no colo, mão direita no cabo (a esquerda vai ao guarda-mão abaixo).
+                frame['socket_weapon'] = frame['hand.R'] @ offset  # filho da mão: o IK o leva junto
+                worst[name + ' (dir.)'] = max(worst.get(name + ' (dir.)', 0.0),
+                                              arm_ik(rig, frame, 'R', lap_gun(frame) @ offset.inverted()))
             socket = frame['hand.R'] @ offset
             frame['socket_weapon'] = Matrix.Translation(socket.translation) @ rotation(socket).to_4x4()
             hold = 0.0 if name in legs_only else 1.0

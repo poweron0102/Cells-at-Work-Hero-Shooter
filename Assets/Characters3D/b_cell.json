@@ -12,12 +12,14 @@
   "Melee",
   "Reload",
   "Run",
+  "Sit",
   "Walk"
  ],
  "loops": [
   "Idle",
   "Jump",
   "Run",
+  "Sit",
   "Walk"
  ],
  "layers": {

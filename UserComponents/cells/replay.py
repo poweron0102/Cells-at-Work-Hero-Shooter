@@ -46,7 +46,7 @@ AIM_RATE = .1
 FLUSH_EVERY = 2.0  # segundos: o que já foi gravado sobrevive a uma queda do jogo
 SPECTATOR_ID = -7  # nenhum herói pertence a este id: no replay ninguém é "local"
 ARENA_ID = 200
-STREAMS = ("sync_transform", "sync_minion")  # estado contínuo: no avanço rápido só o último vale
+STREAMS = ("sync_transform", "sync_minion", "sync_focus")  # estado contínuo: no avanço rápido só o último vale
 
 
 def balance_hash():

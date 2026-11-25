@@ -4,7 +4,7 @@ import random
 import time
 from EasyCells3D.Components import Component
 from EasyCells3D.Geometry import Vec3
-from .catalog import HEROES, CELLS
+from .catalog import HEROES, CELLS, BALANCE
 
 EYE = .56
 
@@ -12,6 +12,53 @@ EYE = .56
 # o respingo e a poça acontecem quando ele bate em algo, não no clique (``Arena.step_spits``).
 SPIT = dict(speed=75.0, gravity=9.0, life=.8, splash_radius=1.6, splash_damage=8.0,
             zone_radius=1.4, zone_life=2.0, linger=.4)
+
+
+# Habilidades de tiro unico com efeito. Com um inimigo a ate ``assist_angle`` graus da mira (cone
+# de assistencia invisivel) e a vista, o tiro vai nele (``assist_target``); barreiras e
+# membranas no caminho continuam parando o tiro. heroi -> ((tecla, recarga, traco, alcance), ...)
+SKILL_SHOTS = {
+    'neutrophil': (('E', 'ability2_cd', 'net', 25.0),),
+    'killer_t': (('E', 'ability2_cd', 'perforin', 12.0),),
+    'macrophage': (('Q', 'ability_cd', 'hook', 20.0),),
+    'staphylococcus': (('E', 'ability2_cd', 'toxin', 30.0), ('RMB', 'secondary_cd', 'sticky', 40.0)),
+    'streptococcus': (('E', 'ability2_cd', 'chain', 22.0),),
+}
+
+
+def skill_reach(hero, kind):
+    return next(r for _, _, k, r in SKILL_SHOTS[hero] if k == kind)
+
+
+def assist_target(actor, aim, reach):
+    """Inimigo (heroi, torreta ou clone) mais perto do centro da mira cujo corpo toca o cone de
+    assistencia, dentro do alcance e sem parede no meio. Devolve (alvo, direcao ate ele) ou
+    (None, ``aim``). Se a mira ja passa pelo corpo, a direcao continua a da mira (headshot vale)."""
+    arena = actor.arena
+    origin = actor.transform.position+Vec3(0, EYE, 0)
+    limit = math.radians(BALANCE['assist_angle'])
+    spheres = []
+    for other in arena.actors.values():
+        if other.team != actor.team and other.alive and other.body.enable:
+            spheres += [(other, center, radius) for center, radius, _ in other.hitboxes()]
+    for ident, m in arena.minions.items():
+        owner = arena.actors.get(m['slot'])
+        if owner is not None and owner.team != actor.team:
+            x, y, z = m['pos']
+            spheres.append((ident, (x, y+.85, z), .55))
+    best = None
+    for target, center, radius in spheres:
+        d = Vec3(center[0]-origin.x, center[1]-origin.y, center[2]-origin.z)
+        dist = d.magnitude()
+        if dist < 1e-3 or dist-radius > reach:
+            continue
+        off = math.acos(max(-1.0, min(1.0, d.dot(aim)/dist)))-math.asin(min(1.0, radius/dist))
+        if off <= limit and (best is None or off < best[0]) and arena.clear_line(origin.to_tuple, center):
+            best = (off, target, d*(1/dist))
+    if best is None:
+        return None, aim
+    off, target, toward = best
+    return target, (aim if off <= 0 else toward)
 
 
 def ballistic_pitch(horizontal, height, speed, gravity):
@@ -94,9 +141,8 @@ def cast(actor, aim, max_dist, through=False, origin=None):
         t = _front_hit(origin, aim, other, limit)
         if t is not None:
             hits.append(dict(kind='front', target=other, point=origin+aim*t, dist=t))
-        p = other.transform.position
-        # Capsule approximated by two spheres (body + head) to allow headshots.
-        for center, radius, head in (((p.x, p.y-.15, p.z), .5, False), ((p.x, p.y+.62, p.z), .32, True)):
+        # Capsule approximated by two spheres (body + head) to allow headshots; lower when sitting.
+        for center, radius, head in other.hitboxes():
             t = ray_sphere(origin, aim, center, radius, limit)
             if t is not None:
                 hits.append(dict(kind='actor', target=other, point=origin+aim*t, dist=t, head=head))

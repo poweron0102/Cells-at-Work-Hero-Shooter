@@ -59,6 +59,9 @@ SECTIONS = [
         'Marca (B Cell): o alvo marcado recebe +15% de dano. Killer T causa +20% em marcados.',
         'Cores fixas: sua equipe é sempre turquesa e a inimiga sempre vermelha; dourado é o especial.',
         'Ícones sobre as cabeças: marcado, preso, perforina, sem cura e especial ativo.',
+        'Habilidades de tiro único (Rede NET, Perforina, Toxina, Projétil aderente, Pseudópode, Corrente): '
+        'a mira tem uma ajuda: inimigo à vista bem perto do centro da tela é acerto garantido. '
+        'Barreiras e membranas no caminho ainda bloqueiam.',
     ]),
 ]
 for _key, _info in KIT.items():
